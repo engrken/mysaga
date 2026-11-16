@@ -10,7 +10,7 @@ const json = (body: unknown, status = 200) => Response.json(body, { status, head
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[c]!);
 function page(body: string, status = 200) {
   return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Connect SAGA schedule</title><main style="max-width:40rem;margin:3rem auto;padding:1rem;font:16px system-ui"><h1>Connect your SAGA schedule</h1>${body}</main></html>`, {
-    status, headers: { ...headers, "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'" }
+    status, headers: { ...headers, "Content-Type": "text/html; charset=utf-8", "Referrer-Policy": "same-origin", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'" }
   });
 }
 function tokenKey() {
@@ -74,7 +74,8 @@ export async function GET(request: Request) {
 }
 export async function POST(request: Request) {
   const url = new URL(request.url);
-  if(request.headers.get("origin")!==url.origin)return page("<p>Open this page from SAGA and try again.</p>",403);
+  const origin = request.headers.get("origin");
+  if (!origin || (origin !== url.origin && origin !== "https://mysaga.vercel.app")) return page("<p>Open this page from SAGA and try again.</p>",403);
   const teacher=await requireRole("TEACHER");
   if(!teacher||teacher.isDemo)return page("<p>Sign in to SAGA as a teacher.</p>",401);
   let selection;
