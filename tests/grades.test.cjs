@@ -194,13 +194,21 @@ test("only the third consecutive late counts as absent", () => {
   const days = attendance.attendanceDays(dates);
   assert.deepEqual([...attendance.consecutiveLateAbsences(days, () => "LATE")], ["2"]);
   assert.deepEqual([...attendance.consecutiveLateAbsences(days, id => id === "1" ? "EXCUSED" : "LATE")], []);
-  assert.equal(attendance.droppingAbsenceStreak(days, id => id === "2"), null);
+  const extendedDays = [...days, ["2026-11-20", ["4"]], ["2026-11-23", ["5"]]];
+  assert.deepEqual([...attendance.consecutiveLateAbsences(extendedDays, () => "LATE")], ["2", "5"]);
 });
 
-test("dropping warning includes every date from the latest qualifying streak", () => {
-  const dates = ["2026-10-26", "2026-11-02", "2026-11-09", "2026-11-16", "2026-11-23", "2026-11-30"];
+test("dropping warning clears when the student returns and a new streak starts at zero", () => {
+  const dates = ["2026-10-26", "2026-11-02", "2026-11-09", "2026-11-16", "2026-11-23", "2026-11-30", "2026-12-07"];
   const days = dates.map((date, id) => [date, [String(id)]]);
-  assert.deepEqual(attendance.droppingAbsenceStreak(days, id => id !== "4"), {
-    days: 4, startDate: dates[0], endDate: dates[3], dates: dates.slice(0, 4)
-  });
+  const marks = ["ABSENT", "ABSENT", "ABSENT"];
+  const warning = () => attendance.droppingAbsenceStreak(days,
+    id => ({ remark: marks[Number(id)] ?? null, points: null }), new Set());
+  assert.deepEqual(warning(), { days: 3, startDate: dates[0], endDate: dates[2], dates: dates.slice(0, 3) });
+  marks.push("PRESENT");
+  assert.equal(warning(), null);
+  marks.push("ABSENT", "ABSENT");
+  assert.equal(warning(), null);
+  marks.push("ABSENT");
+  assert.deepEqual(warning(), { days: 3, startDate: dates[4], endDate: dates[6], dates: dates.slice(4) });
 });
