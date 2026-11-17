@@ -48,7 +48,7 @@ export async function GET(request: Request) {
     orderBy: [{ studentName: "asc" }, { subject: { academicYear: "desc" } }],
     take: 50,
     select: {
-      id: true, studentName: true, studentNumber: true, remarks: true, finalGradeOverride: true,
+      id: true, studentName: true, remarks: true, finalGradeOverride: true,
       scores: { select: { assessmentId: true, points: true, remark: true } },
       subject: {
         select: {
@@ -88,7 +88,6 @@ export async function GET(request: Request) {
     return {
       enrollmentId: enrollment.id,
       studentName: enrollment.studentName,
-      studentNumber: enrollment.studentNumber,
       studentRemark: enrollment.remarks,
       class: {
         id: subject.id,

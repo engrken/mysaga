@@ -39,8 +39,9 @@ export default async function ClassWorkspacePage({ params, searchParams }: Route
   }, catalog);
   if (schoolId !== user.school.slug || classSlug !== classRouteKey(selected, catalog)) redirect(canonical);
 
+  const { studentNumber: _studentNumber, ...portalUser } = user;
   return <Portal
-    user={user}
+    user={portalUser}
     initialPage="classes"
     initialClassId={selected.id}
     initialClassSection={options.section}
