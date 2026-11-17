@@ -1,6 +1,7 @@
 export const ATTENDANCE_MARKS = ["PRESENT", "LATE", "ABSENT", "EXCUSED"] as const;
 export const LATES_PER_ABSENCE = 3;
 
+export const EARLY_ABSENCE_PERCENT = 10;
 export const HIGH_RISK_ABSENCE_PERCENT = 20;
 
 export function attendanceMark(score?: { remark: string | null; points: number | null }) {
@@ -83,6 +84,21 @@ export function consecutiveLateAbsences(
     }
   }
   return converted;
+}
+
+export type AbsenceDate = { date: string; fromLate: boolean };
+
+export function absenceDates(
+  days: ReturnType<typeof attendanceDays>,
+  scoreFor: (id: string) => Parameters<typeof attendanceMark>[0],
+  converted: ReadonlySet<string>
+): AbsenceDate[] {
+  return days.flatMap(([date, ids]) => {
+    const fromLate = ids.some(id => converted.has(id));
+    return fromLate || ids.some(id => attendanceMark(scoreFor(id)) === "absent")
+      ? [{ date, fromLate }]
+      : [];
+  });
 }
 
 export function droppingAbsenceStreak(
