@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { attendanceDays, droppingAbsenceStreak, highRiskAttendance } from "@/lib/attendance";
+import { attendanceDays, attendanceRiskSummary, consecutiveLateAbsences, droppingAbsenceStreak, HIGH_RISK_ABSENCE_PERCENT } from "@/lib/attendance";
 import { todayManila } from "@/lib/tenant-operations";
 import { calculateFinal, equivalentFromBands } from "@/lib/grades";
 
@@ -44,12 +44,16 @@ export async function GET(request: Request) {
     // Only use scores belonging to THIS enrollment, never scores from
     // another student who happens to have a matching student number.
     const scoresByItem = new Map(enrollment.scores.map(score => [score.assessmentId, score]));
+    const allItems = subject.categories.flatMap(category => category.assessments);
+    const days = attendanceDays(allItems, today);
+    const converted = consecutiveLateAbsences(days, id => scoresByItem.get(id)?.remark);
+    const attendance = attendanceRiskSummary(allItems, scoresByItem, today, converted);
     const categoryById = new Map(subject.categories.map(category => [category.id, category]));
     const parents = new Set(subject.categories.flatMap(category => category.parentId ? [category.parentId] : []));
     const percent = calculateFinal(subject.categories.map(category => ({
       id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase,
       assessments: category.assessments.map(assessment => ({
-        title: assessment.title, maxScore: assessment.maxScore, weight: assessment.weight,
+        title: assessment.title, dueDate: assessment.dueDate, maxScore: assessment.maxScore, weight: assessment.weight,
         scores: scoresByItem.has(assessment.id) ? [scoresByItem.get(assessment.id)!] : []
       }))
     })));
@@ -61,7 +65,6 @@ export async function GET(request: Request) {
       return names.join(" / ");
     };
     const leafCategories = subject.categories.filter(category => !parents.has(category.id));
-    const allItems = subject.categories.flatMap(category => category.assessments);
     const itemCount = allItems.length;
     const recordedCount = allItems.filter(item => {
       const score = scoresByItem.get(item.id);
@@ -79,6 +82,7 @@ export async function GET(request: Request) {
           id: item.id, title: item.title,
           points: scoresByItem.get(item.id)?.points ?? null,
           remark: scoresByItem.get(item.id)?.remark ?? null,
+          lateAsAbsent: converted.has(item.id),
           maxScore: item.maxScore, weight: item.weight, dueDate: item.dueDate
         }))
       };
@@ -86,9 +90,9 @@ export async function GET(request: Request) {
     return { id: enrollment.id, code: subject.code, title: subject.title, term: subject.term, academicYear: subject.academicYear, teacher: subject.teacher.fullName, status: subject.gradeStatus, submittedAt: subject.submittedAt, verifiedAt: subject.verifiedAt, percent, finalGrade: enrollment.finalGradeOverride ?? equivalent.finalGrade, remarks: enrollment.remarks || equivalent.remarks,
       itemCount, recordedCount,
       classId: subject.classId,
-      attendanceWarning: highRiskAttendance(allItems, scoresByItem, today),
-      droppingWarning: droppingAbsenceStreak(attendanceDays(allItems, today),
-        id => scoresByItem.get(id)?.remark === "ABSENT"),
+      attendanceWarning: attendance.percent !== null && attendance.percent >= HIGH_RISK_ABSENCE_PERCENT ? attendance : null,
+      droppingWarning: droppingAbsenceStreak(days,
+        id => converted.has(id) || scoresByItem.get(id)?.remark === "ABSENT"),
       categories,
       gradeBands: summaryOnly ? [] : subject.gradeBands.map(band => ({
         minPercent: band.minPercent, finalGrade: band.finalGrade, remarks: band.remarks
