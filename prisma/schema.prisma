@@ -361,6 +361,8 @@ model ClassActivity {
   itemWeight   Float?
   practice     Boolean             @default(false)
   questions    Json
+  materialUrl  String?
+  availableAt DateTime?
   dueAt        DateTime?
   openedAt     DateTime?
   createdAt    DateTime            @default(now())

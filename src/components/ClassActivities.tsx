@@ -4,12 +4,13 @@ import { FormEvent, useEffect, useState } from "react";
 
 type ClassInfo = { id: string; code: string; title: string; term: string; academicYear: string; gradeStatus: string; teacher: { fullName: string } };
 type CategoryOption = { id: string; label: string };
+type InlineQuestion = { kind: "choice" | "boolean"; prompt: string; choices: string; answer: string };
 type Question = { id: string; prompt: string; options: string[]; answer?: number };
 type Submission = { text: string | null; driveUrl: string | null; points: number | null; feedback: string | null; submittedAt: string; graded?: boolean; gradedAt?: string | null; answers?: Record<string, number> };
 type TeacherSubmission = Submission & { id: string; enrollment: { studentName: string } };
 type Activity = {
   id: string; title: string; kind: "QUIZ" | "ASSIGNMENT"; instructions: string; maxScore: number;
-  status: "DRAFT" | "OPEN" | "CLOSED"; practice: boolean; dueAt: string | null;
+  status: "DRAFT" | "OPEN" | "CLOSED"; practice: boolean; dueAt: string | null; availableAt?: string | null; materialUrl?: string | null;
   categoryId?: string | null; itemWeight?: number | null; questions?: Question[];
   submission?: Submission | null; subject?: ClassInfo; _count?: { submissions: number };
 };
@@ -33,8 +34,8 @@ async function request(url: string, body?: unknown, signal?: AbortSignal) {
 }
 
 const baseDraft = {
-  kind: "QUIZ" as Activity["kind"], title: "", instructions: "", practice: false,
-  categoryId: "", due: "", maxScore: "20", itemWeight: "", questionIds: [] as string[]
+  kind: "ASSIGNMENT" as Activity["kind"], title: "", instructions: "", practice: false,
+  categoryId: "", due: "", opens: "", materialUrl: "", maxScore: "20", itemWeight: "", questionIds: [] as string[], inline: [] as InlineQuestion[]
 };
 
 export function TeacherActivities({ subjectId, categories, locked, readOnly, initialActivityId, onRecordChange }: {
@@ -45,6 +46,7 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
   const [bank, setBank] = useState<Question[]>([]);
   const [draft, setDraft] = useState(baseDraft);
   const [editing, setEditing] = useState<string | null>(null);
+  const [useBank, setUseBank] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [active, setActive] = useState(initialActivityId || "");
   const [rows, setRows] = useState<TeacherSubmission[]>([]);
@@ -104,10 +106,18 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
   function edit(activity?: Activity) {
     setFailure("");
     setEditing(activity?.id ?? null);
+    const questions = activity?.questions ?? [];
+    const bankIds = questions.filter(item => !item.id.startsWith("inline-")).map(item => item.id);
+    setUseBank(bankIds.length > 0);
     setDraft(activity ? {
       kind: activity.kind, title: activity.title, instructions: activity.instructions, practice: activity.practice,
       categoryId: activity.categoryId || "", due: dateInput(activity.dueAt), maxScore: String(activity.maxScore || 20),
-      itemWeight: activity.itemWeight?.toString() ?? "", questionIds: activity.questions?.map(item => item.id) ?? []
+      itemWeight: activity.itemWeight?.toString() ?? "", questionIds: bankIds,
+      materialUrl: activity.materialUrl ?? "", opens: dateInput(activity.availableAt),
+      inline: questions.filter(item => item.id.startsWith("inline-")).map(item => ({
+        kind: item.options.join("|") === "True|False" ? "boolean" : "choice",
+        prompt: item.prompt, choices: item.options.join("\n"), answer: String((item.answer ?? 0) + 1)
+      }))
     } : baseDraft);
     setFormOpen(true);
   }
@@ -120,7 +130,14 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
       dueAt: draft.due ? new Date(`${draft.due}:00+08:00`).toISOString() : null,
       maxScore: draft.kind === "QUIZ" ? 1 : Number(draft.maxScore),
       itemWeight: draft.practice || !draft.itemWeight ? null : Number(draft.itemWeight),
-      questionIds: draft.questionIds
+      materialUrl: draft.kind === "ASSIGNMENT" ? draft.materialUrl.trim() || null : null,
+      availableAt: draft.opens ? new Date(`${draft.opens}:00+08:00`).toISOString() : null,
+      questionIds: draft.kind === "QUIZ" && useBank ? draft.questionIds : [],
+      inlineQuestions: draft.kind === "QUIZ" ? draft.inline.map(question => ({
+        prompt: question.prompt,
+        options: question.kind === "boolean" ? ["True", "False"] : question.choices.split(/\r?\n/).map(choice => choice.trim()).filter(Boolean),
+        answer: Number(question.answer) - 1
+      })) : []
     }, "Draft saved.")) setFormOpen(false);
   }
 
@@ -149,10 +166,81 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
       <h2 id="class-activities-heading" className="mb-0">Class activities</h2>
       <button className="btn btn-primary btn-sm" disabled={disabled} type="button" onClick={() => edit()}>New activity</button>
     </div>
+    <p className="alert alert-info">The Activities feature is still under development.</p>
     {failure && <p className="alert alert-danger" role="alert">{failure}</p>}
     {message && <p className="alert alert-success" role="status">{message}</p>}
     {locked && <p className="small text-secondary">Recall the class record to draft before opening activities or recording grades.</p>}
-    <details className="border rounded p-3 mb-3">
+    {formOpen && <form className="border rounded p-3 mb-3 d-grid gap-3" onSubmit={saveDraft}>
+      <h3 className="h6 mb-0">{editing ? "Edit draft" : "New activity draft"}</h3>
+      <label>Type<select value={draft.kind} className="form-select" onChange={event => setDraft({ ...draft, kind: event.target.value as Activity["kind"] })}>
+        <option value="ASSIGNMENT">Teacher-posted activity</option><option value="QUIZ">Auto-graded quiz</option>
+      </select></label>
+      <label>Title<input className="form-control" value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} maxLength={120} required/></label>
+      <label>Instructions<textarea className="form-control" rows={3} maxLength={8000} value={draft.instructions} onChange={event => setDraft({ ...draft, instructions: event.target.value })}/></label>
+      {draft.kind === "ASSIGNMENT" && <label>Activity material (optional Google Drive link)
+        <input type="url" className="form-control" maxLength={2048} value={draft.materialUrl} onChange={event => setDraft({ ...draft, materialUrl: event.target.value })}/>
+        <small>Give enrolled students permission to view the file in Drive.</small>
+      </label>}
+      <label>Opens (Manila time)<input type="datetime-local" className="form-control" value={draft.opens} onChange={event => setDraft({ ...draft, opens: event.target.value })}/>
+        <small>Leave blank for immediate access when published.</small></label>
+      <label>Deadline (Manila time)<input type="datetime-local" className="form-control" value={draft.due} onChange={event => setDraft({ ...draft, due: event.target.value })}/></label>
+      <label><input type="checkbox" className="form-check-input me-2" checked={draft.practice} onChange={event => setDraft({ ...draft, practice: event.target.checked })}/>Practice only</label>
+      {!draft.practice && <>
+        <label>Record scores in<select className="form-select" value={draft.categoryId} onChange={event => setDraft({ ...draft, categoryId: event.target.value })}>
+          <option value="">Choose before opening</option>
+          {categories.map(category => <option key={category.id} value={category.id}>{category.label}</option>)}
+        </select></label>
+        {!categories.length && <p className="small text-secondary mb-0">Create an assessment category in Grading setup before opening a graded activity.</p>}
+        <label>Item weight (%)<input className="form-control" type="number" min="0.01" max="100" step="0.01" value={draft.itemWeight} onChange={event => setDraft({ ...draft, itemWeight: event.target.value })}/>
+          <small>Leave blank if the category uses points without item weights.</small></label>
+      </>}
+      {draft.kind === "QUIZ" ? <>
+        <p className="small text-secondary mb-0">Use multiple-choice or true/false questions. Each correct answer earns one point.</p>
+        {draft.inline.map((question, index) => {
+          const update = (values: Partial<InlineQuestion>) => setDraft({
+            ...draft, inline: draft.inline.map((item, position) => position === index ? { ...item, ...values } : item)
+          });
+          return <fieldset className="border rounded p-3 d-grid gap-2" key={index}>
+            <legend className="h6 float-none">Question {index + 1}</legend>
+            <label>Question type<select className="form-select" value={question.kind}
+              onChange={event => update({ kind: event.target.value as InlineQuestion["kind"], answer: "1" })}>
+              <option value="choice">Multiple choice</option><option value="boolean">True / False</option>
+            </select></label>
+            <label>Question<textarea className="form-control" required maxLength={1000} rows={2} value={question.prompt}
+              onChange={event => update({ prompt: event.target.value })}/></label>
+            {question.kind === "choice" ? <>
+              <label>Answer options, one per line<textarea className="form-control" required rows={3} maxLength={1806}
+                value={question.choices} onChange={event => update({ choices: event.target.value })}/></label>
+              <label>Correct option number<input className="form-control" type="number" min="1" max="6" required
+                value={question.answer} onChange={event => update({ answer: event.target.value })}/></label>
+            </> : <label>Correct answer<select className="form-select" value={question.answer} onChange={event => update({ answer: event.target.value })}>
+              <option value="1">True</option><option value="2">False</option></select></label>}
+            <button type="button" className="btn btn-sm btn-outline-secondary justify-self-start"
+              onClick={() => setDraft({ ...draft, inline: draft.inline.filter((_, position) => position !== index) })}>Remove question</button>
+          </fieldset>;
+        })}
+        <button type="button" className="btn btn-outline-primary justify-self-start"
+          disabled={draft.inline.length + (useBank ? draft.questionIds.length : 0) >= 50}
+          onClick={() => setDraft({ ...draft, inline: [...draft.inline, { kind: "choice", prompt: "", choices: "", answer: "1" }] })}>Add a quiz-only question</button>
+        <label><input type="checkbox" className="form-check-input me-2" checked={useBank} onChange={event => setUseBank(event.target.checked)}/>Use questions from my question bank</label>
+        {useBank && <fieldset>
+
+        <legend className="h6">Select questions · {draft.questionIds.length} points</legend>
+        {!bank.length && <p className="small text-secondary">Add reusable questions in the question bank below.</p>}
+        <div className="overflow-auto border rounded p-2 d-grid gap-2" style={{ maxHeight: 260 }}>
+          {bank.map(item => <label className="text-break" key={item.id}>
+            <input className="form-check-input me-2" type="checkbox" checked={draft.questionIds.includes(item.id)}
+              disabled={draft.questionIds.length + draft.inline.length >= 50 && !draft.questionIds.includes(item.id)}
+              onChange={event => setDraft({ ...draft, questionIds: event.target.checked
+                ? [...draft.questionIds, item.id] : draft.questionIds.filter(value => value !== item.id) })}/>
+            {item.prompt}
+          </label>)}
+        </div>
+      </fieldset>}
+      </> : <label>Maximum points<input className="form-control" type="number" min="0.01" step="0.01" max="100000" required value={draft.maxScore} onChange={event => setDraft({ ...draft, maxScore: event.target.value })}/></label>}
+      <div className="d-flex flex-wrap gap-2"><button className="btn btn-primary" disabled={disabled}>Save draft</button><button type="button" className="btn btn-outline-secondary" onClick={() => setFormOpen(false)}>Cancel</button></div>
+    </form>}
+    {formOpen && draft.kind === "QUIZ" && useBank && <details className="border rounded p-3 mb-3">
       <summary>Question bank · {bank.length} recent questions</summary>
       <p className="small text-secondary mt-2 mb-2">Multiple choice and true/false. Each correct answer earns one point.</p>
       <form onSubmit={addQuestion} className="d-grid gap-2">
@@ -166,51 +254,18 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
           : <label>Correct answer<select name="answer" className="form-select"><option value="1">True</option><option value="2">False</option></select></label>}
         <button className="btn btn-outline-primary justify-self-start" disabled={busy || readOnly}>Save question</button>
       </form>
-    </details>
-    {formOpen && <form className="border rounded p-3 mb-3 d-grid gap-3" onSubmit={saveDraft}>
-      <h3 className="h6 mb-0">{editing ? "Edit draft" : "New activity draft"}</h3>
-      <label>Type<select value={draft.kind} className="form-select" onChange={event => setDraft({ ...draft, kind: event.target.value as Activity["kind"] })}>
-        <option value="QUIZ">Quiz</option><option value="ASSIGNMENT">Assignment</option>
-      </select></label>
-      <label>Title<input className="form-control" value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} maxLength={120} required/></label>
-      <label>Instructions<textarea className="form-control" rows={3} maxLength={8000} value={draft.instructions} onChange={event => setDraft({ ...draft, instructions: event.target.value })}/></label>
-      <label>Deadline (Manila time)<input type="datetime-local" className="form-control" value={draft.due} onChange={event => setDraft({ ...draft, due: event.target.value })}/></label>
-      <label><input type="checkbox" className="form-check-input me-2" checked={draft.practice} onChange={event => setDraft({ ...draft, practice: event.target.checked })}/>Practice only</label>
-      {!draft.practice && <>
-        <label>Record scores in<select className="form-select" value={draft.categoryId} onChange={event => setDraft({ ...draft, categoryId: event.target.value })}>
-          <option value="">Choose before opening</option>
-          {categories.map(category => <option key={category.id} value={category.id}>{category.label}</option>)}
-        </select></label>
-        {!categories.length && <p className="small text-secondary mb-0">Create an assessment category in Grading setup before opening a graded activity.</p>}
-        <label>Item weight (%)<input className="form-control" type="number" min="0.01" max="100" step="0.01" value={draft.itemWeight} onChange={event => setDraft({ ...draft, itemWeight: event.target.value })}/>
-          <small>Leave blank if the category uses points without item weights.</small></label>
-      </>}
-      {draft.kind === "QUIZ" ? <fieldset>
-        <legend className="h6">Select questions · {draft.questionIds.length} points</legend>
-        {!bank.length && <p className="small text-secondary">Add questions to your bank above.</p>}
-        <div className="overflow-auto border rounded p-2 d-grid gap-2" style={{ maxHeight: 260 }}>
-          {bank.map(item => <label className="text-break" key={item.id}>
-            <input className="form-check-input me-2" type="checkbox" checked={draft.questionIds.includes(item.id)}
-              disabled={draft.questionIds.length >= 50 && !draft.questionIds.includes(item.id)}
-              onChange={event => setDraft({ ...draft, questionIds: event.target.checked
-                ? [...draft.questionIds, item.id] : draft.questionIds.filter(value => value !== item.id) })}/>
-            {item.prompt}
-          </label>)}
-        </div>
-      </fieldset> : <label>Maximum points<input className="form-control" type="number" min="0.01" step="0.01" max="100000" required value={draft.maxScore} onChange={event => setDraft({ ...draft, maxScore: event.target.value })}/></label>}
-      <div className="d-flex flex-wrap gap-2"><button className="btn btn-primary" disabled={disabled}>Save draft</button><button type="button" className="btn btn-outline-secondary" onClick={() => setFormOpen(false)}>Cancel</button></div>
-    </form>}
+    </details>}
     {loading ? <p role="status">Loading activities…</p> : !activities.length && <p className="text-secondary">No activities in this class yet.</p>}
     <ul className="list-group mb-3">
       {activities.map(activity => <li key={activity.id} className="list-group-item d-flex flex-wrap gap-2 justify-content-between align-items-center">
         <div className="text-break"><b>{activity.title}</b><div className="small text-secondary">
-          {activity.kind === "QUIZ" ? "Quiz" : "Assignment"} · {activity.status === "OPEN" && activity.dueAt && Date.parse(activity.dueAt) <= Date.now() ? "Deadline passed" : activity.status.toLowerCase()} · {activity.practice ? "Practice" : `${activity.maxScore} points`}{activity.dueAt ? ` · Due ${formatDate(activity.dueAt)}` : ""}
+          {activity.kind === "QUIZ" ? "Quiz" : "Teacher-posted activity"} · {activity.status === "OPEN" && activity.dueAt && Date.parse(activity.dueAt) <= Date.now() ? "Deadline passed" : activity.status.toLowerCase()} · {activity.practice ? "Practice" : `${activity.maxScore} points`}{activity.availableAt && Date.parse(activity.availableAt) > Date.now() ? ` · Opens ${formatDate(activity.availableAt)}` : ""}{activity.dueAt ? ` · Due ${formatDate(activity.dueAt)}` : ""}
         </div></div>
         <div className="d-flex flex-wrap gap-2">
           {activity.status === "DRAFT" ? <>
             <button className="btn btn-sm btn-outline-secondary" type="button" disabled={disabled} onClick={() => edit(activity)}>Edit draft</button>
             <button className="btn btn-sm btn-primary" type="button" disabled={disabled} onClick={() =>
-              void save({ action: "open", subjectId, activityId: activity.id }, "Activity opened.", true)}>Open activity</button>
+              void save({ action: "open", subjectId, activityId: activity.id }, "Activity published.", true)}>Publish activity</button>
           </> : <>
             <button className="btn btn-sm btn-outline-primary" type="button" disabled={busy} onClick={() => setActive(activity.id)}>Submissions ({activity._count?.submissions ?? 0})</button>
             {activity.status === "OPEN" && <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy || readOnly} onClick={() =>
@@ -352,6 +407,7 @@ export function StudentActivities({ readOnly }: { readOnly?: boolean }) {
       </div>
       <p className="small text-secondary">{active.subject?.code} · {active.maxScore} points{active.practice ? " · Practice" : ""}</p>
       {active.instructions && <p style={{ whiteSpace: "pre-wrap" }}>{active.instructions}</p>}
+      {active.materialUrl && <p><a href={active.materialUrl} target="_blank" rel="noreferrer">Open activity material in Google Drive</a></p>}
       {active.submission ? <div>
         <p><b>My submission</b> · {formatDate(active.submission.submittedAt)} Manila time</p>
         {active.submission.text && <p style={{ whiteSpace: "pre-wrap" }}>{active.submission.text}</p>}

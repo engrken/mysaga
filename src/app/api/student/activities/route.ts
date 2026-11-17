@@ -45,11 +45,12 @@ export async function GET(request: Request) {
     where: {
       subjectId: { in: classId ? [classId] : [...enrollmentByClass.keys()] },
       status: { in: ["OPEN", "CLOSED"] },
+      OR: [{ availableAt: null }, { availableAt: { lte: new Date() } }],
       ...(activityId ? { id: activityId } : {})
     },
     orderBy: [{ openedAt: "desc" }, { id: "desc" }], take: classId ? 50 : 20,
     select: { id: true, title: true, kind: true, instructions: true, subjectId: true, status: true,
-      maxScore: true, practice: true, dueAt: true, ...(activityId ? { questions: true } : {}),
+      materialUrl: true, maxScore: true, practice: true, dueAt: true, ...(activityId ? { questions: true } : {}),
       submissions: { where: { enrollmentId: { in: enrollmentIds } },
         select: { text: true, driveUrl: true, answers: true, submittedAt: true, points: true, feedback: true, gradedAt: true } }
     }
@@ -104,6 +105,7 @@ export async function POST(request: Request) {
       return reply({ ok: true, alreadySubmitted: true });
     }
     const now = new Date();
+    if (activity.availableAt && activity.availableAt > now) return error("This activity has not opened yet.", 409);
     if (activity.status !== "OPEN" || (activity.dueAt && activity.dueAt <= now)) return error("Submissions are closed.", 409);
     if (!activity.practice && subject[0].gradeStatus !== "DRAFT") return error("The class record is closed for grading.", 409);
 
