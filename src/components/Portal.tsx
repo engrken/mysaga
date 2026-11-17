@@ -18,7 +18,8 @@ const OnboardingGuide = dynamic(() => import("./PortalGuides").then(module => mo
 const PhilippineHolidayCalendar = dynamic(() => import("./PhilippineHolidayCalendar").then(module => module.PhilippineHolidayCalendar));
 import { calculateCategoryPercent, calculateFinal, calculateGradeBreakdown, convertRawPercent, remainingChildAllocation } from "@/lib/grades";
 import { classWorkspaceHref, resolveClassRoute, resolveClassSelection, parseClassWorkspaceQuery, type ClassSection } from "@/lib/class-navigation";
-import { absenceDates, attendanceDays as orderedAttendanceDays, attendanceMark, attendanceTotals, consecutiveLateAbsences, CONVERTED_LATE_LABEL, droppingAbsenceStreak, DROPPING_ABSENCE_THRESHOLD, EARLY_ABSENCE_PERCENT, HIGH_RISK_ABSENCE_PERCENT, type AbsenceDate, type AbsenceStreak } from "@/lib/attendance";
+import { todayManila } from "@/lib/tenant-operations";
+import { absenceDates, attendanceDays as orderedAttendanceDays, attendanceRiskSummary, consecutiveLateAbsences, CONVERTED_LATE_LABEL, droppingAbsenceStreak, DROPPING_ABSENCE_THRESHOLD, EARLY_ABSENCE_PERCENT, HIGH_RISK_ABSENCE_PERCENT, type AbsenceDate, type AbsenceStreak } from "@/lib/attendance";
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 import { buildWorkbookPages, workbookWidths } from "@/lib/scorebook-layout";
 
@@ -430,18 +431,24 @@ function categoryHasScores(enrollment: Enrollment, category: Category, categorie
 }
 function attendanceSummary(enrollment: Enrollment, assessments: Assessment[], scoreLookup?: Map<string, Enrollment["scores"][number]>) {
   const sessions = assessments.filter(item => item.title.toLocaleLowerCase().startsWith("attendance ·"));
-  const counts = { present: 0, absent: 0, excused: 0, late: 0 };
-  for (const item of sessions) {
-    const score = scoreLookup ? scoreLookup.get(item.id) : enrollment.scores.find(value => value.assessmentId === item.id);
-    const mark = attendanceMark(score);
-    if (mark) counts[mark]++;
-  }
   const scores = scoreLookup ?? new Map(enrollment.scores.map(score => [score.assessmentId, score]));
-  const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Manila" }).format(new Date());
+  const today = todayManila();
   const days = orderedAttendanceDays(sessions, today);
   const converted = consecutiveLateAbsences(days, id => scores.get(id)?.remark);
-  const { counted, effectiveAbsent, lateAbsences, percent: absencePercent } = attendanceTotals(counts.absent, counts.present, counts.late, converted.size);
-  return { ...counts, counted, effectiveAbsent, lateAbsences, converted, absenceDates: absenceDates(days, id => scores.get(id), converted), droppingWarning: droppingAbsenceStreak(days, id => scores.get(id), converted), sessions: sessions.length, percent: absencePercent === null ? null : 100 - absencePercent, absencePercent, alertLevel: absencePercent === null ? "none" as const : absencePercent >= HIGH_RISK_ABSENCE_PERCENT ? "critical" as const : absencePercent >= EARLY_ABSENCE_PERCENT ? "early" as const : "none" as const, atRisk: absencePercent !== null && absencePercent > HIGH_RISK_ABSENCE_PERCENT };
+  const { present, excused, late, recordedAbsent: absent, absent: effectiveAbsent, counted, lateAbsences, percent: absencePercent } =
+    attendanceRiskSummary(sessions, scores, today, converted);
+  return {
+    present, excused, late, absent, counted, effectiveAbsent, lateAbsences, converted,
+    absenceDates: absenceDates(days, id => scores.get(id), converted),
+    droppingWarning: droppingAbsenceStreak(days, id => scores.get(id), converted),
+    sessions: sessions.length,
+    percent: absencePercent === null ? null : 100 - absencePercent,
+    absencePercent,
+    alertLevel: absencePercent === null ? "none" as const
+      : absencePercent >= HIGH_RISK_ABSENCE_PERCENT ? "critical" as const
+      : absencePercent >= EARLY_ABSENCE_PERCENT ? "early" as const : "none" as const,
+    atRisk: absencePercent !== null && absencePercent > HIGH_RISK_ABSENCE_PERCENT
+  };
 }
 
 function leafCategories(categories: Category[]) { return categories.filter(category => !categories.some(item => item.parentId === category.id)); }
@@ -739,8 +746,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     if (!teacher || tab !== "overview" || !overviewFrom || !overviewTo || overviewFrom > overviewTo) return;
     const controller = new AbortController();
     setOverviewLoading(true);
-    api(`/api/teacher/overview?from=${encodeURIComponent(overviewFrom)}&to=${encodeURIComponent(overviewTo)}`, { signal: controller.signal })
-      .then(data => setOverviewData(data as OverviewData))
+    api(`/api/teacher/overview?from=${encodeURIComponent(overviewFrom)}&to=${encodeURIComponent(overviewTo)}`, { signal: controller.signal, cache: "no-store" })
+      .then(data => { if (!controller.signal.aborted) setOverviewData(data as OverviewData); })
       .catch(error => { if (error?.name !== "AbortError") setErr(error instanceof Error ? error.message : "Could not load teaching analytics."); })
       .finally(() => { if (!controller.signal.aborted) setOverviewLoading(false); });
     return () => controller.abort();
@@ -1033,6 +1040,10 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           enrollmentId: mark.enrollmentId, assessmentId: mark.assessmentId, remark: mark.remark
         })) })
       });
+      if (!attendancePendingRef.current.size) {
+        setOverviewData(null);
+        setOverviewRefresh(value => value + 1);
+      }
       setAttendanceSaveState(attendancePendingRef.current.size ? "pending" : "saved");
     } catch (error) {
       for (const [key, mark] of batch) {
@@ -1491,7 +1502,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   <div className="section-heading">
     <div>
       <h2 id="overview-attendance-risk-title">Attendance alerts</h2>
-      <p className="muted">High-risk attendance starts at {HIGH_RISK_ABSENCE_PERCENT}% absences. Danger of failing applies above {HIGH_RISK_ABSENCE_PERCENT}%.</p>
+      <p className="muted">High-risk attendance starts at {HIGH_RISK_ABSENCE_PERCENT}% absences. Danger of failing applies above {HIGH_RISK_ABSENCE_PERCENT}%. Rates include attendance recorded through today (Manila time).</p>
     </div>
   </div>
   {overviewData.attendanceRisk.some(item => item.percent >= HIGH_RISK_ABSENCE_PERCENT) ? <ul className="overview-attendance-risk-list">

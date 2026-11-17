@@ -212,3 +212,19 @@ test("dropping warning clears when the student returns and a new streak starts a
   marks.push("ABSENT");
   assert.deepEqual(warning(), { days: 3, startDate: dates[4], endDate: dates[6], dates: dates.slice(4) });
 });
+
+test("attendance risk excludes future marks and uses one cutoff for server and browser dates", () => {
+  const date = i => `2026-11-${String(i + 1).padStart(2, "0")}`;
+  const assessments = Array.from({ length: 23 }, (_, i) => ({
+    id: String(i), title: "Attendance · meeting", dueDate: new Date(date(i))
+  }));
+  const scores = new Map(assessments.map((item, i) => [
+    item.id, { remark: i < 4 ? "ABSENT" : "PRESENT", points: null }
+  ]));
+  const browserAssessments = assessments.map(item => ({ ...item, dueDate: item.dueDate.toISOString() }));
+  const serverSummary = attendance.attendanceRiskSummary(assessments, scores, "2026-11-20");
+  assert.deepEqual(attendance.attendanceRiskSummary(browserAssessments, scores, "2026-11-20"), serverSummary);
+  assert.equal(serverSummary.percent, 20);
+  assert.equal(serverSummary.counted, 20);
+  assert.equal(attendance.attendanceRiskSummary(assessments, scores, "2026-11-23").percent.toFixed(1), "17.4");
+});

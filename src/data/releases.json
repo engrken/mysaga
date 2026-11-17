@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.6.0-beta.2",
+    "date": "2026-11-17",
+    "kind": "fix",
+    "changes": [
+      "Use the same attendance cutoff in Class Attendance and Teacher Overview, and refresh the overview after attendance changes so early warnings stay out of the dashboard."
+    ]
+  },
+  {
     "version": "0.6.0-beta.1",
     "date": "2026-11-17",
     "kind": "feature",
