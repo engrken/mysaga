@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { highRiskAttendance } from "@/lib/attendance";
+import { attendanceDays, droppingAbsenceStreak, highRiskAttendance } from "@/lib/attendance";
 import { todayManila } from "@/lib/tenant-operations";
 import { calculateFinal, equivalentFromBands } from "@/lib/grades";
 
@@ -87,6 +87,8 @@ export async function GET(request: Request) {
       itemCount, recordedCount,
       classId: subject.classId,
       attendanceWarning: highRiskAttendance(allItems, scoresByItem, today),
+      droppingWarning: droppingAbsenceStreak(attendanceDays(allItems, today),
+        id => scoresByItem.get(id)?.remark === "ABSENT"),
       categories,
       gradeBands: summaryOnly ? [] : subject.gradeBands.map(band => ({
         minPercent: band.minPercent, finalGrade: band.finalGrade, remarks: band.remarks

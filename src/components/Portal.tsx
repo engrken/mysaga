@@ -18,7 +18,7 @@ const OnboardingGuide = dynamic(() => import("./PortalGuides").then(module => mo
 const PhilippineHolidayCalendar = dynamic(() => import("./PhilippineHolidayCalendar").then(module => module.PhilippineHolidayCalendar));
 import { calculateCategoryPercent, calculateFinal, calculateGradeBreakdown, convertRawPercent, remainingChildAllocation } from "@/lib/grades";
 import { classWorkspaceHref, resolveClassRoute, resolveClassSelection, parseClassWorkspaceQuery, type ClassSection } from "@/lib/class-navigation";
-import { absencePercent as calculateAbsencePercent, attendanceMark, HIGH_RISK_ABSENCE_PERCENT } from "@/lib/attendance";
+import { absencePercent as calculateAbsencePercent, attendanceMark, DROPPING_ABSENCE_THRESHOLD, HIGH_RISK_ABSENCE_PERCENT, type AbsenceStreak } from "@/lib/attendance";
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 import { buildWorkbookPages, workbookWidths } from "@/lib/scorebook-layout";
 
@@ -31,7 +31,7 @@ type Assessment = { id: string; categoryId: string; title: string; maxScore: num
 type Enrollment = { id: string; studentName: string; studentNumber: string | null; studentUserId: string | null; remarks: string | null; finalGradeOverride?: string | null; gradeChangeCount?: number; gradeChangeHistory?: Array<{ id:string; previousFinalGrade:string|null; previousRemarks:string|null; newFinalGrade:string|null; newRemarks:string|null; reason:string; createdAt:string; actor:{fullName:string} }>; scores: Array<{ assessmentId: string; points: number | null; remark: string | null }>; finalPercent: number | null };
 type GradeBand = { id: string; minPercent: number; finalGrade: string; remarks: string };
 type Detail = Subject & { categories: Category[]; gradeBands: GradeBand[]; assessments: Assessment[]; enrollments: Enrollment[] };
-type Grade = { id: string; classId?: string | null; attendanceWarning?: { absent: number; counted: number; percent: number } | null; itemCount?: number; recordedCount?: number; code: string; title: string; term: string; academicYear: string; teacher: string; status: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; percent: number | null; finalGrade: string | null; remarks: string; gradeBands: Array<{ minPercent: number; finalGrade: string; remarks: string }>; categories: Array<{ id: string; name: string; weight: number; conversionBase: number; assessments: Array<{id:string;title:string;points:number|null;remark:string|null;maxScore:number;weight:number|null}> }> };
+type Grade = { id: string; classId?: string | null; droppingWarning?: AbsenceStreak | null; attendanceWarning?: { absent: number; counted: number; percent: number } | null; itemCount?: number; recordedCount?: number; code: string; title: string; term: string; academicYear: string; teacher: string; status: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; percent: number | null; finalGrade: string | null; remarks: string; gradeBands: Array<{ minPercent: number; finalGrade: string; remarks: string }>; categories: Array<{ id: string; name: string; weight: number; conversionBase: number; assessments: Array<{id:string;title:string;points:number|null;remark:string|null;maxScore:number;weight:number|null}> }> };
 type StudentSearchMatch = { enrollmentId: string; studentName: string; studentNumber: string | null; studentRemark: string | null; class: { id: string; classId: string | null; code: string; title: string; term: string; academicYear: string; status: "DRAFT" | "SUBMITTED" | "VERIFIED" }; finalPercent: number | null; finalGrade: string | null; finalRemark: string; records: Array<{id:string;title:string;category:string;points:number|null;remark:string|null;maxScore:number;dueDate:string|null}> };
 type ScheduleRow = { label: string; day: string; startTime: string; endTime: string };
 type OverviewItem = { id: string; title: string; date: string | null; subjectId: string; code: string; subjectTitle: string; attendanceType?: "FACE_TO_FACE" | "ONLINE" | null; scheduleOverrideReason?: string | null; markedCount?: number; studentCount?: number };
@@ -42,7 +42,7 @@ type OverviewData = {
   attendanceRisk: Array<{
     enrollmentId: string; studentName: string; studentNumber: string | null;
     subjectId: string; classId: string | null; code: string; title: string; academicYear: string; term: string;
-    absent: number; counted: number; percent: number;
+    absent: number; counted: number; percent: number; highRisk: boolean; droppingWarning: AbsenceStreak | null;
   }>;
   submissions: { draft: number; provisional: number; final: number };
   enrollment: Array<{ id: string; label: string; title: string; code: string; count: number }>;
@@ -59,6 +59,12 @@ function newScheduleRow(): ScheduleRow {
 }
 function todayDateInput() { const now = new Date(); return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
 function formatOverviewDate(value: string | null) { return value ? new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" }).format(new Date(value)) : "Date not set"; }
+function DroppingWarning({ streak }: { streak: AbsenceStreak }) {
+  return <div className="mt-1">
+    <span className="badge text-bg-danger">Danger of dropping</span>
+    <small className="d-block">{streak.days} consecutive absences ({formatOverviewDate(streak.startDate)} – {formatOverviewDate(streak.endDate)})</small>
+  </div>;
+}
 function scoreSheetCategoryLabel(name: string) {
   const label = name.trim();
   if (/^laboratory\s+exam\b/i.test(label)) return "Lab Exam";
@@ -1254,8 +1260,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       count + Math.max(0, (grade.itemCount ?? 0) - (grade.recordedCount ?? 0)), 0)
   }), [grades]);
   const studentAttendanceWarnings = useMemo(() => grades
-    .flatMap(grade => grade.attendanceWarning ? [{ grade, warning: grade.attendanceWarning }] : [])
-    .sort((a, b) => b.warning.percent - a.warning.percent), [grades]);
+    .filter(grade => grade.attendanceWarning || grade.droppingWarning)
+    .sort((a, b) => Number(!!b.droppingWarning) - Number(!!a.droppingWarning)
+      || (b.attendanceWarning?.percent ?? 0) - (a.attendanceWarning?.percent ?? 0)), [grades]);
   const studentGradeYears = useMemo(() => [...new Set(grades.map(grade => grade.academicYear))].sort((a,b)=>b.localeCompare(a)), [grades]);
   const studentGradeTerms = useMemo(() => [...new Set(grades.map(grade => grade.term))].sort(), [grades]);
   const visibleGrades = useMemo(() => grades.filter(grade =>
@@ -1462,8 +1469,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
 <section className="surface overview-attendance-risk" aria-labelledby="overview-attendance-risk-title">
   <div className="section-heading">
     <div>
-      <h2 id="overview-attendance-risk-title">High-risk attendance</h2>
-      <p className="muted">Students with {HIGH_RISK_ABSENCE_PERCENT}% or more absences in a subject. Based on attendance recorded through today, excluding excused and unmarked days.</p>
+      <h2 id="overview-attendance-risk-title">Attendance alerts</h2>
+      <p className="muted">High-risk attendance starts at {HIGH_RISK_ABSENCE_PERCENT}% absences. Three consecutive recorded absences trigger a danger of dropping warning.</p>
     </div>
   </div>
   {overviewData.attendanceRisk.length ? <ul className="overview-attendance-risk-list">
@@ -1477,14 +1484,16 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         <small>{[item.classId, item.term, item.academicYear].filter(Boolean).join(" · ")}</small>
       </div>
       <div className="overview-attendance-risk-rate">
+        {item.highRisk && <span className="badge text-bg-warning me-1">High-risk attendance</span>}
         <strong>{item.percent.toFixed(1)}% absent</strong>
         <small>{item.absent} of {item.counted} counted days</small>
+        {item.droppingWarning && <DroppingWarning streak={item.droppingWarning}/>}
       </div>
       <button type="button" className="btn btn-sm btn-outline-primary"
         aria-label={`Open attendance for ${item.code}${item.classId ? ` (${item.classId})` : ""}`}
         onClick={() => openClass(item.subjectId, "attendance")}>Open attendance</button>
     </li>)}
-  </ul> : <div className="inline-empty">No students have reached the {HIGH_RISK_ABSENCE_PERCENT}% absence threshold.</div>}
+  </ul> : <div className="inline-empty">No attendance alerts for your classes.</div>}
 </section>
 <div className="overview-section-heading"><div><span className="eyebrow">REPORTS</span><h2>Learning activity</h2></div><span>Based on {new Date(`${overviewFrom}T00:00:00`).toLocaleDateString()} – {new Date(`${overviewTo}T00:00:00`).toLocaleDateString()}</span></div>
 <div className="overview-chart-grid">
@@ -1648,13 +1657,16 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         {studentAttendanceWarnings.length > 0 && (
           <section className="alert alert-warning" aria-labelledby="student-attendance-warning-heading" aria-live="polite">
             <h3 className="h6" id="student-attendance-warning-heading">Attendance warning</h3>
-            <p className="mb-2">You have reached {HIGH_RISK_ABSENCE_PERCENT}% absences in the classes below. Excused and unmarked days are excluded.</p>
+            <p className="mb-2">These alerts are based on your recorded attendance in each class. {DROPPING_ABSENCE_THRESHOLD} consecutive recorded absences trigger a danger of dropping warning.</p>
             <ul className="ps-3 mb-2">
-              {studentAttendanceWarnings.map(({ grade, warning }) => (
+              {studentAttendanceWarnings.map(grade => (
                 <li className="mb-2" key={grade.id}>
                   <strong>{grade.code} · {grade.title}</strong>
                   <small className="d-block">{[grade.classId, grade.term, grade.academicYear].filter(Boolean).join(" · ")}</small>
-                  <span>{warning.percent.toFixed(1)}% absent ({warning.absent} of {warning.counted} counted class days)</span>
+                  {grade.attendanceWarning && <span className="d-block">
+                    High-risk attendance · {grade.attendanceWarning.percent.toFixed(1)}% absent ({grade.attendanceWarning.absent} of {grade.attendanceWarning.counted} counted class days)
+                  </span>}
+                  {grade.droppingWarning && <DroppingWarning streak={grade.droppingWarning}/>}
                 </li>
               ))}
             </ul>

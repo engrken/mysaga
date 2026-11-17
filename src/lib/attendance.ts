@@ -31,3 +31,44 @@ export function highRiskAttendance(
     ? { absent, counted: absent + present, percent }
     : null;
 }
+
+export const DROPPING_ABSENCE_THRESHOLD = 3;
+
+export type AbsenceStreak = { days: number; startDate: string; endDate: string };
+
+export function attendanceDays(
+  assessments: ReadonlyArray<{ id: string; title: string; dueDate: Date | null }>,
+  today: string
+) {
+  const days = new Map<string, string[]>();
+  for (const assessment of assessments) {
+    if (!assessment.title.toLowerCase().startsWith("attendance ·")) continue;
+    const date = assessment.dueDate?.toISOString().slice(0, 10)
+      ?? /^attendance ·\s*(\d{4}-\d{2}-\d{2})$/i.exec(assessment.title)?.[1];
+    if (!date || date > today) continue;
+    const ids = days.get(date) ?? [];
+    ids.push(assessment.id);
+    days.set(date, ids);
+  }
+  return [...days].sort(([a], [b]) => a.localeCompare(b));
+}
+
+export function droppingAbsenceStreak(
+  days: ReturnType<typeof attendanceDays>,
+  isAbsent: (assessmentId: string) => boolean
+): AbsenceStreak | null {
+  let warning: AbsenceStreak | null = null;
+  let count = 0;
+  let startDate = "";
+  for (const [date, ids] of days) {
+    // A day confirms an absence only when every attendance entry for it is marked absent.
+    if (!ids.every(isAbsent)) {
+      count = 0;
+      continue;
+    }
+    if (count === 0) startDate = date;
+    count++;
+    if (count >= DROPPING_ABSENCE_THRESHOLD) warning = { days: count, startDate, endDate: date };
+  }
+  return warning;
+}

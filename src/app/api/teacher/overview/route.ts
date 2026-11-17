@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { absencePercent, attendanceMark, HIGH_RISK_ABSENCE_PERCENT } from "@/lib/attendance";
+import { absencePercent, attendanceDays, attendanceMark, droppingAbsenceStreak, HIGH_RISK_ABSENCE_PERCENT } from "@/lib/attendance";
 import { scheduleWeekdays } from "@/lib/schedule-days";
 
 function parseDate(value: string | null) {
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
   const today = new Date(`${manilaDate}T00:00:00.000Z`);
   const subjectScope = { teacherId: teacher.id, schoolId: teacher.schoolId };
 
-  const [subjects, upcomingAttendance, upcomingAssessments, attendanceCounts, todaysAttendance, recordedAttendance] = await Promise.all([
+  const [subjects, upcomingAttendance, upcomingAssessments, attendanceCounts, todaysAttendance, recordedAttendance, attendanceSessions] = await Promise.all([
     prisma.subject.findMany({
       where: subjectScope,
       select: {
@@ -90,8 +90,32 @@ export async function GET(request: Request) {
         OR: [{ remark: { in: ["PRESENT", "ABSENT", "DID_NOT_SUBMIT"] } }, { points: { gt: 0 } }]
       },
       _count: { _all: true }
+    }),
+    prisma.assessment.findMany({
+      where: {
+        subject: subjectScope,
+        title: { startsWith: "Attendance ·", mode: "insensitive" },
+        OR: [{ dueDate: null }, { dueDate: { lt: nextDay(today) } }]
+      },
+      select: {
+        id: true, subjectId: true, title: true, dueDate: true,
+        scores: { where: { remark: "ABSENT" }, select: { enrollmentId: true } }
+      }
     })
   ]);
+
+  const sessionsBySubject = new Map<string, typeof attendanceSessions>();
+  const absencesByEnrollment = new Map<string, Set<string>>();
+  for (const session of attendanceSessions) {
+    const sessions = sessionsBySubject.get(session.subjectId) ?? [];
+    sessions.push(session);
+    sessionsBySubject.set(session.subjectId, sessions);
+    for (const { enrollmentId } of session.scores) {
+      const ids = absencesByEnrollment.get(enrollmentId) ?? new Set<string>();
+      ids.add(session.id);
+      absencesByEnrollment.set(enrollmentId, ids);
+    }
+  }
 
   const attendanceByEnrollment = new Map<string, { absent: number; present: number }>();
   for (const row of recordedAttendance) {
@@ -102,26 +126,35 @@ export async function GET(request: Request) {
     counts[mark] += row._count._all;
     attendanceByEnrollment.set(row.enrollmentId, counts);
   }
-  const attendanceRisk = subjects.flatMap(subject => subject.enrollments.flatMap(enrollment => {
-    const counts = attendanceByEnrollment.get(enrollment.id);
-    if (!counts) return [];
-    const percent = absencePercent(counts.absent, counts.present);
-    if (percent === null || percent < HIGH_RISK_ABSENCE_PERCENT) return [];
-    return [{
-      enrollmentId: enrollment.id,
-      studentName: enrollment.studentName,
-      studentNumber: enrollment.studentNumber,
-      subjectId: subject.id,
-      classId: subject.classId,
-      code: subject.code,
-      title: subject.title,
-      academicYear: subject.academicYear,
-      term: subject.term,
-      absent: counts.absent,
-      counted: counts.absent + counts.present,
-      percent
-    }];
-  })).sort((a, b) => b.percent - a.percent || b.absent - a.absent || a.studentName.localeCompare(b.studentName));
+  const attendanceRisk = subjects.flatMap(subject => {
+    const days = attendanceDays(sessionsBySubject.get(subject.id) ?? [], manilaDate);
+    return subject.enrollments.flatMap(enrollment => {
+      const counts = attendanceByEnrollment.get(enrollment.id);
+      if (!counts) return [];
+      const percent = absencePercent(counts.absent, counts.present);
+      const absences = absencesByEnrollment.get(enrollment.id);
+      const droppingWarning = absences ? droppingAbsenceStreak(days, id => absences.has(id)) : null;
+      const highRisk = percent !== null && percent >= HIGH_RISK_ABSENCE_PERCENT;
+      if (percent === null || (!highRisk && !droppingWarning)) return [];
+      return [{
+        enrollmentId: enrollment.id,
+        studentName: enrollment.studentName,
+        studentNumber: enrollment.studentNumber,
+        subjectId: subject.id,
+        classId: subject.classId,
+        code: subject.code,
+        title: subject.title,
+        academicYear: subject.academicYear,
+        term: subject.term,
+        absent: counts.absent,
+        counted: counts.absent + counts.present,
+        percent,
+        highRisk,
+        droppingWarning
+      }];
+    });
+  }).sort((a, b) => Number(!!b.droppingWarning) - Number(!!a.droppingWarning)
+    || b.percent - a.percent || b.absent - a.absent || a.studentName.localeCompare(b.studentName));
 
   const students = new Set<string>();
   let activities = 0;
