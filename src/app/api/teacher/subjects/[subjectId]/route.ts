@@ -16,7 +16,7 @@ async function ownedSubjectForMutation(subjectId: string, teacherId: string, sch
     include: {
       categories: { orderBy: { sortOrder: "asc" } },
       gradeBands: { orderBy: { sortOrder: "asc" } },
-      assessments: { orderBy: { createdAt: "asc" } },
+      assessments: { orderBy: { createdAt: "asc" }, include: { activity: { select: { id: true } } } },
       enrollments: { select: {
         id: true, studentName: true, studentNumber: true, remarks: true, finalGradeOverride: true,
         scores: { select: { assessmentId: true, points: true, remark: true } }
@@ -181,8 +181,15 @@ export async function PATCH(request: Request, context: Context) {
     const missingScores = subject.enrollments.filter(enrollment => !enrollment.remarks && subject.assessments.some(item => !enrollment.scores.some(score => score.assessmentId === item.id && (score.points !== null || !!score.remark)))).length;
     if (missingScores) return NextResponse.json({ error: `${missingScores} student record(s) have missing assessment scores. Enter a score or set an item status such as Excused, Absent, or Did not submit.` }, { status: 400 });
     const now = new Date();
-    await prisma.subject.update({ where: { id: subjectId }, data: { gradeStatus: "SUBMITTED", submittedAt: now, verifiedAt: null } });
-    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "submitted class grade record; student visibility unchanged", entity: "subject", entityId: subjectId } });
+    const submitted = await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "Subject" WHERE id = ${subjectId} FOR UPDATE`;
+      if (await tx.classActivity.count({ where: { subjectId, practice: false, status: "OPEN" } })) return false;
+      const result = await tx.subject.updateMany({ where: { id: subjectId, gradeStatus: subject.gradeStatus }, data: { gradeStatus: "SUBMITTED", submittedAt: now, verifiedAt: null } });
+      if (!result.count) return false;
+      await tx.auditEvent.create({ data: { actorId: teacher.id, action: "submitted class grade record; student visibility unchanged", entity: "subject", entityId: subjectId } });
+      return true;
+    });
+    if (!submitted) return NextResponse.json({ error: "Close all graded activities and refresh the class record before submitting grades." }, { status: 409 });
     return NextResponse.json({ ok: true, gradeStatus: "SUBMITTED", submittedAt: now, verifiedAt: null });
   }
   if ("verifyGrades" in input) {
@@ -241,6 +248,7 @@ export async function PATCH(request: Request, context: Context) {
   }
   if (["LECTURE_ONLY", "LABORATORY_ONLY", "LECTURE_LAB", "LECTURE_LAB_60_40"].includes(input.gradingTemplate)) {
     if (subject.gradeStatus !== "DRAFT") return NextResponse.json({ error: "Recall this class to draft before changing its grading structure." }, { status: 409 });
+    if (subject.assessments.some(item => item.activity)) return NextResponse.json({ error: "The grading template cannot be replaced after graded activities are opened." }, { status: 409 });
     const lectureOnly = input.gradingTemplate === "LECTURE_ONLY";
     const laboratoryOnly = input.gradingTemplate === "LABORATORY_ONLY";
     const legacyTemplate = input.gradingTemplate === "LECTURE_LAB_60_40";
@@ -326,6 +334,7 @@ export async function PATCH(request: Request, context: Context) {
     const assessmentId = z.string().safeParse(input.deleteAssessmentId); if (!assessmentId.success) return NextResponse.json({ error: "Choose an assessment to remove." }, { status: 400 });
     const assessment = subject.assessments.find(item => item.id === assessmentId.data);
     if (!assessment) return NextResponse.json({ error: "Assessment not found." }, { status: 404 });
+    if (assessment.activity) return NextResponse.json({ error: "This assessment is linked to an activity and its submissions." }, { status: 409 });
     await prisma.assessment.delete({ where: { id: assessment.id } });
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "deleted assessment and its associated score records", entity: "assessment", entityId: assessment.id } });
     return NextResponse.json({ ok: true });
@@ -368,13 +377,18 @@ export async function PATCH(request: Request, context: Context) {
         (item.scheduleOverrideReason || null) !== (previous.scheduleOverrideReason || null) ||
         (item.attendanceType || null) !== (previous.attendanceType || null);
     });
+    if (changed.some(item => {
+      const previous = existingById.get(item.id)!;
+      return previous.activity && (item.title !== previous.title || item.maxScore !== previous.maxScore ||
+        item.categoryId !== previous.categoryId || (item.dueDate?.slice(0, 10) || null) !== (previous.dueDate?.toISOString().slice(0, 10) || null));
+    })) return NextResponse.json({ error: "The linked activity sets this assessment’s name, points, category, and deadline. You can still adjust its weight." }, { status: 409 });
     if (changed.length) {
       await prisma.$transaction([
         ...changed.map(item => prisma.assessment.update({
           where: { id: item.id },
           data: {
             categoryId: item.categoryId, title: item.title, maxScore: item.maxScore, weight: item.weight,
-            dueDate: item.dueDate ? new Date(item.dueDate) : null,
+            dueDate: existingById.get(item.id)?.activity ? undefined : item.dueDate ? new Date(item.dueDate) : null,
             scheduleOverrideReason: item.scheduleOverrideReason || null,
             attendanceType: item.attendanceType || null
           }

@@ -96,6 +96,7 @@ model User {
   emailChangeTokens       EmailChangeToken[]
   securityOtps            SecurityOtp[]
   gradeChanges            GradeChangeHistory[] @relation("GradeChangeActor")
+  bankQuestions           BankQuestion[]
 
   @@unique([schoolId, email])
   @@unique([schoolId, studentNumber])
@@ -146,6 +147,7 @@ model Subject {
   categories   GradeCategory[]
   gradeBands   GradeBand[]
   assessments  Assessment[]
+  activities   ClassActivity[]
 
   @@unique([schoolId, classId])
   @@index([schoolId, teacherId, academicYear, term])
@@ -178,6 +180,7 @@ model Enrollment {
   student            User?                @relation("StudentEnrollments", fields: [studentUserId], references: [id], onDelete: SetNull)
   scores             Score[]
   gradeChangeHistory GradeChangeHistory[]
+  activitySubmissions ActivitySubmission[]
 
   @@unique([subjectId, studentNumber])
   @@index([subjectId, studentName])
@@ -232,6 +235,7 @@ model Assessment {
   subject                Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   category               GradeCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   scores                 Score[]
+  activity               ClassActivity?
 
   @@index([subjectId, categoryId])
 }
@@ -319,4 +323,70 @@ model EmailVerificationChallenge {
   usedAt      DateTime?
 
   @@index([expiresAt])
+}
+
+enum ClassActivityKind {
+  QUIZ
+  ASSIGNMENT
+}
+
+enum ClassActivityStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+model BankQuestion {
+  id        String   @id @default(cuid())
+  teacherId String
+  prompt    String
+  options   Json
+  answer    Int
+  createdAt DateTime @default(now())
+  teacher   User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@index([teacherId, createdAt])
+}
+
+model ClassActivity {
+  id           String              @id @default(cuid())
+  subjectId    String
+  categoryId   String?
+  assessmentId String?             @unique
+  title        String
+  instructions String
+  kind         ClassActivityKind
+  status       ClassActivityStatus @default(DRAFT)
+  maxScore     Float
+  itemWeight   Float?
+  practice     Boolean             @default(false)
+  questions    Json
+  dueAt        DateTime?
+  openedAt     DateTime?
+  createdAt    DateTime            @default(now())
+  subject      Subject             @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  assessment   Assessment?         @relation(fields: [assessmentId], references: [id], onDelete: NoAction)
+  submissions  ActivitySubmission[]
+
+  @@index([subjectId, status, createdAt])
+}
+
+model ActivitySubmission {
+  id           String        @id @default(cuid())
+  activityId   String
+  enrollmentId String
+  answers      Json?
+  text         String?
+  driveUrl     String?
+  points       Float?
+  feedback     String?
+  submittedAt  DateTime      @default(now())
+  gradedAt     DateTime?
+  updatedAt    DateTime      @updatedAt
+  activity     ClassActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  enrollment   Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, enrollmentId])
+  @@index([enrollmentId])
+  @@index([activityId, updatedAt])
 }
