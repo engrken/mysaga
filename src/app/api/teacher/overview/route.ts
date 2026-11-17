@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { absencePercent, attendanceMark, HIGH_RISK_ABSENCE_PERCENT } from "@/lib/attendance";
 import { scheduleWeekdays } from "@/lib/schedule-days";
 
 function parseDate(value: string | null) {
@@ -37,12 +38,12 @@ export async function GET(request: Request) {
   const today = new Date(`${manilaDate}T00:00:00.000Z`);
   const subjectScope = { teacherId: teacher.id, schoolId: teacher.schoolId };
 
-  const [subjects, upcomingAttendance, upcomingAssessments, attendanceCounts, todaysAttendance] = await Promise.all([
+  const [subjects, upcomingAttendance, upcomingAssessments, attendanceCounts, todaysAttendance, recordedAttendance] = await Promise.all([
     prisma.subject.findMany({
       where: subjectScope,
       select: {
-        id: true, code: true, title: true, classId: true, gradeStatus: true, schedule: true,
-        enrollments: { select: { studentUserId: true, studentNumber: true, studentName: true } },
+        id: true, code: true, title: true, classId: true, academicYear: true, term: true, gradeStatus: true, schedule: true,
+        enrollments: { select: { id: true, studentUserId: true, studentNumber: true, studentName: true } },
         assessments: {
           where: { dueDate: { gte: from, lt: rangeEnd } },
           select: {
@@ -76,8 +77,51 @@ export async function GET(request: Request) {
         _count: { select: { scores: { where: { remark: { in: ["PRESENT", "ABSENT", "EXCUSED"] } } } } },
         subject: { select: { _count: { select: { enrollments: true } } } }
       }
+    }),
+    prisma.score.groupBy({
+      by: ["enrollmentId", "remark"],
+      where: {
+        assessment: {
+          subject: subjectScope,
+          title: { startsWith: "Attendance ·", mode: "insensitive" },
+          OR: [{ dueDate: null }, { dueDate: { lt: nextDay(today) } }]
+        },
+        enrollment: { subject: subjectScope },
+        OR: [{ remark: { in: ["PRESENT", "ABSENT", "DID_NOT_SUBMIT"] } }, { points: { gt: 0 } }]
+      },
+      _count: { _all: true }
     })
   ]);
+
+  const attendanceByEnrollment = new Map<string, { absent: number; present: number }>();
+  for (const row of recordedAttendance) {
+    // A grouped row without an explicit mark can only match through positive legacy points.
+    const mark = attendanceMark({ remark: row.remark, points: 1 });
+    if (mark !== "absent" && mark !== "present") continue;
+    const counts = attendanceByEnrollment.get(row.enrollmentId) ?? { absent: 0, present: 0 };
+    counts[mark] += row._count._all;
+    attendanceByEnrollment.set(row.enrollmentId, counts);
+  }
+  const attendanceRisk = subjects.flatMap(subject => subject.enrollments.flatMap(enrollment => {
+    const counts = attendanceByEnrollment.get(enrollment.id);
+    if (!counts) return [];
+    const percent = absencePercent(counts.absent, counts.present);
+    if (percent === null || percent < HIGH_RISK_ABSENCE_PERCENT) return [];
+    return [{
+      enrollmentId: enrollment.id,
+      studentName: enrollment.studentName,
+      studentNumber: enrollment.studentNumber,
+      subjectId: subject.id,
+      classId: subject.classId,
+      code: subject.code,
+      title: subject.title,
+      academicYear: subject.academicYear,
+      term: subject.term,
+      absent: counts.absent,
+      counted: counts.absent + counts.present,
+      percent
+    }];
+  })).sort((a, b) => b.percent - a.percent || b.absent - a.absent || a.studentName.localeCompare(b.studentName));
 
   const students = new Set<string>();
   let activities = 0;
@@ -149,6 +193,7 @@ export async function GET(request: Request) {
       attendanceLogs: present + absent + excused
     },
     attendance: { present, absent, excused },
+    attendanceRisk,
     submissions,
     enrollment: subjects.map(subject => ({ id: subject.id, label: subject.classId || subject.code, title: subject.title, code: subject.code, count: subject.enrollments.length })),
     today: manilaDate,
