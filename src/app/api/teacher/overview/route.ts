@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { absenceDates, ATTENDANCE_MARKS, attendanceDays, attendanceRiskSummary, consecutiveLateAbsences, droppingAbsenceStreak, EARLY_ABSENCE_PERCENT, HIGH_RISK_ABSENCE_PERCENT } from "@/lib/attendance";
+import { absenceDates, ATTENDANCE_MARKS, attendanceDays, attendanceRiskSummary, consecutiveLateAbsences, HIGH_RISK_ABSENCE_PERCENT } from "@/lib/attendance";
 import { scheduleWeekdays } from "@/lib/schedule-days";
 
 function parseDate(value: string | null) {
@@ -115,9 +115,7 @@ export async function GET(request: Request) {
       if (!scores) return [];
       const converted = consecutiveLateAbsences(days, id => scores.get(id)?.remark);
       const { absent, late, lateAbsences, counted, percent } = attendanceRiskSummary(sessions, scores, manilaDate, converted);
-      const droppingWarning = droppingAbsenceStreak(days, id => scores.get(id), converted);
-      const highRisk = percent !== null && percent >= HIGH_RISK_ABSENCE_PERCENT;
-      if (percent === null || (percent < EARLY_ABSENCE_PERCENT && !droppingWarning)) return [];
+      if (percent === null || percent < HIGH_RISK_ABSENCE_PERCENT) return [];
       return [{
         enrollmentId: enrollment.id,
         studentName: enrollment.studentName,
@@ -133,13 +131,10 @@ export async function GET(request: Request) {
         lateAbsences,
         counted,
         percent,
-        highRisk,
-        absenceDates: absenceDates(days, id => scores.get(id), converted),
-        droppingWarning
+        absenceDates: absenceDates(days, id => scores.get(id), converted)
       }];
     });
-  }).sort((a, b) => Number(!!b.droppingWarning) - Number(!!a.droppingWarning)
-    || b.percent - a.percent || b.absent - a.absent || a.studentName.localeCompare(b.studentName));
+  }).sort((a, b) => b.percent - a.percent || b.absent - a.absent || a.studentName.localeCompare(b.studentName));
 
   const students = new Set<string>();
   let activities = 0;

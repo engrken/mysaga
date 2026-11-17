@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.6.0-beta.1",
+    "date": "2026-11-17",
+    "kind": "feature",
+    "changes": [
+      "Added attendance risk alerts with absence dates, consecutive absence streaks, and automatic treatment of every third consecutive late as absent. Teacher Overview highlights high-risk attendance and danger of failing. Class Attendance shows early and dropping warnings."
+    ]
+  },
+  {
     "version": "0.5.0-beta.2",
     "date": "2026-11-14",
     "kind": "fix",
