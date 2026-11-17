@@ -31,7 +31,7 @@ type Assessment = { id: string; categoryId: string; title: string; maxScore: num
 type Enrollment = { id: string; studentName: string; studentNumber: string | null; studentUserId: string | null; remarks: string | null; finalGradeOverride?: string | null; gradeChangeCount?: number; gradeChangeHistory?: Array<{ id:string; previousFinalGrade:string|null; previousRemarks:string|null; newFinalGrade:string|null; newRemarks:string|null; reason:string; createdAt:string; actor:{fullName:string} }>; scores: Array<{ assessmentId: string; points: number | null; remark: string | null }>; finalPercent: number | null };
 type GradeBand = { id: string; minPercent: number; finalGrade: string; remarks: string };
 type Detail = Subject & { categories: Category[]; gradeBands: GradeBand[]; assessments: Assessment[]; enrollments: Enrollment[] };
-type Grade = { id: string; itemCount?: number; recordedCount?: number; code: string; title: string; term: string; academicYear: string; teacher: string; status: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; percent: number | null; finalGrade: string | null; remarks: string; gradeBands: Array<{ minPercent: number; finalGrade: string; remarks: string }>; categories: Array<{ id: string; name: string; weight: number; conversionBase: number; assessments: Array<{id:string;title:string;points:number|null;remark:string|null;maxScore:number;weight:number|null}> }> };
+type Grade = { id: string; classId?: string | null; attendanceWarning?: { absent: number; counted: number; percent: number } | null; itemCount?: number; recordedCount?: number; code: string; title: string; term: string; academicYear: string; teacher: string; status: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; percent: number | null; finalGrade: string | null; remarks: string; gradeBands: Array<{ minPercent: number; finalGrade: string; remarks: string }>; categories: Array<{ id: string; name: string; weight: number; conversionBase: number; assessments: Array<{id:string;title:string;points:number|null;remark:string|null;maxScore:number;weight:number|null}> }> };
 type StudentSearchMatch = { enrollmentId: string; studentName: string; studentNumber: string | null; studentRemark: string | null; class: { id: string; classId: string | null; code: string; title: string; term: string; academicYear: string; status: "DRAFT" | "SUBMITTED" | "VERIFIED" }; finalPercent: number | null; finalGrade: string | null; finalRemark: string; records: Array<{id:string;title:string;category:string;points:number|null;remark:string|null;maxScore:number;dueDate:string|null}> };
 type ScheduleRow = { label: string; day: string; startTime: string; endTime: string };
 type OverviewItem = { id: string; title: string; date: string | null; subjectId: string; code: string; subjectTitle: string; attendanceType?: "FACE_TO_FACE" | "ONLINE" | null; scheduleOverrideReason?: string | null; markedCount?: number; studentCount?: number };
@@ -1253,6 +1253,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     pendingAssessments: grades.reduce((count, grade) =>
       count + Math.max(0, (grade.itemCount ?? 0) - (grade.recordedCount ?? 0)), 0)
   }), [grades]);
+  const studentAttendanceWarnings = useMemo(() => grades
+    .flatMap(grade => grade.attendanceWarning ? [{ grade, warning: grade.attendanceWarning }] : [])
+    .sort((a, b) => b.warning.percent - a.warning.percent), [grades]);
   const studentGradeYears = useMemo(() => [...new Set(grades.map(grade => grade.academicYear))].sort((a,b)=>b.localeCompare(a)), [grades]);
   const studentGradeTerms = useMemo(() => [...new Set(grades.map(grade => grade.term))].sort(), [grades]);
   const visibleGrades = useMemo(() => grades.filter(grade =>
@@ -1642,6 +1645,22 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <div className="student-stat"><small>IN PROGRESS</small><strong>{studentGradeStats.inProgress}</strong><span>Draft or provisional records</span></div>
           <div className="student-stat"><small>UNRECORDED ITEMS</small><strong>{studentGradeStats.pendingAssessments}</strong><span>Across visible classes</span></div>
         </div>
+        {studentAttendanceWarnings.length > 0 && (
+          <section className="alert alert-warning" aria-labelledby="student-attendance-warning-heading" aria-live="polite">
+            <h3 className="h6" id="student-attendance-warning-heading">Attendance warning</h3>
+            <p className="mb-2">You have reached {HIGH_RISK_ABSENCE_PERCENT}% absences in the classes below. Excused and unmarked days are excluded.</p>
+            <ul className="ps-3 mb-2">
+              {studentAttendanceWarnings.map(({ grade, warning }) => (
+                <li className="mb-2" key={grade.id}>
+                  <strong>{grade.code} · {grade.title}</strong>
+                  <small className="d-block">{[grade.classId, grade.term, grade.academicYear].filter(Boolean).join(" · ")}</small>
+                  <span>{warning.percent.toFixed(1)}% absent ({warning.absent} of {warning.counted} counted class days)</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mb-0">Review your attendance entries under My grades and contact your instructor about any discrepancies.</p>
+          </section>
+        )}
         <StudentClassEnrollment onJoined={() => { void refreshStudentGrades(); }}/>
         <section className="section-block student-grade-section">
           <div className="section-heading student-grade-section-heading"><div><h2>My grades</h2>

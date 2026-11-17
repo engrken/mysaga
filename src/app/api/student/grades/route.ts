@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { highRiskAttendance } from "@/lib/attendance";
+import { todayManila } from "@/lib/tenant-operations";
 import { calculateFinal, equivalentFromBands } from "@/lib/grades";
 
 export async function GET(request: Request) {
@@ -23,7 +25,7 @@ export async function GET(request: Request) {
       scores: { select: { assessmentId: true, points: true, remark: true } },
       subject: {
         select: {
-          code: true, title: true, term: true, academicYear: true,
+          code: true, title: true, classId: true, term: true, academicYear: true,
           gradeStatus: true, submittedAt: true, verifiedAt: true,
           teacher: { select: { fullName: true } },
           gradeBands: { select: { minPercent: true, finalGrade: true, remarks: true } },
@@ -36,6 +38,7 @@ export async function GET(request: Request) {
     },
     orderBy: { subject: { code: "asc" } }
   });
+  const today = todayManila();
   const grades = enrollments.map(enrollment => {
     const { subject } = enrollment;
     // Only use scores belonging to THIS enrollment, never scores from
@@ -82,6 +85,8 @@ export async function GET(request: Request) {
     });
     return { id: enrollment.id, code: subject.code, title: subject.title, term: subject.term, academicYear: subject.academicYear, teacher: subject.teacher.fullName, status: subject.gradeStatus, submittedAt: subject.submittedAt, verifiedAt: subject.verifiedAt, percent, finalGrade: enrollment.finalGradeOverride ?? equivalent.finalGrade, remarks: enrollment.remarks || equivalent.remarks,
       itemCount, recordedCount,
+      classId: subject.classId,
+      attendanceWarning: highRiskAttendance(allItems, scoresByItem, today),
       categories,
       gradeBands: summaryOnly ? [] : subject.gradeBands.map(band => ({
         minPercent: band.minPercent, finalGrade: band.finalGrade, remarks: band.remarks
