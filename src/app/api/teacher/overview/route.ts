@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { ATTENDANCE_MARKS, attendanceDays, attendanceRiskSummary, consecutiveLateAbsences, droppingAbsenceStreak, HIGH_RISK_ABSENCE_PERCENT } from "@/lib/attendance";
+import { absenceDates, ATTENDANCE_MARKS, attendanceDays, attendanceRiskSummary, consecutiveLateAbsences, droppingAbsenceStreak, EARLY_ABSENCE_PERCENT, HIGH_RISK_ABSENCE_PERCENT } from "@/lib/attendance";
 import { scheduleWeekdays } from "@/lib/schedule-days";
 
 function parseDate(value: string | null) {
@@ -117,7 +117,7 @@ export async function GET(request: Request) {
       const { absent, late, lateAbsences, counted, percent } = attendanceRiskSummary(sessions, scores, manilaDate, converted);
       const droppingWarning = droppingAbsenceStreak(days, id => converted.has(id) || scores.get(id)?.remark === "ABSENT");
       const highRisk = percent !== null && percent >= HIGH_RISK_ABSENCE_PERCENT;
-      if (percent === null || (!highRisk && !droppingWarning)) return [];
+      if (percent === null || (percent < EARLY_ABSENCE_PERCENT && !droppingWarning)) return [];
       return [{
         enrollmentId: enrollment.id,
         studentName: enrollment.studentName,
@@ -134,6 +134,7 @@ export async function GET(request: Request) {
         counted,
         percent,
         highRisk,
+        absenceDates: absenceDates(days, id => scores.get(id), converted),
         droppingWarning
       }];
     });
