@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.9.0-beta.1",
+    "date": "2026-11-17",
+    "kind": "feature",
+    "changes": [
+      "Added an activity chooser, read-only resources, student class activities, and topic filters for the question bank."
+    ]
+  },
+  {
     "version": "0.8.0-beta.1",
     "date": "2026-11-17",
     "kind": "feature",

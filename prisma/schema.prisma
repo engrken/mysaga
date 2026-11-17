@@ -328,6 +328,7 @@ model EmailVerificationChallenge {
 enum ClassActivityKind {
   QUIZ
   ASSIGNMENT
+  RESOURCE
 }
 
 enum ClassActivityStatus {
@@ -339,6 +340,7 @@ enum ClassActivityStatus {
 model BankQuestion {
   id        String   @id @default(cuid())
   teacherId String
+  topic     String?
   prompt    String
   options   Json
   answer    Int
@@ -346,6 +348,7 @@ model BankQuestion {
   teacher   User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 
   @@index([teacherId, createdAt])
+  @@index([teacherId, topic, createdAt])
 }
 
 model ClassActivity {
@@ -361,6 +364,7 @@ model ClassActivity {
   itemWeight   Float?
   practice     Boolean             @default(false)
   questions    Json
+  topic        String?
   materialUrl  String?
   availableAt DateTime?
   dueAt        DateTime?

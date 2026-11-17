@@ -3,14 +3,15 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { activityHeaders, questionSchema, quizSnapshotSchema, validDriveLink } from "@/lib/class-activities";
+import { activityTopicSchema, activityHeaders, questionSchema, quizSnapshotSchema, validDriveLink } from "@/lib/class-activities";
 
 const id = z.string().trim().min(1).max(128);
 const inputSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("bank"), question: questionSchema }),
+  z.object({ action: z.literal("bank"), question: questionSchema, topic: activityTopicSchema.optional() }),
+  z.object({ action: z.literal("tag-question"), questionId: id, topic: activityTopicSchema }),
   z.object({
     action: z.literal("draft"), subjectId: id, activityId: id.optional(),
-    kind: z.enum(["QUIZ", "ASSIGNMENT"]), title: z.string().trim().min(1).max(120)
+    kind: z.enum(["QUIZ", "ASSIGNMENT", "RESOURCE"]), title: z.string().trim().min(1).max(120)
       .refine(title => !title.toLowerCase().startsWith("attendance ·")),
     instructions: z.string().trim().max(8000),
     practice: z.boolean(), categoryId: id.nullable(), dueAt: z.iso.datetime({ offset: true }).nullable(),
@@ -18,6 +19,7 @@ const inputSchema = z.discriminatedUnion("action", [
     itemWeight: z.number().positive().max(100).nullable(),
     questionIds: z.array(id).max(50),
     inlineQuestions: z.array(questionSchema).max(50).default([]),
+    topic: activityTopicSchema.optional(),
     materialUrl: z.string().trim().max(2048).nullable().optional(),
     availableAt: z.iso.datetime({ offset: true }).nullable().optional()
   }),
@@ -29,7 +31,7 @@ const inputSchema = z.discriminatedUnion("action", [
 const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: activityHeaders });
 const error = (message: string, status = 400) => reply({ error: message }, status);
 const activityFields = {
-  id: true, title: true, kind: true, instructions: true, categoryId: true, assessmentId: true,
+  id: true, title: true, kind: true, instructions: true, topic: true, categoryId: true, assessmentId: true,
   status: true, questions: true, materialUrl: true, availableAt: true, practice: true, maxScore: true, itemWeight: true, dueAt: true,
   _count: { select: { submissions: true } }
 } as const;
@@ -69,12 +71,15 @@ export async function GET(request: Request) {
     });
     return reply({ submissions: rows.slice(0, 30), nextCursor: rows.length > 30 ? rows[29].id : null });
   }
-  const [activities, bank] = await Promise.all([
+  const topic = searchParams.get("topic");
+  if (topic && topic.length > 100) return error("Invalid topic.");
+  const [activities, bank, topics] = await Promise.all([
     prisma.classActivity.findMany({ where: { subjectId }, orderBy: { createdAt: "desc" }, take: 50, select: activityFields }),
-    prisma.bankQuestion.findMany({ where: { teacherId: teacher.id }, orderBy: { createdAt: "desc" }, take: 200,
-      select: { id: true, prompt: true, options: true, answer: true } })
+    prisma.bankQuestion.findMany({ where: { teacherId: teacher.id, ...(topic === "" ? { topic: null } : topic ? { topic: { equals: topic, mode: "insensitive" } } : {}) }, orderBy: { createdAt: "desc" }, take: 200,
+      select: { id: true, prompt: true, topic: true } }),
+    prisma.bankQuestion.groupBy({ by: ["topic"], where: { teacherId: teacher.id, topic: { not: null } }, orderBy: { topic: "asc" } })
   ]);
-  return reply({ activities, bank });
+  return reply({ activities, bank, topics: [...new Map(topics.map(({topic}) => [topic!.toLowerCase(), topic])).values()] });
 }
 
 export async function POST(request: Request) {
@@ -83,8 +88,14 @@ export async function POST(request: Request) {
   const parsed = inputSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return error("Check the activity settings and try again.");
   const input = parsed.data;
+  if (input.action === "tag-question") {
+    const updated = await prisma.bankQuestion.updateMany({
+      where: { id: input.questionId, teacherId: teacher.id }, data: { topic: input.topic || null }
+    });
+    return updated.count ? reply({ ok: true }) : error("Question not found.", 404);
+  }
   if (input.action === "bank") {
-    const question = await prisma.bankQuestion.create({ data: { teacherId: teacher.id, ...input.question },
+    const question = await prisma.bankQuestion.create({ data: { teacherId: teacher.id, topic: input.topic || null, ...input.question },
       select: { id: true, prompt: true, options: true, answer: true } });
     return reply({ question }, 201);
   }
@@ -102,7 +113,7 @@ export async function POST(request: Request) {
 
     if (input.action === "close") {
       if (activity?.status !== "OPEN") return error("Open the activity before closing it.", 409);
-      await tx.classActivity.update({ where: { id: activity.id }, data: { status: "CLOSED" } });
+      await tx.classActivity.update({ where: { id: activity.id }, data: activity.kind === "RESOURCE" ? { status: "DRAFT", openedAt: null } : { status: "CLOSED" } });
       return reply({ ok: true });
     }
     if (input.action === "open" && activity?.status === "OPEN") return reply({ ok: true, assessmentId: activity.assessmentId });
@@ -110,7 +121,8 @@ export async function POST(request: Request) {
 
     if (input.action === "draft") {
       if (activity && activity.status !== "DRAFT") return error("Only draft activities can be edited.", 409);
-      if (input.categoryId && !await tx.gradeCategory.findFirst({
+      const practice = input.kind === "RESOURCE" || input.practice;
+      if (!practice && input.categoryId && !await tx.gradeCategory.findFirst({
         where: { id: input.categoryId, subjectId: input.subjectId, children: { none: {} } }, select: { id: true }
       })) return error("Choose an assessment category from this class.");
       if (input.materialUrl && !validDriveLink(input.materialUrl)) return error("Use a valid HTTPS Google Drive or Google Docs link for the activity material.");
@@ -129,9 +141,9 @@ export async function POST(request: Request) {
       ] : [];
       const data = {
         subjectId: input.subjectId, kind: input.kind, title: input.title, instructions: input.instructions,
-        practice: input.practice, categoryId: input.practice ? null : input.categoryId, dueAt, availableAt, materialUrl: input.kind === "ASSIGNMENT" ? input.materialUrl || null : null,
-        itemWeight: !input.practice && input.categoryId ? input.itemWeight : null,
-        maxScore: input.kind === "QUIZ" ? snapshot.length : input.maxScore,
+        practice, categoryId: practice ? null : input.categoryId, topic: input.topic || null, dueAt: input.kind === "RESOURCE" ? null : dueAt, availableAt, materialUrl: input.kind !== "QUIZ" ? input.materialUrl || null : null,
+        itemWeight: !practice && input.categoryId ? input.itemWeight : null,
+        maxScore: input.kind === "QUIZ" ? snapshot.length : input.kind === "RESOURCE" ? 0 : input.maxScore,
         questions: snapshot
       };
       const saved = activity
@@ -144,6 +156,9 @@ export async function POST(request: Request) {
       if (activity.dueAt && activity.dueAt <= new Date()) return error("Choose a deadline in the future.");
       if (activity.kind === "QUIZ" && !quizSnapshotSchema.parse(activity.questions).length) {
         return error("Add at least one question before opening the quiz.");
+      }
+      if (activity.kind === "RESOURCE" && !activity.materialUrl && !activity.instructions) {
+        return error("Add resource content or a Google Drive link before publishing.");
       }
       let assessmentId: string | null = null;
       if (!activity.practice) {

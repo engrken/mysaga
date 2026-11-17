@@ -9,12 +9,18 @@ type Question = { id: string; prompt: string; options: string[]; answer?: number
 type Submission = { text: string | null; driveUrl: string | null; points: number | null; feedback: string | null; submittedAt: string; graded?: boolean; gradedAt?: string | null; answers?: Record<string, number> };
 type TeacherSubmission = Submission & { id: string; enrollment: { studentName: string } };
 type Activity = {
-  id: string; title: string; kind: "QUIZ" | "ASSIGNMENT"; instructions: string; maxScore: number;
+  id: string; title: string; kind: "QUIZ" | "ASSIGNMENT" | "RESOURCE"; topic?: string | null; instructions: string; maxScore: number;
   status: "DRAFT" | "OPEN" | "CLOSED"; practice: boolean; dueAt: string | null; availableAt?: string | null; materialUrl?: string | null;
   categoryId?: string | null; itemWeight?: number | null; questions?: Question[];
   submission?: Submission | null; subject?: ClassInfo; _count?: { submissions: number };
 };
 
+const activityLabels = { ASSIGNMENT: "Assignment", QUIZ: "Quiz", RESOURCE: "Resource" };
+const activityDescriptions = {
+  ASSIGNMENT: "Collect written answers or Google Drive links and grade submissions.",
+  QUIZ: "Auto-grade multiple-choice and true/false questions.",
+  RESOURCE: "Share instructions, readings, or a Google Drive file."
+};
 const teacherPath = "/api/teacher/activities";
 const studentPath = "/api/student/activities";
 const formatDate = (value: string) => new Intl.DateTimeFormat("en-PH", {
@@ -34,7 +40,7 @@ async function request(url: string, body?: unknown, signal?: AbortSignal) {
 }
 
 const baseDraft = {
-  kind: "ASSIGNMENT" as Activity["kind"], title: "", instructions: "", practice: false,
+  kind: "ASSIGNMENT" as Activity["kind"], title: "", topic: "", instructions: "", practice: false,
   categoryId: "", due: "", opens: "", materialUrl: "", maxScore: "20", itemWeight: "", questionIds: [] as string[], inline: [] as InlineQuestion[]
 };
 
@@ -43,7 +49,10 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
   initialActivityId?: string; onRecordChange: () => Promise<void>;
 }) {
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [bank, setBank] = useState<Question[]>([]);
+  const [bank, setBank] = useState<(Pick<Question, "id" | "prompt"> & { topic: string | null })[]>([]);
+  const [topics, setTopics] = useState<string[]>([]);
+  const [bankTopic, setBankTopic] = useState("all");
+  const [choosing, setChoosing] = useState(false);
   const [draft, setDraft] = useState(baseDraft);
   const [editing, setEditing] = useState<string | null>(null);
   const [useBank, setUseBank] = useState(false);
@@ -59,18 +68,20 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
   const [failure, setFailure] = useState("");
   const [questionKind, setQuestionKind] = useState("choice");
   const query = `${teacherPath}?subjectId=${encodeURIComponent(subjectId)}`;
+  const bankQuery = bankTopic === "all" ? query : `${query}&topic=${encodeURIComponent(bankTopic === "untagged" ? "" : bankTopic.slice(6))}`;
   const selected = activities.find(activity => activity.id === active);
   const disabled = busy || locked || readOnly;
 
   useEffect(() => {
     const controller = new AbortController();
-    request(query, undefined, controller.signal).then(data => {
+    request(bankQuery, undefined, controller.signal).then(data => {
       setActivities(data.activities);
       setBank(data.bank);
+      setTopics(data.topics);
     }).catch(error => { if (!controller.signal.aborted) setFailure(error.message); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [query, revision]);
+  }, [bankQuery, revision]);
 
   useEffect(() => {
     if (!active) return;
@@ -103,14 +114,15 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
     } finally { setBusy(false); }
   }
 
-  function edit(activity?: Activity) {
+  function edit(activity?: Activity, kind = baseDraft.kind) {
+    setChoosing(false);
     setFailure("");
     setEditing(activity?.id ?? null);
     const questions = activity?.questions ?? [];
     const bankIds = questions.filter(item => !item.id.startsWith("inline-")).map(item => item.id);
     setUseBank(bankIds.length > 0);
     setDraft(activity ? {
-      kind: activity.kind, title: activity.title, instructions: activity.instructions, practice: activity.practice,
+      kind: activity.kind, title: activity.title, topic: activity.topic ?? "", instructions: activity.instructions, practice: activity.practice,
       categoryId: activity.categoryId || "", due: dateInput(activity.dueAt), maxScore: String(activity.maxScore || 20),
       itemWeight: activity.itemWeight?.toString() ?? "", questionIds: bankIds,
       materialUrl: activity.materialUrl ?? "", opens: dateInput(activity.availableAt),
@@ -118,7 +130,7 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
         kind: item.options.join("|") === "True|False" ? "boolean" : "choice",
         prompt: item.prompt, choices: item.options.join("\n"), answer: String((item.answer ?? 0) + 1)
       }))
-    } : baseDraft);
+    } : { ...baseDraft, kind });
     setFormOpen(true);
   }
 
@@ -126,11 +138,11 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
     event.preventDefault();
     if (await save({
       action: "draft", subjectId, activityId: editing ?? undefined, kind: draft.kind, title: draft.title,
-      instructions: draft.instructions, practice: draft.practice, categoryId: draft.practice ? null : draft.categoryId || null,
+      instructions: draft.instructions, topic: draft.topic, practice: draft.practice, categoryId: draft.practice ? null : draft.categoryId || null,
       dueAt: draft.due ? new Date(`${draft.due}:00+08:00`).toISOString() : null,
       maxScore: draft.kind === "QUIZ" ? 1 : Number(draft.maxScore),
       itemWeight: draft.practice || !draft.itemWeight ? null : Number(draft.itemWeight),
-      materialUrl: draft.kind === "ASSIGNMENT" ? draft.materialUrl.trim() || null : null,
+      materialUrl: draft.kind !== "QUIZ" ? draft.materialUrl.trim() || null : null,
       availableAt: draft.opens ? new Date(`${draft.opens}:00+08:00`).toISOString() : null,
       questionIds: draft.kind === "QUIZ" && useBank ? draft.questionIds : [],
       inlineQuestions: draft.kind === "QUIZ" ? draft.inline.map(question => ({
@@ -146,7 +158,7 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
     const form = event.currentTarget;
     const data = new FormData(form);
     const options = questionKind === "boolean" ? ["True", "False"] : String(data.get("options")).split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-    if (await save({ action: "bank", question: { prompt: data.get("prompt"), options, answer: Number(data.get("answer")) - 1 } },
+    if (await save({ action: "bank", topic: data.get("topic"), question: { prompt: data.get("prompt"), options, answer: Number(data.get("answer")) - 1 } },
       "Question saved to your bank.")) form.reset();
   }
 
@@ -164,26 +176,36 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
   return <section className="surface mb-3" aria-labelledby="class-activities-heading">
     <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
       <h2 id="class-activities-heading" className="mb-0">Class activities</h2>
-      <button className="btn btn-primary btn-sm" disabled={disabled} type="button" onClick={() => edit()}>New activity</button>
+      <button className="btn btn-primary btn-sm" disabled={disabled} type="button" onClick={() => { setFormOpen(false); setChoosing(current => !current); }}>Add activity</button>
     </div>
     <p className="alert alert-info">The Activities feature is still under development.</p>
     {failure && <p className="alert alert-danger" role="alert">{failure}</p>}
     {message && <p className="alert alert-success" role="status">{message}</p>}
     {locked && <p className="small text-secondary">Recall the class record to draft before opening activities or recording grades.</p>}
+    {choosing && <section aria-label="Choose an activity type" className="border rounded p-3 mb-3">
+      <h3 className="h6">Choose an activity type</h3>
+      <div className="row g-2">{(["ASSIGNMENT", "QUIZ", "RESOURCE"] as const).map(kind =>
+        <div className="col-12 col-md-4" key={kind}><button type="button" className="btn btn-outline-primary text-start w-100 h-100" disabled={disabled} onClick={() => edit(undefined, kind)}>
+          <strong>{activityLabels[kind]}</strong><small className="d-block">{activityDescriptions[kind]}</small>
+        </button></div>)}</div>
+    </section>}
     {formOpen && <form className="border rounded p-3 mb-3 d-grid gap-3" onSubmit={saveDraft}>
-      <h3 className="h6 mb-0">{editing ? "Edit draft" : "New activity draft"}</h3>
-      <label>Type<select value={draft.kind} className="form-select" onChange={event => setDraft({ ...draft, kind: event.target.value as Activity["kind"] })}>
-        <option value="ASSIGNMENT">Teacher-posted activity</option><option value="QUIZ">Auto-graded quiz</option>
-      </select></label>
+      <h3 className="h6 mb-0">{editing ? "Edit" : "New"} {activityLabels[draft.kind].toLowerCase()}</h3>
+      <fieldset className="d-grid gap-2"><legend className="h6">General</legend>
       <label>Title<input className="form-control" value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} maxLength={120} required/></label>
+      <label>Topic or lesson<input className="form-control" maxLength={100} value={draft.topic} onChange={event => setDraft({ ...draft, topic: event.target.value })}/></label>
       <label>Instructions<textarea className="form-control" rows={3} maxLength={8000} value={draft.instructions} onChange={event => setDraft({ ...draft, instructions: event.target.value })}/></label>
-      {draft.kind === "ASSIGNMENT" && <label>Activity material (optional Google Drive link)
+      {draft.kind !== "QUIZ" && <label>Activity material (optional Google Drive link)
         <input type="url" className="form-control" maxLength={2048} value={draft.materialUrl} onChange={event => setDraft({ ...draft, materialUrl: event.target.value })}/>
         <small>Give enrolled students permission to view the file in Drive.</small>
       </label>}
+      </fieldset>
+      <fieldset className="d-grid gap-2"><legend className="h6">Availability</legend>
       <label>Opens (Manila time)<input type="datetime-local" className="form-control" value={draft.opens} onChange={event => setDraft({ ...draft, opens: event.target.value })}/>
         <small>Leave blank for immediate access when published.</small></label>
-      <label>Deadline (Manila time)<input type="datetime-local" className="form-control" value={draft.due} onChange={event => setDraft({ ...draft, due: event.target.value })}/></label>
+      {draft.kind !== "RESOURCE" && <label>Deadline (Manila time)<input type="datetime-local" className="form-control" value={draft.due} onChange={event => setDraft({ ...draft, due: event.target.value })}/></label>}
+      </fieldset>
+      {draft.kind !== "RESOURCE" && <fieldset className="d-grid gap-2"><legend className="h6">Grading</legend>
       <label><input type="checkbox" className="form-check-input me-2" checked={draft.practice} onChange={event => setDraft({ ...draft, practice: event.target.checked })}/>Practice only</label>
       {!draft.practice && <>
         <label>Record scores in<select className="form-select" value={draft.categoryId} onChange={event => setDraft({ ...draft, categoryId: event.target.value })}>
@@ -194,7 +216,9 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
         <label>Item weight (%)<input className="form-control" type="number" min="0.01" max="100" step="0.01" value={draft.itemWeight} onChange={event => setDraft({ ...draft, itemWeight: event.target.value })}/>
           <small>Leave blank if the category uses points without item weights.</small></label>
       </>}
-      {draft.kind === "QUIZ" ? <>
+      {draft.kind === "ASSIGNMENT" && <label>Maximum points<input className="form-control" type="number" min="0.01" step="0.01" max="100000" required value={draft.maxScore} onChange={event => setDraft({ ...draft, maxScore: event.target.value })}/></label>}
+      </fieldset>}
+      {draft.kind === "QUIZ" && <>
         <p className="small text-secondary mb-0">Use multiple-choice or true/false questions. Each correct answer earns one point.</p>
         {draft.inline.map((question, index) => {
           const update = (values: Partial<InlineQuestion>) => setDraft({
@@ -225,7 +249,11 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
         <label><input type="checkbox" className="form-check-input me-2" checked={useBank} onChange={event => setUseBank(event.target.checked)}/>Use questions from my question bank</label>
         {useBank && <fieldset>
 
-        <legend className="h6">Select questions · {draft.questionIds.length} points</legend>
+        <legend className="h6">Question bank · {draft.questionIds.length} selected</legend>
+        <label>Filter by topic or lesson<select className="form-select mb-2" value={bankTopic} onChange={event => setBankTopic(event.target.value)}>
+          <option value="all">All topics</option><option value="untagged">Uncategorized</option>
+          {topics.map(topic => <option key={topic} value={`topic:${topic}`}>{topic}</option>)}
+        </select></label>
         {!bank.length && <p className="small text-secondary">Add reusable questions in the question bank below.</p>}
         <div className="overflow-auto border rounded p-2 d-grid gap-2" style={{ maxHeight: 260 }}>
           {bank.map(item => <label className="text-break" key={item.id}>
@@ -233,17 +261,19 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
               disabled={draft.questionIds.length + draft.inline.length >= 50 && !draft.questionIds.includes(item.id)}
               onChange={event => setDraft({ ...draft, questionIds: event.target.checked
                 ? [...draft.questionIds, item.id] : draft.questionIds.filter(value => value !== item.id) })}/>
-            {item.prompt}
+            {item.prompt} <small className="text-secondary">· {item.topic || "Uncategorized"}</small>
           </label>)}
         </div>
       </fieldset>}
-      </> : <label>Maximum points<input className="form-control" type="number" min="0.01" step="0.01" max="100000" required value={draft.maxScore} onChange={event => setDraft({ ...draft, maxScore: event.target.value })}/></label>}
+      </>}
       <div className="d-flex flex-wrap gap-2"><button className="btn btn-primary" disabled={disabled}>Save draft</button><button type="button" className="btn btn-outline-secondary" onClick={() => setFormOpen(false)}>Cancel</button></div>
     </form>}
     {formOpen && draft.kind === "QUIZ" && useBank && <details className="border rounded p-3 mb-3">
       <summary>Question bank · {bank.length} recent questions</summary>
       <p className="small text-secondary mt-2 mb-2">Multiple choice and true/false. Each correct answer earns one point.</p>
+      <datalist id="bank-topics">{topics.map(topic => <option key={topic} value={topic}/>)}</datalist>
       <form onSubmit={addQuestion} className="d-grid gap-2">
+        <label>Topic or lesson<input name="topic" className="form-control" maxLength={100} list="bank-topics"/></label>
         <label>Question type<select className="form-select" value={questionKind} onChange={event => setQuestionKind(event.target.value)}>
           <option value="choice">Multiple choice</option><option value="boolean">True / False</option>
         </select></label>
@@ -254,12 +284,24 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
           : <label>Correct answer<select name="answer" className="form-select"><option value="1">True</option><option value="2">False</option></select></label>}
         <button className="btn btn-outline-primary justify-self-start" disabled={busy || readOnly}>Save question</button>
       </form>
+      {bank.length > 0 && <details className="mt-3">
+        <summary>Manage question topics</summary>
+        <div className="overflow-auto" style={{ maxHeight: 300 }}>
+          {bank.map(question => <form key={question.id + question.topic} className="border-bottom py-2" onSubmit={event => {
+            event.preventDefault();
+            void save({ action: "tag-question", questionId: question.id, topic: new FormData(event.currentTarget).get("topic") }, "Question topic saved.");
+          }}>
+            <label className="w-100 text-break">{question.prompt}<input aria-label={`Topic for ${question.prompt}`} name="topic" className="form-control my-1" maxLength={100} list="bank-topics" defaultValue={question.topic ?? ""}/></label>
+            <button className="btn btn-sm btn-outline-secondary" disabled={busy || readOnly}>Save topic</button>
+          </form>)}
+        </div>
+      </details>}
     </details>}
     {loading ? <p role="status">Loading activities…</p> : !activities.length && <p className="text-secondary">No activities in this class yet.</p>}
     <ul className="list-group mb-3">
       {activities.map(activity => <li key={activity.id} className="list-group-item d-flex flex-wrap gap-2 justify-content-between align-items-center">
         <div className="text-break"><b>{activity.title}</b><div className="small text-secondary">
-          {activity.kind === "QUIZ" ? "Quiz" : "Teacher-posted activity"} · {activity.status === "OPEN" && activity.dueAt && Date.parse(activity.dueAt) <= Date.now() ? "Deadline passed" : activity.status.toLowerCase()} · {activity.practice ? "Practice" : `${activity.maxScore} points`}{activity.availableAt && Date.parse(activity.availableAt) > Date.now() ? ` · Opens ${formatDate(activity.availableAt)}` : ""}{activity.dueAt ? ` · Due ${formatDate(activity.dueAt)}` : ""}
+          {activityLabels[activity.kind]} · {activity.topic ? `${activity.topic} · ` : ""}{activity.status === "OPEN" && activity.dueAt && Date.parse(activity.dueAt) <= Date.now() ? "Deadline passed" : activity.status.toLowerCase()} · {activity.kind === "RESOURCE" ? "Read only" : activity.practice ? "Practice" : `${activity.maxScore} points`}{activity.availableAt && Date.parse(activity.availableAt) > Date.now() ? ` · Opens ${formatDate(activity.availableAt)}` : ""}{activity.dueAt ? ` · Due ${formatDate(activity.dueAt)}` : ""}
         </div></div>
         <div className="d-flex flex-wrap gap-2">
           {activity.status === "DRAFT" ? <>
@@ -267,9 +309,9 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
             <button className="btn btn-sm btn-primary" type="button" disabled={disabled} onClick={() =>
               void save({ action: "open", subjectId, activityId: activity.id }, "Activity published.", true)}>Publish activity</button>
           </> : <>
-            <button className="btn btn-sm btn-outline-primary" type="button" disabled={busy} onClick={() => setActive(activity.id)}>Submissions ({activity._count?.submissions ?? 0})</button>
+            {activity.kind !== "RESOURCE" && <button className="btn btn-sm btn-outline-primary" type="button" disabled={busy} onClick={() => setActive(activity.id)}>Submissions ({activity._count?.submissions ?? 0})</button>}
             {activity.status === "OPEN" && <button type="button" className="btn btn-sm btn-outline-secondary" disabled={busy || readOnly} onClick={() =>
-              void save({ action: "close", subjectId, activityId: activity.id }, "Submissions closed.")}>Close submissions</button>}
+              void save({ action: "close", subjectId, activityId: activity.id }, activity.kind === "RESOURCE" ? "Resource unpublished." : "Submissions closed.")}>{activity.kind === "RESOURCE" ? "Unpublish" : "Close submissions"}</button>}
           </>}
         </div>
       </li>)}
@@ -326,9 +368,9 @@ export function RecentActivitySubmissions({ onOpen }: { onOpen: (subjectId: stri
   </section>;
 }
 
-export function StudentActivities({ readOnly }: { readOnly?: boolean }) {
+export function StudentActivities({ readOnly, subjectId }: { readOnly?: boolean; subjectId?: string }) {
   const [classes, setClasses] = useState<ClassInfo[]>([]);
-  const [classId, setClassId] = useState("");
+  const classId = subjectId ?? "";
   const [activities, setActivities] = useState<Activity[]>([]);
   const [active, setActive] = useState<Activity | null>(null);
   const [loading, setLoading] = useState(true);
@@ -372,43 +414,53 @@ export function StudentActivities({ readOnly }: { readOnly?: boolean }) {
     finally { setBusy(false); }
   }
 
+  const groups = new Map<string, Activity[]>();
+  for (const item of activities) {
+    const topic = subjectId ? item.topic || "General" : "";
+    groups.set(topic, [...(groups.get(topic) ?? []), item]);
+  }
   const deadlinePassed = active?.dueAt ? Date.parse(active.dueAt) <= Date.now() : false;
   const canSubmit = active && active.status === "OPEN" && !deadlinePassed &&
     (active.practice || active.subject?.gradeStatus === "DRAFT");
 
   return <section className="surface mb-3" aria-labelledby="student-activities-heading">
     <div className="d-flex flex-wrap justify-content-between gap-2 align-items-center mb-2">
-      <h2 id="student-activities-heading" className="mb-0">Activities and submissions</h2>
-      <label>Class<select className="form-select form-select-sm" disabled={busy} value={classId} onChange={event => {
-        setActive(null); setClassId(event.target.value);
-      }}>
-        <option value="">All classes</option>
-        {classes.map(item => <option value={item.id} key={item.id}>{item.code} · {item.title} ({item.term}, {item.academicYear})</option>)}
-      </select></label>
+      <h2 id="student-activities-heading" className="mb-0">{subjectId ? "Class activities" : "Activities and submissions"}</h2>
     </div>
+    {!subjectId && classes.length > 0 && <nav aria-label="Activities by class" className="d-flex flex-wrap gap-2 mb-3">
+      {classes.map(item => <a className="btn btn-sm btn-outline-primary text-start" key={item.id} href={`/student/classes/${encodeURIComponent(item.id)}/activities`}>{item.code} · {item.title}</a>)}
+    </nav>}
     {selected && <p className="small text-secondary">{selected.code} · {selected.teacher.fullName} · {selected.term} {selected.academicYear}</p>}
     {failure && <p className="alert alert-danger" role="alert">{failure}</p>}
     {loading ? <p role="status">Loading activities…</p> : !activities.length && <p className="text-secondary mb-0">No activities have opened for these classes.</p>}
-    <ul className="list-group list-group-flush">
-      {activities.map(item => <li key={item.id} className="list-group-item px-0 text-break">
-        <button className="btn btn-link text-start p-0" type="button" disabled={busy} onClick={() => void open(item.id)}>{item.title}</button>
-        <div className="small text-secondary">
-          {item.subject?.code} · {item.kind === "QUIZ" ? "Quiz" : "Assignment"} · {item.submission
-            ? item.submission.graded ? "Graded" : "Submitted"
-            : item.status === "CLOSED" || (item.dueAt && Date.parse(item.dueAt) <= Date.now()) ? "Closed" : "Not submitted"}
-          {item.dueAt ? ` · Due ${formatDate(item.dueAt)} Manila time` : ""}
-        </div>
-      </li>)}
-    </ul>
+    {!loading && Array.from(groups, ([topic, items]) => <section key={topic} className="mb-3">
+      {subjectId && <h3 className="h6 text-break">{topic}</h3>}
+      <ul className="list-group list-group-flush">
+        {items.map(item => {
+          const upcoming = !!item.availableAt && Date.parse(item.availableAt) > Date.now();
+          const closed = item.status === "CLOSED" || (!!item.dueAt && Date.parse(item.dueAt) <= Date.now());
+          const status = item.submission ? item.submission.graded ? "Graded" : "Submitted"
+            : closed ? "Closed" : upcoming ? "Upcoming" : item.kind === "RESOURCE" ? "Available" : "Open";
+          return <li key={item.id} className="list-group-item px-0 text-break">
+            {upcoming ? <strong>{item.title}</strong> : <button className="btn btn-link text-start p-0" type="button" disabled={busy} onClick={() => void open(item.id)}>{item.title}</button>}
+            <div className="small text-secondary">
+              {!subjectId && `${item.subject?.code} · `}{activityLabels[item.kind]} · {status}
+              {upcoming && item.availableAt ? ` · Opens ${formatDate(item.availableAt)} Manila time` : ""}
+              {item.dueAt ? ` · Due ${formatDate(item.dueAt)} Manila time` : ""}
+            </div>
+          </li>;
+        })}
+      </ul>
+    </section>)}
     {active && <article className="border rounded p-3 mt-3 text-break">
       <div className="d-flex flex-wrap justify-content-between gap-2 mb-2">
         <h3 className="h6 mb-0">{active.title}</h3>
         <button className="btn btn-sm btn-outline-secondary" type="button" disabled={busy} onClick={() => setActive(null)}>Close details</button>
       </div>
-      <p className="small text-secondary">{active.subject?.code} · {active.maxScore} points{active.practice ? " · Practice" : ""}</p>
+      <p className="small text-secondary">{active.subject?.code} · {active.kind === "RESOURCE" ? "Resource" : `${active.maxScore} points${active.practice ? " · Practice" : ""}`}</p>
       {active.instructions && <p style={{ whiteSpace: "pre-wrap" }}>{active.instructions}</p>}
       {active.materialUrl && <p><a href={active.materialUrl} target="_blank" rel="noreferrer">Open activity material in Google Drive</a></p>}
-      {active.submission ? <div>
+      {active.kind !== "RESOURCE" && (active.submission ? <div>
         <p><b>My submission</b> · {formatDate(active.submission.submittedAt)} Manila time</p>
         {active.submission.text && <p style={{ whiteSpace: "pre-wrap" }}>{active.submission.text}</p>}
         {active.submission.driveUrl && <p><a href={active.submission.driveUrl} target="_blank" rel="noreferrer">Open my submitted file</a></p>}
@@ -428,7 +480,7 @@ export function StudentActivities({ readOnly }: { readOnly?: boolean }) {
             <small>Share the file with your teacher in Drive before submitting. Add a text response, a link, or both.</small></label>
         </>}
         <button className="btn btn-primary" disabled={busy || readOnly}>{busy ? "Submitting…" : "Submit work"}</button>
-      </form> : <p className="mb-0">Submissions are closed.</p>}
+      </form> : <p className="mb-0">Submissions are closed.</p>)}
     </article>}
   </section>;
 }
