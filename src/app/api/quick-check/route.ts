@@ -83,5 +83,5 @@ export async function POST(request: Request) {
       })
     };
   });
-  return NextResponse.json({ student: { fullName: profile.fullName, studentNumber: profile.studentNumber }, accountExists: !!existingAccount, schoolId, grades }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ student: { fullName: profile.fullName }, accountExists: !!existingAccount, schoolId, grades }, { headers: { "Cache-Control": "no-store" } });
 }

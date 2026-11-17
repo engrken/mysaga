@@ -32,5 +32,6 @@ export default async function SchoolPage({ params, searchParams }: RouteProps) {
       }, catalog));
     }
   }
-  return <Portal user={user} initialPage={page as PageName} initialClassId={classWorkspace?.classId || ""} initialClassSection={classWorkspace?.section || "setup"} initialClassStudent={classWorkspace?.student || ""} initialAttendanceToday={classWorkspace?.attendanceToday || false} />;
+  const { studentNumber: _studentNumber, ...portalUser } = user;
+  return <Portal user={portalUser} initialPage={page as PageName} initialClassId={classWorkspace?.classId || ""} initialClassSection={classWorkspace?.section || "setup"} initialClassStudent={classWorkspace?.student || ""} initialAttendanceToday={classWorkspace?.attendanceToday || false} />;
 }

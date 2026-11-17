@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.6.0-beta.3",
+    "date": "2026-11-17",
+    "kind": "fix",
+    "changes": [
+      "Limit the display of student IDs to authorized rosters. Remove IDs from attendance alerts, scorebook screens, student lookup results, grade previews, profiles, and Quick Grade Check results."
+    ]
+  },
+  {
     "version": "0.6.0-beta.2",
     "date": "2026-11-17",
     "kind": "fix",

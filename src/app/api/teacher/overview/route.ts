@@ -120,7 +120,6 @@ export async function GET(request: Request) {
       return [{
         enrollmentId: enrollment.id,
         studentName: enrollment.studentName,
-        studentNumber: enrollment.studentNumber,
         subjectId: subject.id,
         classId: subject.classId,
         code: subject.code,
