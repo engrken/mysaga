@@ -103,20 +103,20 @@ export function absenceDates(
 
 export function droppingAbsenceStreak(
   days: ReturnType<typeof attendanceDays>,
-  isAbsent: (assessmentId: string) => boolean
+  scoreFor: (id: string) => Parameters<typeof attendanceMark>[0],
+  converted: ReadonlySet<string>
 ): AbsenceStreak | null {
-  let latest: string[] = [];
-  let consecutive: string[] = [];
-  for (const [date, ids] of days) {
-    // A day confirms an absence only when every attendance entry for it is marked absent.
-    if (!ids.every(isAbsent)) {
-      consecutive = [];
-      continue;
-    }
+  const consecutive: string[] = [];
+  let foundMarkedDay = false;
+  for (let index = days.length - 1; index >= 0; index--) {
+    const [date, ids] = days[index];
+    // A pending roll call after the last marked meeting does not resolve the warning.
+    if (!foundMarkedDay && ids.every(id => attendanceMark(scoreFor(id)) === null)) continue;
+    foundMarkedDay = true;
+    if (!ids.every(id => converted.has(id) || scoreFor(id)?.remark === "ABSENT")) break;
     consecutive.push(date);
-    if (consecutive.length >= DROPPING_ABSENCE_THRESHOLD) latest = consecutive;
   }
-  return latest.length
-    ? { days: latest.length, startDate: latest[0], endDate: latest[latest.length - 1], dates: latest }
-    : null;
+  if (consecutive.length < DROPPING_ABSENCE_THRESHOLD) return null;
+  const dates = consecutive.reverse();
+  return { days: dates.length, startDate: dates[0], endDate: dates[dates.length - 1], dates };
 }

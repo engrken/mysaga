@@ -115,7 +115,7 @@ export async function GET(request: Request) {
       if (!scores) return [];
       const converted = consecutiveLateAbsences(days, id => scores.get(id)?.remark);
       const { absent, late, lateAbsences, counted, percent } = attendanceRiskSummary(sessions, scores, manilaDate, converted);
-      const droppingWarning = droppingAbsenceStreak(days, id => converted.has(id) || scores.get(id)?.remark === "ABSENT");
+      const droppingWarning = droppingAbsenceStreak(days, id => scores.get(id), converted);
       const highRisk = percent !== null && percent >= HIGH_RISK_ABSENCE_PERCENT;
       if (percent === null || (percent < EARLY_ABSENCE_PERCENT && !droppingWarning)) return [];
       return [{

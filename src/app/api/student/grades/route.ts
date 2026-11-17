@@ -91,8 +91,7 @@ export async function GET(request: Request) {
       itemCount, recordedCount,
       classId: subject.classId,
       attendanceWarning: attendance.percent !== null && attendance.percent >= HIGH_RISK_ABSENCE_PERCENT ? attendance : null,
-      droppingWarning: droppingAbsenceStreak(days,
-        id => converted.has(id) || scoresByItem.get(id)?.remark === "ABSENT"),
+      droppingWarning: droppingAbsenceStreak(days, id => scoresByItem.get(id), converted),
       categories,
       gradeBands: summaryOnly ? [] : subject.gradeBands.map(band => ({
         minPercent: band.minPercent, finalGrade: band.finalGrade, remarks: band.remarks
