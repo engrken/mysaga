@@ -1,15 +1,25 @@
+export const ATTENDANCE_MARKS = ["PRESENT", "LATE", "ABSENT", "EXCUSED"] as const;
+export const LATES_PER_ABSENCE = 3;
+
 export const HIGH_RISK_ABSENCE_PERCENT = 20;
 
 export function attendanceMark(score?: { remark: string | null; points: number | null }) {
+  if (score?.remark === "LATE") return "late";
   if (score?.remark === "EXCUSED") return "excused";
   if (score?.remark === "ABSENT" || score?.remark === "DID_NOT_SUBMIT") return "absent";
   if (score?.remark === "PRESENT" || (score?.points != null && score.points > 0)) return "present";
   return null;
 }
 
-export function absencePercent(absent: number, present: number) {
-  const counted = present + absent;
-  return counted ? absent / counted * 100 : null;
+export function equivalentLateAbsences(late: number) {
+  return Math.floor(late / LATES_PER_ABSENCE);
+}
+
+export function attendanceTotals(absent: number, present: number, late = 0) {
+  const lateAbsences = equivalentLateAbsences(late);
+  const effectiveAbsent = absent + lateAbsences;
+  const counted = present + absent + late;
+  return { lateAbsences, effectiveAbsent, counted, percent: counted ? effectiveAbsent / counted * 100 : null };
 }
 
 export function highRiskAttendance(
@@ -19,16 +29,18 @@ export function highRiskAttendance(
 ) {
   let absent = 0;
   let present = 0;
+  let late = 0;
   for (const assessment of assessments) {
     if (!assessment.title.toLowerCase().startsWith("attendance ·")) continue;
     if (assessment.dueDate && assessment.dueDate.toISOString().slice(0, 10) > today) continue;
     const mark = attendanceMark(scores.get(assessment.id));
     if (mark === "absent") absent++;
     if (mark === "present") present++;
+    if (mark === "late") late++;
   }
-  const percent = absencePercent(absent, present);
+  const { lateAbsences, effectiveAbsent, counted, percent } = attendanceTotals(absent, present, late);
   return percent !== null && percent >= HIGH_RISK_ABSENCE_PERCENT
-    ? { absent, counted: absent + present, percent }
+    ? { absent: effectiveAbsent, late, lateAbsences, counted, percent }
     : null;
 }
 

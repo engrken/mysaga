@@ -1,3 +1,4 @@
+import { ATTENDANCE_MARKS } from "@/lib/attendance";
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@/generated/prisma/client";
@@ -19,7 +20,7 @@ const marksSchema = z.object({
   changes: z.array(z.object({
     enrollmentId: z.string().min(1),
     assessmentId: z.string().min(1),
-    remark: z.enum(["PRESENT", "ABSENT", "EXCUSED"]).nullable()
+    remark: z.enum(ATTENDANCE_MARKS).nullable()
   })).min(1).max(50)
 });
 

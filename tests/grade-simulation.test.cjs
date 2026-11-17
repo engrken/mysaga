@@ -9,9 +9,10 @@ function loaded(relative) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   }).outputText;
   const m = { exports: {} };
-  new Function("require", "exports", "module", code)((id) => id === "./grades" ? grading : require(id), m.exports, m);
+  new Function("require", "exports", "module", code)((id) => id === "./grades" ? grading : id === "./attendance" ? attendance : require(id), m.exports, m);
   return m.exports;
 }
+const attendance = loaded("../src/lib/attendance.ts");
 const grading = loaded("../src/lib/grades.ts");
 const sim = loaded("../src/lib/grade-simulation.ts");
 const item = (id, points, maxScore = 100, remark = null, title = id, weight = null) => ({ id, points, maxScore, remark, title, weight });

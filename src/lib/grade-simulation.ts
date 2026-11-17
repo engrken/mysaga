@@ -39,7 +39,7 @@ export function isAttendanceAssessment(item: Pick<SimulatedAssessment, "title">)
 
 export function validScenarioEntry(item: SimulatedAssessment, value: string | undefined) {
   if (value === undefined || value === "") return true;
-  if (isAttendanceAssessment(item)) return value === "PRESENT" || value === "ABSENT" || value === "EXCUSED";
+  if (isAttendanceAssessment(item)) return value === "PRESENT" || value === "LATE" || value === "ABSENT" || value === "EXCUSED";
   if (!/^\d+(?:\.\d{1,2})?$/.test(value)) return false;
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 && number <= item.maxScore;
@@ -58,7 +58,7 @@ export function simulateStudentGrade(grade: StudentSimulationGrade, scenario: Sc
       const status = changed && isAttendanceAssessment(item) ? override : undefined;
       const points = changed
         ? status === "PRESENT" ? item.maxScore
-          : status === "ABSENT" || status === "EXCUSED" ? null
+          : status === "LATE" || status === "ABSENT" || status === "EXCUSED" ? null
           : Number(override)
         : item.points;
       const remark = changed ? status || null : item.remark;
