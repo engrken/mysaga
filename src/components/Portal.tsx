@@ -16,6 +16,9 @@ const GradeWhatIfSimulator = dynamic(() => import("./GradeWhatIfSimulator"));
 const HelpCenter = dynamic(() => import("./PortalGuides").then(module => module.HelpCenter));
 const OnboardingGuide = dynamic(() => import("./PortalGuides").then(module => module.OnboardingGuide));
 const PhilippineHolidayCalendar = dynamic(() => import("./PhilippineHolidayCalendar").then(module => module.PhilippineHolidayCalendar));
+const TeacherActivities = dynamic(() => import("./ClassActivities").then(module => module.TeacherActivities));
+const RecentActivitySubmissions = dynamic(() => import("./ClassActivities").then(module => module.RecentActivitySubmissions));
+const StudentActivities = dynamic(() => import("./ClassActivities").then(module => module.StudentActivities));
 import { calculateCategoryPercent, calculateFinal, calculateGradeBreakdown, convertRawPercent, remainingChildAllocation } from "@/lib/grades";
 import { classWorkspaceHref, resolveClassRoute, resolveClassSelection, parseClassWorkspaceQuery, type ClassSection } from "@/lib/class-navigation";
 import { todayManila } from "@/lib/tenant-operations";
@@ -514,6 +517,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [profileName, setProfileName] = useState(user.fullName); const [passwordCurrent, setPasswordCurrent] = useState(""); const [passwordNew, setPasswordNew] = useState(""); const [passwordConfirm, setPasswordConfirm] = useState(""); const [passwordOtp, setPasswordOtp] = useState(""); const [passwordOtpSent, setPasswordOtpSent] = useState(false);
   const [profileImagePath, setProfileImagePath] = useState(user.profileImagePath); const [schoolLogoPath, setSchoolLogoPath] = useState(user.school.logoPath);
   const [overviewData, setOverviewData] = useState<OverviewData | null>(null); const [overviewLoading, setOverviewLoading] = useState(false); const [overviewRefresh, setOverviewRefresh] = useState(0);
+  const [recentActivity, setRecentActivity] = useState<{ subjectId: string; activityId: string } | null>(null);
   const [overviewTo, setOverviewTo] = useState(todayDateInput); const [overviewFrom, setOverviewFrom] = useState(() => shiftDateInput(todayDateInput(), -29));
   const [bulkScoresOpen, setBulkScoresOpen] = useState(false); const [bulkFileName, setBulkFileName] = useState(""); const [bulkOperations, setBulkOperations] = useState<Array<{enrollmentId:string;assessmentId:string;points:number|null;remark:"EXCUSED"|"ABSENT"|"DID_NOT_SUBMIT"|null}>>([]); const [bulkRowsPreview, setBulkRowsPreview] = useState<Array<{row:number;student:string;cells:number;errors:string[]}>>([]); const [bulkErrors, setBulkErrors] = useState<string[]>([]);
   const [gradeChangeEnrollmentId, setGradeChangeEnrollmentId] = useState(""); const [gradeChangeGrade, setGradeChangeGrade] = useState("AUTO"); const [gradeChangeRemark, setGradeChangeRemark] = useState("AUTO"); const [gradeChangeReason, setGradeChangeReason] = useState("");
@@ -1547,6 +1551,10 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
 </div>
 {overviewLoading && <div className="overview-refresh-note" role="status">Updating report…</div>}
 </>}
+<RecentActivitySubmissions onOpen={(subjectId, activityId) => {
+  setRecentActivity({ subjectId, activityId });
+  openClass(subjectId, "activities");
+}}/>
 <section className="section-block"><div className="section-heading"><div><h2>Your subjects</h2><p className="muted">Open a class to manage rosters and grades.</p></div><button className="btn btn-outline-primary btn-sm" onClick={() => navigatePage("classes")}>Manage classes <span>→</span></button></div><p className="muted small dashboard-filter-note">Class cards use the school year and term filters in Smart Student Search above.</p>{visibleSubjects.length ? <><div className="subject-grid">{pageSubjects.map((s, i) => <button key={s.id} className="subject-card" onClick={() => openClass(s.id, "setup")}><div className={`subject-band band-${i%4}`}><span>{s.code} <small className="class-id-badge">{s.classId || "No Class ID"}</small></span><span className="subject-symbol">{["◌","⌁","▧","✳"][i%4]}</span></div><div className="subject-card-body"><div className="subject-card-title">{s.title}</div><div className="subject-metadata">{s.courseYear || "Class"} <span>·</span> {s.term} {s.academicYear}</div><div className="subject-card-footer"><span>♙ {s._count?.enrollments || 0} students</span><span className={`publish-state ${s.gradeStatus === "VERIFIED" ? "is-live" : ""}`}>{s.gradeStatus === "VERIFIED" ? "Final" : s.gradeStatus === "SUBMITTED" ? "Provisional · awaiting Registrar confirmation" : "Draft"}</span></div></div></button>)}</div>{subjectPageCount > 1 && <div className="list-pagination"><span>Showing {(subjectPage - 1) * subjectsPerPage + 1}–{Math.min(subjectPage * subjectsPerPage, visibleSubjects.length)} of {visibleSubjects.length} subjects</span><div><button className="btn btn-outline-secondary btn-sm" disabled={subjectPage <= 1} onClick={() => setSubjectPage(page => page - 1)}>Previous</button><span>Page {subjectPage} of {subjectPageCount}</span><button className="btn btn-outline-secondary btn-sm" disabled={subjectPage >= subjectPageCount} onClick={() => setSubjectPage(page => page + 1)}>Next</button></div></div>}</> : <div className="empty-state"><div className="empty-icon">▤</div><h3>{subjects.length ? "No classes match these filters" : "Your classes will show here"}</h3><p>{subjects.length ? "Change the school year or term to see more classes." : "Create your first subject to start building a class roster and gradebook."}</p>{!subjects.length&&<button className="btn btn-primary" onClick={() => setCreateOpen(true)}>Add your first subject</button>}</div>}</section></>}
       {tab === "classes" && <>
         <div className="class-toolbar">
@@ -1561,10 +1569,20 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <section className="surface class-summary"><div><span className="eyebrow">{detail.courseYear || "CLASS RECORD"} · {detail.term} {detail.academicYear}</span><h2>{detail.code}: {detail.title}</h2><p className="muted mb-0">Class ID: <b>{detail.classId || "Not set"}</b> · {formatSchedule(detail.schedule) || "Schedule not set"} · {detail.enrollments.length} rostered students</p></div><div className="class-final-actions"><button type="button" className="btn btn-outline-primary grade-visibility-current" onClick={() => setVisibilityManagerQuery(detail.classId || detail.code)}>{detail.isPublished ? "Visible to students" : "Hidden from students"} · Manage</button><span className={`grade-status-pill ${detail.gradeStatus === "VERIFIED" ? "final" : detail.gradeStatus === "SUBMITTED" ? "provisional" : "draft"}`}>{detail.gradeStatus === "VERIFIED" ? "Verified to Registrar · Final" : detail.gradeStatus === "SUBMITTED" ? "Awaiting teacher confirmation to Registrar" : "Draft · Not submitted"}</span><button className="btn btn-outline-primary" onClick={()=>openClassSection("final")}>Final grades</button><button className="btn btn-outline-primary" onClick={openSubjectEditor} disabled={detail.gradeStatus!=="DRAFT"}>Edit class</button><button className="btn btn-outline-danger" onClick={deleteSubject} disabled={busy||detail.gradeStatus!=="DRAFT"}>Delete class</button></div></section>
           <nav className="class-section-tabs" aria-label="Class workspace">
             <button className={classSection === "setup" ? "active" : ""} onClick={() => openClassSection("setup")}>Grading setup</button><button className={classSection === "roster" ? "active" : ""} onClick={() => openClassSection("roster")}>Class roster</button><button className={classSection === "items" ? "active" : ""} onClick={() => openClassSection("items")}>Assessment items</button><button className={classSection === "record" ? "active" : ""} onClick={() => openClassSection("record")}>Record scores</button>
+            <button className={classSection === "activities" ? "active" : ""} onClick={() => { setRecentActivity(null); openClassSection("activities"); }}>Activities</button>
             <button className={classSection === "attendance" ? "active" : ""} onClick={() => openClassSection("attendance")}>Attendance</button>
             <button className={classSection === "analytics" ? "active" : ""} onClick={() => openClassSection("analytics")}>Class analytics</button>
             <button className={classSection === "final" ? "active" : ""} onClick={() => openClassSection("final")}>Final grades &amp; submit</button>
           </nav>
+          {classSection === "activities" && <TeacherActivities
+            key={detail.id + (recentActivity?.subjectId === detail.id ? recentActivity.activityId : "")}
+            subjectId={detail.id}
+            categories={leafCategories(detail.categories).map(category => ({ id: category.id, label: categoryPath(category, detail.categories) }))}
+            locked={detail.gradeStatus !== "DRAFT"}
+            readOnly={user.isDemo}
+            initialActivityId={recentActivity?.subjectId === detail.id ? recentActivity.activityId : undefined}
+            onRecordChange={() => loadDetail(detail.id)}
+          />}
           {classSection === "setup" && <>
             <section id="class-section-setup" className="surface grading-card">
               <div className="section-heading grading-setup-heading">
@@ -1687,6 +1705,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <div className="student-stat"><small>IN PROGRESS</small><strong>{studentGradeStats.inProgress}</strong><span>Draft or provisional records</span></div>
           <div className="student-stat"><small>UNRECORDED ITEMS</small><strong>{studentGradeStats.pendingAssessments}</strong><span>Across visible classes</span></div>
         </div>
+        <StudentActivities readOnly={user.isDemo}/>
         {studentAttendanceWarnings.length > 0 && (
           <section className="alert alert-warning" aria-labelledby="student-attendance-warning-heading" aria-live="polite">
             <h3 className="h6" id="student-attendance-warning-heading">Attendance warning</h3>

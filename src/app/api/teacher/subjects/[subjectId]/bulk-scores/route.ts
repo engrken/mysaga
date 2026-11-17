@@ -22,7 +22,7 @@ export async function POST(request: Request, context: Context) {
   const { subjectId } = await context.params;
   const subject = await prisma.subject.findFirst({
     where: { id: subjectId, teacherId: teacher.id, schoolId: teacher.schoolId },
-    select: { id: true, gradeStatus: true, enrollments: { select: { id: true } }, assessments: { select: { id: true, maxScore: true, title: true } } }
+    select: { id: true, gradeStatus: true, enrollments: { select: { id: true } }, assessments: { select: { id: true, maxScore: true, title: true, activity: { select: { id: true } } } } }
   });
   if (!subject) return NextResponse.json({ error: "Class not found." }, { status: 404 });
   if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "Recall this grade record before changing scores." }, { status: 409 });
@@ -37,6 +37,7 @@ export async function POST(request: Request, context: Context) {
     seen.add(key);
     const assessment = assessmentById.get(entry.assessmentId);
     if (!enrollmentIds.has(entry.enrollmentId) || !assessment) return NextResponse.json({ error: "A student or assessment in this batch does not belong to this class. Refresh the file and preview it again." }, { status: 400 });
+    if (assessment.activity) return NextResponse.json({ error: "Grade linked activities from the Activities tab." }, { status: 400 });
     if (assessment.title.toLocaleLowerCase().startsWith("attendance ·")) return NextResponse.json({ error: "Bulk score import does not change attendance records. Use the Attendance tab." }, { status: 400 });
     if (entry.points !== null && entry.points > assessment.maxScore) return NextResponse.json({ error: `A score exceeds the maximum of ${assessment.maxScore} for ${assessment.title}.` }, { status: 400 });
     if (entry.remark && entry.points !== null) return NextResponse.json({ error: "Each imported cell must contain either a score or a status, not both." }, { status: 400 });

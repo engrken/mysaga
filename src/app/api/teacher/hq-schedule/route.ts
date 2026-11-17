@@ -130,14 +130,14 @@ async function scoreRequest(request: Request, token:string) {
   if(input.action==="classes"){
     const subjects=await prisma.subject.findMany({where:scope(g),orderBy:{code:"asc"},
       select:{id:true,title:true,code:true,classId:true,courseYear:true,gradeStatus:true,
-        assessments:{select:{id:true,title:true,maxScore:true},orderBy:{title:"asc"}}}});
+        assessments:{where:{activity:null},select:{id:true,title:true,maxScore:true},orderBy:{title:"asc"}}}});
     return json({academicYear:g.year,term:g.term,subjects:subjects.map(subject=>({
       ...subject,assessments:subject.assessments.filter(item=>!attendance(item.title))
     }))});
   }
   if(input.action==="apply")return applyMissing(g,input.preview);
   const subject=await prisma.subject.findFirst({where:{...scope(g),id:input.subjectId},
-    select:{id:true,gradeStatus:true,assessments:{where:{id:input.assessmentId},select:{id:true,title:true,maxScore:true}},
+    select:{id:true,gradeStatus:true,assessments:{where:{id:input.assessmentId,activity:null},select:{id:true,title:true,maxScore:true}},
       enrollments:{select:{id:true,studentNumber:true,studentName:true,
         scores:{where:{assessmentId:input.assessmentId},select:{points:true,remark:true}}}}}});
   const assessment=subject?.assessments[0];

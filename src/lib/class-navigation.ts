@@ -1,5 +1,5 @@
 /** Permanent, human-readable SAGA class links scoped to the logged-in teacher. */
-export const CLASS_SECTIONS = ["setup", "roster", "items", "record", "attendance", "analytics", "final"] as const;
+export const CLASS_SECTIONS = ["setup", "roster", "items", "activities", "record", "attendance", "analytics", "final"] as const;
 export type ClassSection = (typeof CLASS_SECTIONS)[number];
 
 export function isClassSection(value: unknown): value is ClassSection {

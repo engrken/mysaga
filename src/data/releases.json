@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.7.0-beta.1",
+    "date": "2026-11-17",
+    "kind": "feature",
+    "changes": [
+      "Added class activities, a question bank and auto-graded quizzes, assignment submissions, and linked class record scores."
+    ]
+  },
+  {
     "version": "0.6.0-beta.5",
     "date": "2026-11-17",
     "kind": "fix",
