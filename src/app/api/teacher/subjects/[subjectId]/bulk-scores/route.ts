@@ -26,7 +26,7 @@ export async function POST(request: Request, context: Context) {
   });
   if (!subject) return NextResponse.json({ error: "Class not found." }, { status: 404 });
   if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "Recall this grade record before changing scores." }, { status: 409 });
-  const parsed = batchSchema.safeParse(await request.json());
+  const parsed = batchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "The score batch is invalid or exceeds the 5,000-cell limit." }, { status: 400 });
   const enrollmentIds = new Set(subject.enrollments.map(item => item.id));
   const assessmentById = new Map(subject.assessments.map(item => [item.id, item]));

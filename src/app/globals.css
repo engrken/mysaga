@@ -1707,3 +1707,26 @@ body[data-saga-theme="dark"]:has(.portal-layout[data-saga-role="student"]) .saga
 @media (max-width: 400px) {
   .overview-attendance-risk-list > li { grid-template-columns: minmax(0, 1fr); gap: 8px; }
 }
+
+@media (max-width: 760px) {
+  .attendance-table th:first-child,
+  .attendance-table td:first-child {
+    width: 112px;
+    min-width: 112px;
+    max-width: 112px;
+    overflow-wrap: anywhere;
+  }
+
+  .attendance-table th:nth-child(2),
+  .attendance-table td:nth-child(2) {
+    left: auto;
+    width: 144px;
+    min-width: 144px;
+    max-width: 144px;
+    box-shadow: none;
+  }
+
+  .attendance-table tbody td:nth-child(2) {
+    position: static;
+  }
+}

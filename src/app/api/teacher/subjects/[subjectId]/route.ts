@@ -60,8 +60,14 @@ const categorySchema = z.object({ categories: categoryValuesSchema.min(1) });
 const newCategorySchema = z.object({ name: z.string().trim().min(1).max(80), parentId: z.string().nullable().optional(), weight: z.number().min(0).max(100).optional(), conversionBase: z.number().min(1).max(100).optional() });
 const rosterSchema = z.object({ students: z.array(z.object({ studentName: z.string().trim().min(2).max(120), studentNumber: z.string().trim().max(40).optional() })).min(1).max(100) });
 const enrollmentUpdateSchema = z.object({ updateEnrollment: z.object({ enrollmentId: z.string(), studentName: z.string().trim().min(2).max(120), studentNumber: z.string().trim().max(40).nullable().optional() }) });
-const assessmentSchema = z.object({ categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable().optional(), dueDate: z.string().optional(), scheduleOverrideReason: z.string().trim().max(120).optional(), attendanceType: z.enum(["FACE_TO_FACE", "ONLINE"]).nullable().optional() });
-const assessmentUpdatesSchema = z.object({ assessmentItems: z.array(z.object({ id: z.string(), categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable(), dueDate: z.string().nullable().optional(), scheduleOverrideReason: z.string().trim().max(120).nullable().optional(), attendanceType: z.enum(["FACE_TO_FACE", "ONLINE"]).nullable().optional() })).min(1).max(200) });
+const assessmentDateSchema = z.union([z.literal(""), z.iso.date(), z.iso.datetime({ offset: true })]);
+
+function mixesAssessmentWeights(items: ReadonlyArray<{ weight?: number | null }>) {
+  return items.some(item => item.weight != null) && items.some(item => item.weight == null);
+}
+
+const assessmentSchema = z.object({ categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable().optional(), dueDate: assessmentDateSchema.optional(), scheduleOverrideReason: z.string().trim().max(120).optional(), attendanceType: z.enum(["FACE_TO_FACE", "ONLINE"]).nullable().optional() });
+const assessmentUpdatesSchema = z.object({ assessmentItems: z.array(z.object({ id: z.string(), categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable(), dueDate: assessmentDateSchema.nullable().optional(), scheduleOverrideReason: z.string().trim().max(120).nullable().optional(), attendanceType: z.enum(["FACE_TO_FACE", "ONLINE"]).nullable().optional() })).min(1).max(200) });
 const remarkSchema = z.object({ enrollmentId: z.string(), remark: z.enum(["INC", "NP", "DROPPED"]).nullable() });
 const gradeChangeSchema = z.object({ gradeChange: z.object({ enrollmentId: z.string(), finalGrade: z.string().trim().min(1).max(12), remarks: z.string().trim().max(40), reason: z.string().trim().min(10).max(500) }) });
 const copyGradingSchema = z.object({ copyGradingFromSubjectId: z.string() });
@@ -327,7 +333,7 @@ export async function PATCH(request: Request, context: Context) {
   if ("assessmentItems" in input) {
     const parsed = assessmentUpdatesSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Check assessment names, maximum points, and item weights." }, { status: 400 });
     const items = parsed.data.assessmentItems;
-    if (items.length !== subject.assessments.length || items.some(item => !subject.assessments.some(existing => existing.id === item.id))) return NextResponse.json({ error: "The assessment list changed. Refresh and try again." }, { status: 409 });
+    if (items.length !== subject.assessments.length || new Set(items.map(item => item.id)).size !== items.length || items.some(item => !subject.assessments.some(existing => existing.id === item.id))) return NextResponse.json({ error: "The assessment list changed. Refresh and try again." }, { status: 409 });
     if (items.some(item => !subject.categories.some(category => category.id === item.categoryId) || subject.categories.some(category => category.parentId === item.categoryId))) return NextResponse.json({ error: "Choose a leaf category for every assessment item." }, { status: 400 });
     for (const item of items.filter(value => value.title.toLocaleLowerCase().startsWith("attendance ·"))) {
       const weekday = item.dueDate ? weekdayFromDate(item.dueDate.slice(0, 10)) : null;
@@ -341,6 +347,19 @@ export async function PATCH(request: Request, context: Context) {
     // An onBlur edit usually changes a single row. Do not send up to 200
     // identical UPDATE statements to Neon on each edit.
     const existingById = new Map(subject.assessments.map(item => [item.id, item]));
+    const changedWeightCategories = new Set<string>();
+    for (const item of items) {
+      const previous = existingById.get(item.id)!;
+      if (item.categoryId !== previous.categoryId || (item.weight ?? null) !== previous.weight) {
+        changedWeightCategories.add(item.categoryId);
+        changedWeightCategories.add(previous.categoryId);
+      }
+    }
+    for (const categoryId of changedWeightCategories) {
+      if (mixesAssessmentWeights(items.filter(item => item.categoryId === categoryId))) {
+        return NextResponse.json({ error: "Use item weights for every assessment in a category, or leave all item weights blank." }, { status: 400 });
+      }
+    }
     const changed = items.filter(item => {
       const previous = existingById.get(item.id)!;
       return item.categoryId !== previous.categoryId || item.title !== previous.title ||
@@ -386,6 +405,9 @@ export async function PATCH(request: Request, context: Context) {
   if ("categories" in input) {
     const parsed = categorySchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Invalid grading categories." }, { status: 400 });
     const values = parsed.data.categories;
+    if (new Set(values.map(category => category.id)).size !== values.length) {
+      return NextResponse.json({ error: "Each grading category can only appear once in the update." }, { status: 400 });
+    }
     if (new Set(values.map(c => c.name.toLocaleLowerCase())).size !== values.length) return NextResponse.json({ error: "Category names must be unique within a class." }, { status: 400 });
     if (values.some(c => !subject.categories.some(existing => existing.id === c.id) || (c.parentId && !values.some(parent => parent.id === c.parentId)))) return NextResponse.json({ error: "A category or parent does not belong to this class." }, { status: 400 });
     if (values.some(c => c.parentId && subject.assessments.some(a => a.categoryId === c.parentId))) return NextResponse.json({ error: "Move assessment items out of a category before nesting other categories under it." }, { status: 409 });
@@ -445,7 +467,8 @@ export async function POST(request: Request, context: Context) {
   });
   if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
   if (subject.gradeStatus === "VERIFIED") return NextResponse.json({ error: "This grade record has been finalized. Recall it before making changes." }, { status: 409 });
-  const input = await request.json();
+  const input = await request.json().catch(() => null);
+  if (!input || typeof input !== "object" || Array.isArray(input)) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   if ("category" in input) {
     const parsed = newCategorySchema.safeParse(input.category);
     if (!parsed.success) return NextResponse.json({ error: "Provide a valid subcategory name and weight." }, { status: 400 });
@@ -563,7 +586,9 @@ export async function POST(request: Request, context: Context) {
     if (duplicate) return NextResponse.json({ error: "An attendance day already exists for this date." }, { status: 409 });
   }
   const existingItems = subject.assessments.filter(item => item.categoryId === parsed.data.categoryId);
-  if (existingItems.some(item => item.weight !== null) && (parsed.data.weight === undefined || parsed.data.weight === null)) return NextResponse.json({ error: "This category uses item weights. Enter a weight for this item." }, { status: 400 });
+  if (mixesAssessmentWeights([...existingItems, parsed.data])) {
+    return NextResponse.json({ error: "Match this category’s item weighting. Use weights for every assessment or leave all item weights blank." }, { status: 400 });
+  }
   const assessment = await prisma.$transaction(async tx => {
     const created = await tx.assessment.create({ data: { ...parsed.data, weight: parsed.data.weight ?? null, subjectId, dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null, scheduleOverrideReason: parsed.data.scheduleOverrideReason || null, attendanceType: parsed.data.attendanceType || null } });
     if (isAttendance && subject.enrollments.length) await tx.score.createMany({ data: subject.enrollments.map(enrollment => ({ enrollmentId: enrollment.id, assessmentId: created.id, points: null, remark: "PRESENT" })) });
