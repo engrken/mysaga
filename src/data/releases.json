@@ -4,7 +4,8 @@
     "date": "2026-11-17",
     "kind": "fix",
     "changes": [
-      "Validate assessment dates and category item weights before saving, and reject duplicate assessment or category IDs and malformed score requests."
+      "Validate assessment dates and category item weights before saving, and reject duplicate assessment or category IDs and malformed score requests.",
+      "Keep the student name visible on narrow screens while allowing the attendance summary and meeting columns to scroll."
     ]
   },
   {
