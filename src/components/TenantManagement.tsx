@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AccountMenu, { type AccountTheme } from "./AccountMenu";
 import { saveSagaTheme } from "./ThemeSync";
+import { planDisplayName, SCHOOL_PLAN_LIMITS } from "@/lib/plans";
 import { csvCell, daysUntil, tenantHealth, todayManila } from "@/lib/tenant-operations";
 
 type Payment = {
@@ -28,7 +29,7 @@ type Activity = {
   actor: { fullName: string; role: string };
 };
 
-const planLabel = (plan: Plan) => plan === "FREE" ? "Freemium" : plan === "PREMIUM" ? "Premium" : "Pro / Enterprise";
+const planLabel = planDisplayName;
 const money = (amount: number) => new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 2 }).format(amount);
 const dateLabel = (value: string | null | undefined) => value ? new Date(value).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric", timeZone: "Asia/Manila" }) : "Not set";
 
@@ -118,10 +119,15 @@ export default function TenantManagement({ managerName, managerEmail, managerSch
 
   const active = tenants.find(tenant => tenant.id === selected) ?? null;
   useEffect(() => {
-    if (!active) return;
-    setPlan(active.plan);
-    setStatus(active.subscriptionStatus);
-    setExpires(active.subscriptionExpiresAt?.slice(0, 10) || "");
+    if (active) setPlan(active.plan);
+  }, [active?.id, active?.plan]);
+  useEffect(() => {
+    if (active) setStatus(active.subscriptionStatus);
+  }, [active?.id, active?.subscriptionStatus]);
+  useEffect(() => {
+    if (active) setExpires(active.subscriptionExpiresAt?.slice(0, 10) || "");
+  }, [active?.id, active?.subscriptionExpiresAt]);
+  useEffect(() => {
     setAmount(""); setReference(""); setCoverageTo(""); setNote("");
   }, [active?.id]);
 
@@ -130,7 +136,7 @@ export default function TenantManagement({ managerName, managerEmail, managerSch
     expires !== (active.subscriptionExpiresAt?.slice(0, 10) || "") || amount.trim() !== ""
   );
   function selectTenant(id: string) {
-    if (id === selected) return;
+    if (busy || id === selected) return;
     if (unsaved && !window.confirm("Discard unsaved tenant settings or payment details?")) return;
     setSelected(id);
     setActivityOpen(false); setActivityPage(1); setActivity([]);
@@ -209,7 +215,16 @@ export default function TenantManagement({ managerName, managerEmail, managerSch
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not save tenant changes.");
-      setNotice(payment ? "Tenant settings saved and the payment was recorded." : "Tenant settings saved.");
+      const saved = data.school as Pick<Tenant, "id" | "plan" | "subscriptionStatus" | "isActive" | "subscriptionExpiresAt" | "updatedAt">;
+      setTenants(current => current.map(tenant => tenant.id === saved.id ? { ...tenant, ...saved } : tenant));
+      if (planFilter !== "ALL" && saved.plan !== planFilter) {
+        setPlanFilter("ALL");
+        setPage(1);
+      }
+      const confirmation = saved.plan === active.plan
+        ? "Tenant settings saved."
+        : `Plan saved as ${planLabel(saved.plan)} for ${active.name}.`;
+      setNotice(payment ? `${confirmation} Payment recorded.` : confirmation);
       setAmount(""); setReference(""); setCoverageTo(""); setNote("");
       setActivityRevision(revision => revision + 1);
       await load(true);
@@ -305,7 +320,7 @@ export default function TenantManagement({ managerName, managerEmail, managerSch
               <tbody>{visible.map(tenant => {
                 const health = tenantHealth(tenant);
                 return <tr key={tenant.id} className={selected === tenant.id ? "tenant-row-selected" : ""}>
-                  <td data-label="School"><button type="button" className="tenant-school-button" aria-pressed={selected === tenant.id} onClick={() => selectTenant(tenant.id)}>
+                  <td data-label="School"><button type="button" className="tenant-school-button" aria-pressed={selected === tenant.id} disabled={busy} onClick={() => selectTenant(tenant.id)}>
                     <b>{tenant.name}</b><small>{tenant.slug}</small>
                   </button></td>
                   <td data-label="Tier">{planLabel(tenant.plan)}</td>
@@ -337,7 +352,7 @@ export default function TenantManagement({ managerName, managerEmail, managerSch
           {active ? <>
             <div className="surface tenant-settings-panel">
               <div className="tenant-panel-header">
-                <div><span className="eyebrow">SELECTED SCHOOL</span><h2>{active.name}</h2><small className="text-secondary">{active.slug} · Created {dateLabel(active.createdAt)}</small></div>
+                <div><span className="eyebrow">SELECTED SCHOOL</span><h2>{active.name}</h2><small className="text-secondary">{active.slug} · Created {dateLabel(active.createdAt)}</small><span className="badge text-bg-primary mt-2">Current plan · {planLabel(active.plan)}</span></div>
                 <span className={`tenant-health tenant-health-${activeHealth?.level || "good"}`}>{activeHealth?.label}</span>
               </div>
               <div className="tenant-selected-stats">
@@ -360,6 +375,11 @@ export default function TenantManagement({ managerName, managerEmail, managerSch
               <div className="row g-3">
                 <div className="col-12 col-sm-6"><label className="form-label" htmlFor="tenant-plan">Plan</label><select id="tenant-plan" className="form-select" value={plan} disabled={busy} onChange={event => setPlan(event.target.value as Plan)}><option value="FREE">Freemium · ₱0</option><option value="PREMIUM">Premium · ₱499/month</option><option value="ENTERPRISE">Pro / Enterprise · Custom</option></select></div>
                 <div className="col-12 col-sm-6"><label className="form-label" htmlFor="tenant-status">Activation</label><select id="tenant-status" className="form-select" value={status} disabled={busy} onChange={event => setStatus(event.target.value as Subscription)}><option value="ACTIVE">Active</option><option value="PAST_DUE">Past due</option><option value="SUSPENDED">Suspended</option><option value="CANCELLED">Cancelled</option></select></div>
+                <div className="col-12 small text-secondary">
+                  Current plan limits · {SCHOOL_PLAN_LIMITS[active.plan].teachers.toLocaleString("en-PH")} teachers,{" "}
+                  {SCHOOL_PLAN_LIMITS[active.plan].classes.toLocaleString("en-PH")} classes,{" "}
+                  {SCHOOL_PLAN_LIMITS[active.plan].studentSeats.toLocaleString("en-PH")} seats.
+                </div>
                 <div className="col-12"><label className="form-label" htmlFor="tenant-expiry">Paid-through / expiry date</label>
                   <div className="tenant-renewal-row"><input id="tenant-expiry" className="form-control" type="date" value={expires} disabled={busy} onChange={event => setExpires(event.target.value)}/>
                     <button type="button" className="btn btn-outline-primary btn-sm" onClick={extendExpiry} disabled={busy}>Extend 30 days</button></div>
