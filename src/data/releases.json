@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.6.0-beta.5",
+    "date": "2026-11-17",
+    "kind": "fix",
+    "changes": [
+      "Reflect saved tenant tier changes immediately and show the current plan and its limits in Tenant Management."
+    ]
+  },
+  {
     "version": "0.6.0-beta.4",
     "date": "2026-11-17",
     "kind": "fix",
