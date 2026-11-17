@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { todayManila } from "@/lib/tenant-operations";
 import { absenceDates, ATTENDANCE_MARKS, attendanceDays, attendanceRiskSummary, consecutiveLateAbsences, HIGH_RISK_ABSENCE_PERCENT } from "@/lib/attendance";
 import { scheduleWeekdays } from "@/lib/schedule-days";
 
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
   const to = parseDate(params.get("to"));
   if (!from || !to || from > to) return NextResponse.json({ error: "Choose a valid date range." }, { status: 400 });
   const rangeEnd = nextDay(to);
-  const manilaDate = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const manilaDate = todayManila();
   const today = new Date(`${manilaDate}T00:00:00.000Z`);
   const subjectScope = { teacherId: teacher.id, schoolId: teacher.schoolId };
 
@@ -213,5 +214,5 @@ export async function GET(request: Request) {
     today: manilaDate,
     todayClasses,
     upcoming: { attendance: upcoming(pendingAttendance, true), assessments: upcoming(upcomingAssessments) }
-  });
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }

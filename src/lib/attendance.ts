@@ -21,7 +21,7 @@ export function attendanceTotals(absent: number, present: number, late: number, 
 }
 
 export function attendanceRiskSummary(
-  assessments: ReadonlyArray<{ id: string; title: string; dueDate: Date | null }>,
+  assessments: ReadonlyArray<{ id: string; title: string; dueDate: Date | string | null }>,
   scores: ReadonlyMap<string, { remark: string | null; points: number | null }>,
   today: string,
   converted = consecutiveLateAbsences(attendanceDays(assessments, today), id => scores.get(id)?.remark)
@@ -36,7 +36,7 @@ export function attendanceRiskSummary(
   const { lateAbsences, effectiveAbsent, counted, percent } = attendanceTotals(
     counts.absent, counts.present, counts.late, converted.size
   );
-  return { ...counts, absent: effectiveAbsent, lateAbsences, counted, percent };
+  return { ...counts, recordedAbsent: counts.absent, absent: effectiveAbsent, lateAbsences, counted, percent };
 }
 
 export const DROPPING_ABSENCE_THRESHOLD = 3;
