@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { activityHeaders, gradeQuiz, quizSnapshotSchema, validDriveLink } from "@/lib/class-activities";
+import { activityEnrollmentIdentity, activityHeaders, gradeQuiz, quizSnapshotSchema, validDriveLink } from "@/lib/class-activities";
 
 const submissionSchema = z.object({
   activityId: z.string().min(1).max(128),
@@ -13,12 +13,6 @@ const submissionSchema = z.object({
 const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: activityHeaders });
 const error = (message: string, status = 400) => reply({ error: message }, status);
 
-function identity(student: { id: string; studentNumber: string | null }) {
-  return [{ studentUserId: student.id }, ...(student.studentNumber ? [{
-    studentUserId: null, studentNumber: { equals: student.studentNumber.trim(), mode: "insensitive" as const }
-  }] : [])];
-}
-
 export async function GET(request: Request) {
   const student = await requireRole("STUDENT");
   if (!student) return error("Unauthorized.", 401);
@@ -26,7 +20,7 @@ export async function GET(request: Request) {
   const classId = searchParams.get("subjectId");
   const activityId = searchParams.get("activityId");
   const enrollments = await prisma.enrollment.findMany({
-    where: { OR: identity(student), subject: { schoolId: student.schoolId } },
+    where: { OR: activityEnrollmentIdentity(student), subject: { schoolId: student.schoolId } },
     orderBy: { id: "asc" }, take: 200, select: {
       id: true, subjectId: true, studentUserId: true,
       subject: { select: { id: true, code: true, title: true, term: true, academicYear: true,
@@ -41,16 +35,17 @@ export async function GET(request: Request) {
   }
   if (classId && !enrollmentByClass.has(classId)) return error("Class not found.", 404);
   const enrollmentIds = [...enrollmentByClass.values()].map(row => row.id);
+  const now = new Date();
   const rows = await prisma.classActivity.findMany({
     where: {
       subjectId: { in: classId ? [classId] : [...enrollmentByClass.keys()] },
       status: { in: ["OPEN", "CLOSED"] },
-      OR: [{ availableAt: null }, { availableAt: { lte: new Date() } }],
+      ...(activityId ? { OR: [{ availableAt: null }, { availableAt: { lte: now } }] } : {}),
       ...(activityId ? { id: activityId } : {})
     },
     orderBy: [{ openedAt: "desc" }, { id: "desc" }], take: classId ? 50 : 20,
-    select: { id: true, title: true, kind: true, instructions: true, subjectId: true, status: true,
-      materialUrl: true, maxScore: true, practice: true, dueAt: true, ...(activityId ? { questions: true } : {}),
+    select: { id: true, title: true, kind: true, topic: true, availableAt: true, subjectId: true, status: true,
+      maxScore: true, practice: true, dueAt: true, ...(activityId ? { questions: true, instructions: true, materialUrl: true } : {}),
       submissions: { where: { enrollmentId: { in: enrollmentIds } },
         select: { text: true, driveUrl: true, answers: true, submittedAt: true, points: true, feedback: true, gradedAt: true } }
     }
@@ -83,8 +78,8 @@ export async function POST(request: Request) {
   if (input.driveUrl && !validDriveLink(input.driveUrl)) return error("Use a valid HTTPS Google Drive or Google Docs link.");
   if (input.answers && Object.keys(input.answers).length > 50) return error("Too many answers.");
   const target = await prisma.classActivity.findFirst({ where: {
-    id: input.activityId, status: { not: "DRAFT" },
-    subject: { schoolId: student.schoolId, enrollments: { some: { OR: identity(student) } } }
+    id: input.activityId, status: { not: "DRAFT" }, kind: { not: "RESOURCE" },
+    subject: { schoolId: student.schoolId, enrollments: { some: { OR: activityEnrollmentIdentity(student) } } }
   }, select: { subjectId: true } });
   if (!target) return error("Activity not found.", 404);
 
@@ -93,11 +88,11 @@ export async function POST(request: Request) {
       SELECT "gradeStatus" FROM "Subject" WHERE id = ${target.subjectId} AND "schoolId" = ${student.schoolId}
       FOR SHARE`;
     if (!subject.length) return error("Activity not found.", 404);
-    const enrollments = await tx.enrollment.findMany({ where: { subjectId: target.subjectId, OR: identity(student) },
+    const enrollments = await tx.enrollment.findMany({ where: { subjectId: target.subjectId, OR: activityEnrollmentIdentity(student) },
       orderBy: { id: "asc" }, select: { id: true, studentUserId: true } });
     const enrollment = enrollments.find(row => row.studentUserId === student.id) ?? enrollments[0];
     const activity = await tx.classActivity.findFirst({ where: {
-      id: input.activityId, subjectId: target.subjectId, status: { not: "DRAFT" }
+      id: input.activityId, subjectId: target.subjectId, status: { not: "DRAFT" }, kind: { not: "RESOURCE" }
     } });
     if (!enrollment || !activity) return error("Activity not found.", 404);
     const key = { activityId: activity.id, enrollmentId: enrollment.id };

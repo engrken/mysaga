@@ -30,3 +30,12 @@ export function validDriveLink(value: string) {
 }
 
 export const activityHeaders = { "Cache-Control": "private, no-store" };
+
+
+export const activityTopicSchema = z.string().trim().max(100).transform(value => value.replace(/\s+/g, " "));
+
+export function activityEnrollmentIdentity(student: { id: string; studentNumber: string | null }) {
+  return [{ studentUserId: student.id }, ...(student.studentNumber ? [{
+    studentUserId: null, studentNumber: { equals: student.studentNumber.trim(), mode: "insensitive" as const }
+  }] : [])];
+}
