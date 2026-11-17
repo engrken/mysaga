@@ -1,8 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { activityHeaders, questionSchema, quizSnapshotSchema } from "@/lib/class-activities";
+import { activityHeaders, questionSchema, quizSnapshotSchema, validDriveLink } from "@/lib/class-activities";
 
 const id = z.string().trim().min(1).max(128);
 const inputSchema = z.discriminatedUnion("action", [
@@ -15,7 +16,10 @@ const inputSchema = z.discriminatedUnion("action", [
     practice: z.boolean(), categoryId: id.nullable(), dueAt: z.iso.datetime({ offset: true }).nullable(),
     maxScore: z.number().positive().max(100000),
     itemWeight: z.number().positive().max(100).nullable(),
-    questionIds: z.array(id).max(50)
+    questionIds: z.array(id).max(50),
+    inlineQuestions: z.array(questionSchema).max(50).default([]),
+    materialUrl: z.string().trim().max(2048).nullable().optional(),
+    availableAt: z.iso.datetime({ offset: true }).nullable().optional()
   }),
   z.object({ action: z.enum(["open", "close"]), subjectId: id, activityId: id }),
   z.object({ action: z.literal("grade"), subjectId: id, activityId: id, submissionId: id,
@@ -26,7 +30,7 @@ const reply = (body: unknown, status = 200) => NextResponse.json(body, { status,
 const error = (message: string, status = 400) => reply({ error: message }, status);
 const activityFields = {
   id: true, title: true, kind: true, instructions: true, categoryId: true, assessmentId: true,
-  status: true, questions: true, practice: true, maxScore: true, itemWeight: true, dueAt: true,
+  status: true, questions: true, materialUrl: true, availableAt: true, practice: true, maxScore: true, itemWeight: true, dueAt: true,
   _count: { select: { submissions: true } }
 } as const;
 
@@ -109,17 +113,26 @@ export async function POST(request: Request) {
       if (input.categoryId && !await tx.gradeCategory.findFirst({
         where: { id: input.categoryId, subjectId: input.subjectId, children: { none: {} } }, select: { id: true }
       })) return error("Choose an assessment category from this class.");
+      if (input.materialUrl && !validDriveLink(input.materialUrl)) return error("Use a valid HTTPS Google Drive or Google Docs link for the activity material.");
+      const availableAt = input.availableAt ? new Date(input.availableAt) : null;
+      const dueAt = input.dueAt ? new Date(input.dueAt) : null;
+      if (availableAt && dueAt && availableAt >= dueAt) return error("The deadline must be after the opening date.");
       const ordered = [...new Set(input.questionIds)];
       const questions = input.kind === "QUIZ" ? await tx.bankQuestion.findMany({ where: {
         id: { in: ordered }, teacherId: teacher.id
       }, select: { id: true, prompt: true, options: true, answer: true } }) : [];
       if (input.kind === "QUIZ" && questions.length !== ordered.length) return error("Choose questions from your own question bank.");
+      if (input.kind === "QUIZ" && ordered.length + input.inlineQuestions.length > 50) return error("A quiz can contain up to 50 questions.");
+      const snapshot = input.kind === "QUIZ" ? [
+        ...ordered.flatMap(questionId => questions.filter(question => question.id === questionId)),
+        ...input.inlineQuestions.map(question => ({ ...question, id: `inline-${randomUUID()}` }))
+      ] : [];
       const data = {
         subjectId: input.subjectId, kind: input.kind, title: input.title, instructions: input.instructions,
-        practice: input.practice, categoryId: input.practice ? null : input.categoryId, dueAt: input.dueAt ? new Date(input.dueAt) : null,
+        practice: input.practice, categoryId: input.practice ? null : input.categoryId, dueAt, availableAt, materialUrl: input.kind === "ASSIGNMENT" ? input.materialUrl || null : null,
         itemWeight: !input.practice && input.categoryId ? input.itemWeight : null,
-        maxScore: input.kind === "QUIZ" ? questions.length : input.maxScore,
-        questions: ordered.flatMap(questionId => questions.filter(question => question.id === questionId))
+        maxScore: input.kind === "QUIZ" ? snapshot.length : input.maxScore,
+        questions: snapshot
       };
       const saved = activity
         ? await tx.classActivity.update({ where: { id: activity.id }, data, select: activityFields })

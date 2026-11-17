@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.8.0-beta.1",
+    "date": "2026-11-17",
+    "kind": "feature",
+    "changes": [
+      "Added teacher-posted Drive activities, scheduled openings, and quizzes with optional question-bank reuse."
+    ]
+  },
+  {
     "version": "0.7.0-beta.1",
     "date": "2026-11-17",
     "kind": "feature",
