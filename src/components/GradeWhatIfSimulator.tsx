@@ -119,7 +119,7 @@ export default function GradeWhatIfSimulator({ grade, onClose, inline = false }:
               const attendance = isAttendanceAssessment(item);
               const value = scenario[item.id] || "";
               const valid = validScenarioEntry(item, value);
-              const actual = item.remark === "PRESENT" ? "Present" : item.remark === "ABSENT" ? "Absent" :
+              const actual = item.lateAsAbsent ? "Absent (three consecutive lates)" : item.remark === "PRESENT" ? "Present" : item.remark === "ABSENT" ? "Absent" :
                 item.remark === "LATE" ? "Late" : item.remark === "EXCUSED" ? "Excused" : item.remark === "DID_NOT_SUBMIT" ? "Did not submit" :
                 item.points === null ? "Pending / not recorded" : `${item.points} / ${item.maxScore}`;
               return <div className="grade-simulator-assessment" key={item.id}>

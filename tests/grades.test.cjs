@@ -180,13 +180,19 @@ test("adding a subcategory uses pending edits, not stale saved category allocati
 });
 
 
-test("three late marks count as one absence while raw marks stay late", () => {
-  assert.deepEqual(attendance.attendanceTotals(1, 3, 7), {
-    lateAbsences: 2, effectiveAbsent: 3, counted: 11, percent: 3 / 11 * 100
-  });
-  assert.equal(attendance.attendanceTotals(0, 0, 2).percent, 0);
-  const late = scored(null, 1, "Attendance · meeting", "LATE");
-  const excused = scored(null, 1, "Attendance · meeting", "EXCUSED");
-  assert.equal(calculateCategoryPercent({ assessments: [late, late, excused] }), 100);
-  assert.equal(calculateCategoryPercent({ assessments: [late, late, late, excused] }), 66.67);
+test("only the third consecutive late counts as absent", () => {
+  const late = date => scored(null, 1, "Attendance · " + date, "LATE");
+  const present = date => scored(null, 1, "Attendance · " + date, "PRESENT");
+  const first = late("2026-11-11");
+  const second = late("2026-11-13");
+  const third = late("2026-11-16");
+  const fourth = late("2026-11-18");
+  assert.equal(calculateCategoryPercent({ assessments: [third, first, second] }), 66.67);
+  assert.equal(calculateCategoryPercent({ assessments: [third, first, present("2026-11-12"), second] }), 100);
+  assert.equal(calculateCategoryPercent({ assessments: [fourth, third, first, second] }), 75);
+  const dates = [first, second, third, fourth].map((item, id) => ({ ...item, id: String(id) }));
+  const days = attendance.attendanceDays(dates);
+  assert.deepEqual([...attendance.consecutiveLateAbsences(days, () => "LATE")], ["2"]);
+  assert.deepEqual([...attendance.consecutiveLateAbsences(days, id => id === "1" ? "EXCUSED" : "LATE")], []);
+  assert.equal(attendance.droppingAbsenceStreak(days, id => id === "2"), null);
 });

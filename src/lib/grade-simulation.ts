@@ -3,6 +3,8 @@ import { calculateGradeBreakdown, equivalentFromBands } from "./grades";
 export type SimulatedAssessment = {
   id: string;
   title: string;
+  dueDate?: string | null;
+  lateAsAbsent?: boolean;
   maxScore: number;
   weight: number | null;
   points: number | null;
@@ -63,7 +65,7 @@ export function simulateStudentGrade(grade: StudentSimulationGrade, scenario: Sc
         : item.points;
       const remark = changed ? status || null : item.remark;
       return {
-        title: item.title, maxScore: item.maxScore, weight: item.weight,
+        title: item.title, dueDate: item.dueDate, maxScore: item.maxScore, weight: item.weight,
         scores: points !== null || remark !== null ? [{ points, remark }] : []
       };
     })

@@ -46,7 +46,7 @@ export async function GET(_request: Request, context: Context) {
     const finalPercent = calculateFinal(categoryTree.map(category => ({
       id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase,
       assessments: category.assessments.map(item => ({
-        title: item.title, maxScore: item.maxScore, weight: item.weight,
+        title: item.title, dueDate: item.dueDate, maxScore: item.maxScore, weight: item.weight,
         scores: marks.has(item.id) ? [marks.get(item.id)!] : []
       }))
     })));
@@ -117,7 +117,7 @@ export async function PATCH(request: Request, context: Context) {
     const allowedGrades = new Set(["AUTO", ...subject.gradeBands.map(band => band.finalGrade)]);
     const allowedRemarks = new Set(["AUTO", "Passed", "Failed", "INC", "NP", "DROPPED"]);
     if (!allowedGrades.has(change.finalGrade) || !allowedRemarks.has(change.remarks)) return NextResponse.json({ error: "Choose a grade and remark from this class's grading scale." }, { status: 400 });
-    const calculatedPercent = calculateFinal(subject.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: subject.assessments.filter(item => item.categoryId === category.id).map(item => ({ title: item.title, maxScore: item.maxScore, weight: item.weight, scores: enrollment.scores.filter(score => score.assessmentId === item.id) })) })));
+    const calculatedPercent = calculateFinal(subject.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: subject.assessments.filter(item => item.categoryId === category.id).map(item => ({ title: item.title, dueDate: item.dueDate, maxScore: item.maxScore, weight: item.weight, scores: enrollment.scores.filter(score => score.assessmentId === item.id) })) })));
     const automatic = equivalentFromBands(calculatedPercent, subject.gradeBands);
     const previousFinalGrade = enrollment.finalGradeOverride ?? automatic.finalGrade;
     const previousRemarks = enrollment.remarks ?? automatic.remarks;

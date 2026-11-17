@@ -1,4 +1,4 @@
-import { equivalentLateAbsences } from "./attendance";
+import { attendanceDays, consecutiveLateAbsences } from "./attendance";
 
 export type GradeCategoryInput = { name: string; weight: number; conversionBase: number };
 
@@ -78,6 +78,7 @@ export type GradeCalculationCategory = {
   conversionBase?: number;
   assessments: Array<{
     title?: string;
+    dueDate?: Date | string | null;
     maxScore: number;
     weight?: number | null;
     scores: Array<{ points: number | null; remark?: string | null }>;
@@ -118,7 +119,18 @@ const isAttendanceItem = (title?: string) => !!title && title.toLocaleLowerCase(
  * Attendance must use an actual present/absent ratio, not the academic
  * grade-transmutation base used for quizzes and examinations.
  */
-export function calculateCategoryPercent(category: Pick<GradeCalculationCategory, "conversionBase" | "assessments">) {
+type GradeAssessment = GradeCalculationCategory["assessments"][number];
+
+function convertedLateAssessments(assessments: GradeAssessment[]) {
+  const items = assessments.map((assessment, index) => ({ ...assessment, id: String(index) }));
+  const converted = consecutiveLateAbsences(attendanceDays(items), id => assessments[Number(id)].scores[0]?.remark);
+  return new Set([...converted].map(id => assessments[Number(id)]));
+}
+
+export function calculateCategoryPercent(
+  category: Pick<GradeCalculationCategory, "conversionBase" | "assessments">,
+  converted = convertedLateAssessments(category.assessments)
+) {
   const active = category.assessments.filter(assessment =>
     assessment.scores[0]?.remark !== "EXCUSED" && isRecorded(assessment)
   );
@@ -126,12 +138,9 @@ export function calculateCategoryPercent(category: Pick<GradeCalculationCategory
   const isAttendance = category.assessments.length > 0 && category.assessments.every(item => isAttendanceItem(item.title));
   const base = isAttendance ? 100 : category.conversionBase ?? 50;
   const transmute = (rawPercent: number) => convertRawPercent(rawPercent, base);
-  const lateCount = active.filter(assessment => isAttendanceItem(assessment.title)
-    && assessment.scores[0]?.remark === "LATE").length;
-  const lateCredit = lateCount ? (lateCount - equivalentLateAbsences(lateCount)) / lateCount : 1;
   const rawPoints = (assessment: GradeCalculationCategory["assessments"][number]) => {
     const score = assessment.scores[0];
-    if (score?.remark === "LATE" && isAttendanceItem(assessment.title)) return assessment.maxScore * lateCredit;
+    if (score?.remark === "LATE" && isAttendanceItem(assessment.title)) return converted.has(assessment) ? 0 : assessment.maxScore;
     return score?.remark === "PRESENT" ? assessment.maxScore :
       score?.remark === "ABSENT" || score?.remark === "DID_NOT_SUBMIT" ? 0 : score?.points ?? 0;
   };
@@ -160,6 +169,7 @@ export function calculateGradeBreakdown(categories: GradeCalculationCategory[]) 
   const byId = new Map(categories.map(category => [category.id, category]));
   const withChildren = new Set(categories.filter(category => category.parentId).map(category => category.parentId));
   const items: GradeContribution[] = [];
+  const converted = convertedLateAssessments(categories.flatMap(category => category.assessments));
   for (const category of categories) {
     if (withChildren.has(category.id)) continue;
     let root = category;
@@ -174,7 +184,7 @@ export function calculateGradeBreakdown(categories: GradeCalculationCategory[]) 
     const courseWeight = category.id === root.id ? root.weight : root.weight * category.weight / 100;
     const withinRootWeight = category.id === root.id ? root.weight : category.weight;
     const inheritedBase = category.parentId ? byId.get(category.parentId)?.conversionBase : category.conversionBase;
-    const percent = calculateCategoryPercent({ conversionBase: inheritedBase ?? 50, assessments: category.assessments });
+    const percent = calculateCategoryPercent({ conversionBase: inheritedBase ?? 50, assessments: category.assessments }, converted);
     items.push({
       categoryId: category.id,
       percent,

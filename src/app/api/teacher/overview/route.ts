@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { ATTENDANCE_MARKS, attendanceDays, attendanceMark, attendanceTotals, droppingAbsenceStreak, HIGH_RISK_ABSENCE_PERCENT } from "@/lib/attendance";
+import { ATTENDANCE_MARKS, attendanceDays, attendanceRiskSummary, consecutiveLateAbsences, droppingAbsenceStreak, HIGH_RISK_ABSENCE_PERCENT } from "@/lib/attendance";
 import { scheduleWeekdays } from "@/lib/schedule-days";
 
 function parseDate(value: string | null) {
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
   const today = new Date(`${manilaDate}T00:00:00.000Z`);
   const subjectScope = { teacherId: teacher.id, schoolId: teacher.schoolId };
 
-  const [subjects, upcomingAttendance, upcomingAssessments, attendanceCounts, todaysAttendance, recordedAttendance, attendanceSessions] = await Promise.all([
+  const [subjects, upcomingAttendance, upcomingAssessments, attendanceCounts, todaysAttendance, attendanceSessions] = await Promise.all([
     prisma.subject.findMany({
       where: subjectScope,
       select: {
@@ -78,19 +78,6 @@ export async function GET(request: Request) {
         subject: { select: { _count: { select: { enrollments: true } } } }
       }
     }),
-    prisma.score.groupBy({
-      by: ["enrollmentId", "remark"],
-      where: {
-        assessment: {
-          subject: subjectScope,
-          title: { startsWith: "Attendance ·", mode: "insensitive" },
-          OR: [{ dueDate: null }, { dueDate: { lt: nextDay(today) } }]
-        },
-        enrollment: { subject: subjectScope },
-        OR: [{ remark: { in: [...ATTENDANCE_MARKS, "DID_NOT_SUBMIT"] } }, { points: { gt: 0 } }]
-      },
-      _count: { _all: true }
-    }),
     prisma.assessment.findMany({
       where: {
         subject: subjectScope,
@@ -99,41 +86,36 @@ export async function GET(request: Request) {
       },
       select: {
         id: true, subjectId: true, title: true, dueDate: true,
-        scores: { where: { remark: "ABSENT" }, select: { enrollmentId: true } }
+        scores: {
+          where: { OR: [{ remark: { in: [...ATTENDANCE_MARKS, "DID_NOT_SUBMIT"] } }, { points: { gt: 0 } }] },
+          select: { enrollmentId: true, remark: true, points: true }
+        }
       }
     })
   ]);
 
   const sessionsBySubject = new Map<string, typeof attendanceSessions>();
-  const absencesByEnrollment = new Map<string, Set<string>>();
+  const scoresByEnrollment = new Map<string, Map<string, (typeof attendanceSessions)[number]["scores"][number]>>();
   for (const session of attendanceSessions) {
     const sessions = sessionsBySubject.get(session.subjectId) ?? [];
     sessions.push(session);
     sessionsBySubject.set(session.subjectId, sessions);
-    for (const { enrollmentId } of session.scores) {
-      const ids = absencesByEnrollment.get(enrollmentId) ?? new Set<string>();
-      ids.add(session.id);
-      absencesByEnrollment.set(enrollmentId, ids);
+    for (const score of session.scores) {
+      const scores = scoresByEnrollment.get(score.enrollmentId) ?? new Map();
+      scores.set(session.id, score);
+      scoresByEnrollment.set(score.enrollmentId, scores);
     }
   }
 
-  const attendanceByEnrollment = new Map<string, { absent: number; present: number; late: number }>();
-  for (const row of recordedAttendance) {
-    // A grouped row without an explicit mark can only match through positive legacy points.
-    const mark = attendanceMark({ remark: row.remark, points: 1 });
-    if (!mark || mark === "excused") continue;
-    const counts = attendanceByEnrollment.get(row.enrollmentId) ?? { absent: 0, present: 0, late: 0 };
-    counts[mark] += row._count._all;
-    attendanceByEnrollment.set(row.enrollmentId, counts);
-  }
   const attendanceRisk = subjects.flatMap(subject => {
-    const days = attendanceDays(sessionsBySubject.get(subject.id) ?? [], manilaDate);
+    const sessions = sessionsBySubject.get(subject.id) ?? [];
+    const days = attendanceDays(sessions, manilaDate);
     return subject.enrollments.flatMap(enrollment => {
-      const counts = attendanceByEnrollment.get(enrollment.id);
-      if (!counts) return [];
-      const { lateAbsences, effectiveAbsent, counted, percent } = attendanceTotals(counts.absent, counts.present, counts.late);
-      const absences = absencesByEnrollment.get(enrollment.id);
-      const droppingWarning = absences ? droppingAbsenceStreak(days, id => absences.has(id)) : null;
+      const scores = scoresByEnrollment.get(enrollment.id);
+      if (!scores) return [];
+      const converted = consecutiveLateAbsences(days, id => scores.get(id)?.remark);
+      const { absent, late, lateAbsences, counted, percent } = attendanceRiskSummary(sessions, scores, manilaDate, converted);
+      const droppingWarning = droppingAbsenceStreak(days, id => converted.has(id) || scores.get(id)?.remark === "ABSENT");
       const highRisk = percent !== null && percent >= HIGH_RISK_ABSENCE_PERCENT;
       if (percent === null || (!highRisk && !droppingWarning)) return [];
       return [{
@@ -146,8 +128,8 @@ export async function GET(request: Request) {
         title: subject.title,
         academicYear: subject.academicYear,
         term: subject.term,
-        absent: effectiveAbsent,
-        late: counts.late,
+        absent,
+        late,
         lateAbsences,
         counted,
         percent,

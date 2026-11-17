@@ -46,6 +46,7 @@ export async function POST(_request: Request, context: Context) {
       conversionBase: category.conversionBase,
       assessments: category.assessments.map(item => ({
         title: item.title,
+        dueDate: item.dueDate,
         maxScore: item.maxScore,
         weight: item.weight,
         scores: item.scores.filter(score => score.enrollmentId === enrollment.id)
@@ -58,7 +59,7 @@ export async function POST(_request: Request, context: Context) {
       const base = category.parentId ? subject.categories.find(parent => parent.id === category.parentId)?.conversionBase : category.conversionBase;
       const score = calculateCategoryPercent({
         conversionBase: base ?? 50,
-        assessments: category.assessments.map(item => ({ title: item.title, maxScore: item.maxScore, weight: item.weight, scores: item.scores.filter(value => value.enrollmentId === enrollment.id) }))
+        assessments: category.assessments.map(item => ({ title: item.title, dueDate: item.dueDate, maxScore: item.maxScore, weight: item.weight, scores: item.scores.filter(value => value.enrollmentId === enrollment.id) }))
       });
       let root = category;
       while (root.parentId) { const parent = subject.categories.find(item => item.id === root.parentId); if (!parent) break; root = parent; }
