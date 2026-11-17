@@ -18,6 +18,7 @@ const OnboardingGuide = dynamic(() => import("./PortalGuides").then(module => mo
 const PhilippineHolidayCalendar = dynamic(() => import("./PhilippineHolidayCalendar").then(module => module.PhilippineHolidayCalendar));
 import { calculateCategoryPercent, calculateFinal, calculateGradeBreakdown, convertRawPercent, remainingChildAllocation } from "@/lib/grades";
 import { classWorkspaceHref, resolveClassRoute, resolveClassSelection, parseClassWorkspaceQuery, type ClassSection } from "@/lib/class-navigation";
+import { absencePercent as calculateAbsencePercent, attendanceMark, HIGH_RISK_ABSENCE_PERCENT } from "@/lib/attendance";
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 import { buildWorkbookPages, workbookWidths } from "@/lib/scorebook-layout";
 
@@ -38,6 +39,11 @@ type TodayClass = { id: string; code: string; title: string; classId: string | n
 type OverviewData = {
   stats: { activeClasses: number; activeStudents: number; activities: number; tests: number; pendingReviews: number; attendanceLogs: number };
   attendance: { present: number; absent: number; excused: number };
+  attendanceRisk: Array<{
+    enrollmentId: string; studentName: string; studentNumber: string | null;
+    subjectId: string; classId: string | null; code: string; title: string; academicYear: string; term: string;
+    absent: number; counted: number; percent: number;
+  }>;
   submissions: { draft: number; provisional: number; final: number };
   enrollment: Array<{ id: string; label: string; title: string; code: string; count: number }>;
   today: string;
@@ -403,12 +409,11 @@ function attendanceSummary(enrollment: Enrollment, assessments: Assessment[], sc
   const counts = { present: 0, absent: 0, excused: 0 };
   for (const item of sessions) {
     const score = scoreLookup ? scoreLookup.get(item.id) : enrollment.scores.find(value => value.assessmentId === item.id);
-    if (score?.remark === "EXCUSED") counts.excused++;
-    else if (score?.remark === "ABSENT" || score?.remark === "DID_NOT_SUBMIT") counts.absent++;
-    else if (score?.remark === "PRESENT" || (score?.points != null && score.points > 0)) counts.present++;
+    const mark = attendanceMark(score);
+    if (mark) counts[mark]++;
   }
   const counted = counts.present + counts.absent;
-  const absencePercent = counted ? counts.absent / counted * 100 : null;
+  const absencePercent = calculateAbsencePercent(counts.absent, counts.present);
   return { ...counts, sessions: sessions.length, percent: counted ? counts.present / counted * 100 : null, absencePercent, alertLevel: absencePercent === null ? "none" as const : absencePercent > 20 ? "critical" as const : absencePercent >= 10 ? "early" as const : "none" as const, atRisk: absencePercent !== null && absencePercent > 20 };
 }
 
@@ -1451,6 +1456,33 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   <article className="surface overview-stat-card accent-cyan"><small>PENDING REVIEWS</small><strong>{overviewData.stats.pendingReviews}</strong><span>Provisional classes awaiting confirmation</span></article>
   <article className="surface overview-stat-card accent-blue"><small>ATTENDANCE LOGS</small><strong>{overviewData.stats.attendanceLogs}</strong><span>Attendance marks recorded in range</span></article>
 </div>
+<section className="surface overview-attendance-risk" aria-labelledby="overview-attendance-risk-title">
+  <div className="section-heading">
+    <div>
+      <h2 id="overview-attendance-risk-title">High-risk attendance</h2>
+      <p className="muted">Students with {HIGH_RISK_ABSENCE_PERCENT}% or more absences in a subject. Based on attendance recorded through today, excluding excused and unmarked days.</p>
+    </div>
+  </div>
+  {overviewData.attendanceRisk.length ? <ul className="overview-attendance-risk-list">
+    {overviewData.attendanceRisk.map(item => <li key={item.enrollmentId}>
+      <div className="overview-attendance-risk-student">
+        <strong>{item.studentName}</strong>
+        {item.studentNumber && <small>{item.studentNumber}</small>}
+      </div>
+      <div className="overview-attendance-risk-subject">
+        <strong>{item.code} · {item.title}</strong>
+        <small>{[item.classId, item.term, item.academicYear].filter(Boolean).join(" · ")}</small>
+      </div>
+      <div className="overview-attendance-risk-rate">
+        <strong>{item.percent.toFixed(1)}% absent</strong>
+        <small>{item.absent} of {item.counted} counted days</small>
+      </div>
+      <button type="button" className="btn btn-sm btn-outline-primary"
+        aria-label={`Open attendance for ${item.code}${item.classId ? ` (${item.classId})` : ""}`}
+        onClick={() => openClass(item.subjectId, "attendance")}>Open attendance</button>
+    </li>)}
+  </ul> : <div className="inline-empty">No students have reached the {HIGH_RISK_ABSENCE_PERCENT}% absence threshold.</div>}
+</section>
 <div className="overview-section-heading"><div><span className="eyebrow">REPORTS</span><h2>Learning activity</h2></div><span>Based on {new Date(`${overviewFrom}T00:00:00`).toLocaleDateString()} – {new Date(`${overviewTo}T00:00:00`).toLocaleDateString()}</span></div>
 <div className="overview-chart-grid">
   <article className="surface overview-chart-card"><h3>Attendance</h3><p>Present, absent, and excused records.</p><div className="overview-pie-wrap"><div className="overview-pie-chart" role="img" aria-label={`Attendance: ${overviewData.attendance.present} present, ${overviewData.attendance.absent} absent, ${overviewData.attendance.excused} excused`} style={{background:pieGradient([overviewData.attendance.present,overviewData.attendance.absent,overviewData.attendance.excused],["#10a477","#e5252a","#5144dc"])}}/></div><div className="overview-chart-legend"><span><i className="legend-present"/>Present <b>{overviewData.attendance.present}</b></span><span><i className="legend-absent"/>Absent <b>{overviewData.attendance.absent}</b></span><span><i className="legend-excused"/>Excused <b>{overviewData.attendance.excused}</b></span></div></article>

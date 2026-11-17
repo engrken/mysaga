@@ -1685,3 +1685,25 @@ body[data-saga-theme="dark"]:has(.portal-layout[data-saga-role="student"]) .saga
 @media(prefers-reduced-motion:reduce){
   .saga-site-footer{transition:none}
 }
+
+.overview-attendance-risk { margin-bottom: 22px; }
+.overview-attendance-risk-list { list-style: none; padding: 0; margin: 0; }
+.overview-attendance-risk-list > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, .85fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--bs-border-color);
+  font-size: .82rem;
+  overflow-wrap: anywhere;
+}
+.overview-attendance-risk-list small { display: block; color: var(--bs-secondary-color); }
+.overview-attendance-risk-rate strong { color: var(--bs-danger-text-emphasis); }
+@media (max-width: 760px) {
+  .overview-attendance-risk-list > li { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .overview-attendance-risk-list .btn { justify-self: start; }
+}
+@media (max-width: 400px) {
+  .overview-attendance-risk-list > li { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+}
