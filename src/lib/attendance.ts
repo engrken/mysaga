@@ -41,7 +41,7 @@ export function attendanceRiskSummary(
 
 export const DROPPING_ABSENCE_THRESHOLD = 3;
 
-export type AbsenceStreak = { days: number; startDate: string; endDate: string };
+export type AbsenceStreak = { days: number; startDate: string; endDate: string; dates: string[] };
 
 type AttendanceDateSource = { title?: string; dueDate?: Date | string | null };
 
@@ -105,18 +105,18 @@ export function droppingAbsenceStreak(
   days: ReturnType<typeof attendanceDays>,
   isAbsent: (assessmentId: string) => boolean
 ): AbsenceStreak | null {
-  let warning: AbsenceStreak | null = null;
-  let count = 0;
-  let startDate = "";
+  let latest: string[] = [];
+  let consecutive: string[] = [];
   for (const [date, ids] of days) {
     // A day confirms an absence only when every attendance entry for it is marked absent.
     if (!ids.every(isAbsent)) {
-      count = 0;
+      consecutive = [];
       continue;
     }
-    if (count === 0) startDate = date;
-    count++;
-    if (count >= DROPPING_ABSENCE_THRESHOLD) warning = { days: count, startDate, endDate: date };
+    consecutive.push(date);
+    if (consecutive.length >= DROPPING_ABSENCE_THRESHOLD) latest = consecutive;
   }
-  return warning;
+  return latest.length
+    ? { days: latest.length, startDate: latest[0], endDate: latest[latest.length - 1], dates: latest }
+    : null;
 }

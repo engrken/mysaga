@@ -73,7 +73,14 @@ function AbsenceDateList({ dates }: { dates: AbsenceDate[] }) {
 function DroppingWarning({ streak }: { streak: AbsenceStreak }) {
   return <div className="mt-1">
     <span className="badge text-bg-danger">Danger of dropping</span>
-    <small className="d-block">{streak.days} consecutive absences ({formatOverviewDate(streak.startDate)} – {formatOverviewDate(streak.endDate)})</small>
+    <small className="d-block">{streak.days} consecutive missed class meetings</small>
+    {streak.dates?.length > 0 && <small className="d-block">
+      <b>Dates in this streak</b>{" "}
+      {streak.dates.map((date, index) => <Fragment key={date}>
+        {index > 0 && ", "}
+        <time dateTime={date}>{formatOverviewDate(date)}</time>
+      </Fragment>)}
+    </small>}
   </div>;
 }
 function scoreSheetCategoryLabel(name: string) {

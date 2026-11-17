@@ -196,3 +196,11 @@ test("only the third consecutive late counts as absent", () => {
   assert.deepEqual([...attendance.consecutiveLateAbsences(days, id => id === "1" ? "EXCUSED" : "LATE")], []);
   assert.equal(attendance.droppingAbsenceStreak(days, id => id === "2"), null);
 });
+
+test("dropping warning includes every date from the latest qualifying streak", () => {
+  const dates = ["2026-10-26", "2026-11-02", "2026-11-09", "2026-11-16", "2026-11-23", "2026-11-30"];
+  const days = dates.map((date, id) => [date, [String(id)]]);
+  assert.deepEqual(attendance.droppingAbsenceStreak(days, id => id !== "4"), {
+    days: 4, startDate: dates[0], endDate: dates[3], dates: dates.slice(0, 4)
+  });
+});
