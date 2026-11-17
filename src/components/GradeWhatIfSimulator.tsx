@@ -120,14 +120,14 @@ export default function GradeWhatIfSimulator({ grade, onClose, inline = false }:
               const value = scenario[item.id] || "";
               const valid = validScenarioEntry(item, value);
               const actual = item.remark === "PRESENT" ? "Present" : item.remark === "ABSENT" ? "Absent" :
-                item.remark === "EXCUSED" ? "Excused" : item.remark === "DID_NOT_SUBMIT" ? "Did not submit" :
+                item.remark === "LATE" ? "Late" : item.remark === "EXCUSED" ? "Excused" : item.remark === "DID_NOT_SUBMIT" ? "Did not submit" :
                 item.points === null ? "Pending / not recorded" : `${item.points} / ${item.maxScore}`;
               return <div className="grade-simulator-assessment" key={item.id}>
                 <div className="grade-simulator-assessment-info"><strong>{item.title}</strong><small>Teacher record: {actual}</small></div>
                 <label className="grade-simulator-entry">
                   <span>Try {attendance ? "attendance" : `score (max ${item.maxScore})`}</span>
                   {attendance ? <select className="form-select form-select-sm" value={value} onChange={event => setScore(item.id, event.target.value)}>
-                    <option value="">Keep recorded</option><option value="PRESENT">Present</option><option value="ABSENT">Absent</option><option value="EXCUSED">Excused</option>
+                    <option value="">Keep recorded</option><option value="PRESENT">Present</option><option value="LATE">Late</option><option value="ABSENT">Absent</option><option value="EXCUSED">Excused</option>
                   </select> : <input className={`form-control form-control-sm ${valid ? "" : "is-invalid"}`} type="number" inputMode="decimal"
                     min="0" max={item.maxScore} step=".01" value={value} placeholder="Unchanged"
                     aria-invalid={!valid} onChange={event => setScore(item.id, event.target.value)}/>}

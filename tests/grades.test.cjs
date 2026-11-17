@@ -5,12 +5,17 @@ const test = require("node:test");
 const ts = require("typescript");
 
 // Run actual production calculator code without requiring Next.js or a database.
-const source = fs.readFileSync(path.join(__dirname, "../src/lib/grades.ts"), "utf8");
-const compiled = ts.transpileModule(source, {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
-}).outputText;
-const calculatorExports = {};
-new Function("exports", "module", compiled)(calculatorExports, { exports: calculatorExports });
+function loadCalculator(name, imports = {}) {
+  const source = fs.readFileSync(path.join(__dirname, "../src/lib", name + ".ts"), "utf8");
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+  }).outputText;
+  const exports = {};
+  new Function("require", "exports", compiled)(id => imports[id], exports);
+  return exports;
+}
+const attendance = loadCalculator("attendance");
+const calculatorExports = loadCalculator("grades", { "./attendance": attendance });
 const { calculateCategoryPercent, calculateGradeBreakdown, calculateFinal, convertRawPercent, expectedChildAllocation, remainingChildAllocation, firstOverallocatedCategoryGroup } = calculatorExports;
 const scored = (points, maxScore = 100, title = "Exam", remark = null, weight = null) =>
   ({ title, maxScore, weight, scores: [{ points, remark }] });
@@ -172,4 +177,16 @@ test("adding a subcategory uses pending edits, not stale saved category allocati
   assert.equal(firstOverallocatedCategoryGroup(withAttendance), null);
   const excessive = [...edited, { id: "attendance", parentId: "laboratory", weight: 36 }];
   assert.deepEqual(firstOverallocatedCategoryGroup(excessive), { parentId: "laboratory", allocated: 101, expected: 100 });
+});
+
+
+test("three late marks count as one absence while raw marks stay late", () => {
+  assert.deepEqual(attendance.attendanceTotals(1, 3, 7), {
+    lateAbsences: 2, effectiveAbsent: 3, counted: 11, percent: 3 / 11 * 100
+  });
+  assert.equal(attendance.attendanceTotals(0, 0, 2).percent, 0);
+  const late = scored(null, 1, "Attendance · meeting", "LATE");
+  const excused = scored(null, 1, "Attendance · meeting", "EXCUSED");
+  assert.equal(calculateCategoryPercent({ assessments: [late, late, excused] }), 100);
+  assert.equal(calculateCategoryPercent({ assessments: [late, late, late, excused] }), 66.67);
 });

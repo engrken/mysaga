@@ -1,3 +1,5 @@
+import { equivalentLateAbsences } from "./attendance";
+
 export type GradeCategoryInput = { name: string; weight: number; conversionBase: number };
 
 /** Category weights below the course roots are percentage points within the
@@ -124,8 +126,12 @@ export function calculateCategoryPercent(category: Pick<GradeCalculationCategory
   const isAttendance = category.assessments.length > 0 && category.assessments.every(item => isAttendanceItem(item.title));
   const base = isAttendance ? 100 : category.conversionBase ?? 50;
   const transmute = (rawPercent: number) => convertRawPercent(rawPercent, base);
+  const lateCount = active.filter(assessment => isAttendanceItem(assessment.title)
+    && assessment.scores[0]?.remark === "LATE").length;
+  const lateCredit = lateCount ? (lateCount - equivalentLateAbsences(lateCount)) / lateCount : 1;
   const rawPoints = (assessment: GradeCalculationCategory["assessments"][number]) => {
     const score = assessment.scores[0];
+    if (score?.remark === "LATE" && isAttendanceItem(assessment.title)) return assessment.maxScore * lateCredit;
     return score?.remark === "PRESENT" ? assessment.maxScore :
       score?.remark === "ABSENT" || score?.remark === "DID_NOT_SUBMIT" ? 0 : score?.points ?? 0;
   };

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { absencePercent, attendanceDays, attendanceMark, droppingAbsenceStreak, HIGH_RISK_ABSENCE_PERCENT } from "@/lib/attendance";
+import { ATTENDANCE_MARKS, attendanceDays, attendanceMark, attendanceTotals, droppingAbsenceStreak, HIGH_RISK_ABSENCE_PERCENT } from "@/lib/attendance";
 import { scheduleWeekdays } from "@/lib/schedule-days";
 
 function parseDate(value: string | null) {
@@ -56,12 +56,12 @@ export async function GET(request: Request) {
     prisma.assessment.findMany({
       where: { subject: subjectScope, title: { startsWith: "Attendance ·" }, dueDate: { gte: today } },
       orderBy: { dueDate: "asc" }, take: 48,
-      select: { id: true, title: true, dueDate: true, attendanceType: true, scheduleOverrideReason: true, _count: { select: { scores: { where: { remark: { in: ["PRESENT", "ABSENT", "EXCUSED"] } } } } }, subject: { select: { id: true, code: true, title: true, _count: { select: { enrollments: true } } } } }
+      select: { id: true, title: true, dueDate: true, attendanceType: true, scheduleOverrideReason: true, _count: { select: { scores: { where: { remark: { in: [...ATTENDANCE_MARKS] } } } } }, subject: { select: { id: true, code: true, title: true, _count: { select: { enrollments: true } } } } }
     }),
     prisma.assessment.findMany({
       where: { subject: subjectScope, NOT: { title: { startsWith: "Attendance ·" } }, dueDate: { gte: today } },
       orderBy: { dueDate: "asc" }, take: 8,
-      select: { id: true, title: true, dueDate: true, attendanceType: true, scheduleOverrideReason: true, _count: { select: { scores: { where: { remark: { in: ["PRESENT", "ABSENT", "EXCUSED"] } } } } }, subject: { select: { id: true, code: true, title: true, _count: { select: { enrollments: true } } } } }
+      select: { id: true, title: true, dueDate: true, attendanceType: true, scheduleOverrideReason: true, _count: { select: { scores: { where: { remark: { in: [...ATTENDANCE_MARKS] } } } } }, subject: { select: { id: true, code: true, title: true, _count: { select: { enrollments: true } } } } }
     })
     ,
     prisma.score.groupBy({
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
       where: { subject: subjectScope, title: { startsWith: "Attendance ·" }, dueDate: { gte: today, lt: nextDay(today) } },
       select: {
         subjectId: true,
-        _count: { select: { scores: { where: { remark: { in: ["PRESENT", "ABSENT", "EXCUSED"] } } } } },
+        _count: { select: { scores: { where: { remark: { in: [...ATTENDANCE_MARKS] } } } } },
         subject: { select: { _count: { select: { enrollments: true } } } }
       }
     }),
@@ -87,7 +87,7 @@ export async function GET(request: Request) {
           OR: [{ dueDate: null }, { dueDate: { lt: nextDay(today) } }]
         },
         enrollment: { subject: subjectScope },
-        OR: [{ remark: { in: ["PRESENT", "ABSENT", "DID_NOT_SUBMIT"] } }, { points: { gt: 0 } }]
+        OR: [{ remark: { in: [...ATTENDANCE_MARKS, "DID_NOT_SUBMIT"] } }, { points: { gt: 0 } }]
       },
       _count: { _all: true }
     }),
@@ -117,12 +117,12 @@ export async function GET(request: Request) {
     }
   }
 
-  const attendanceByEnrollment = new Map<string, { absent: number; present: number }>();
+  const attendanceByEnrollment = new Map<string, { absent: number; present: number; late: number }>();
   for (const row of recordedAttendance) {
     // A grouped row without an explicit mark can only match through positive legacy points.
     const mark = attendanceMark({ remark: row.remark, points: 1 });
-    if (mark !== "absent" && mark !== "present") continue;
-    const counts = attendanceByEnrollment.get(row.enrollmentId) ?? { absent: 0, present: 0 };
+    if (!mark || mark === "excused") continue;
+    const counts = attendanceByEnrollment.get(row.enrollmentId) ?? { absent: 0, present: 0, late: 0 };
     counts[mark] += row._count._all;
     attendanceByEnrollment.set(row.enrollmentId, counts);
   }
@@ -131,7 +131,7 @@ export async function GET(request: Request) {
     return subject.enrollments.flatMap(enrollment => {
       const counts = attendanceByEnrollment.get(enrollment.id);
       if (!counts) return [];
-      const percent = absencePercent(counts.absent, counts.present);
+      const { lateAbsences, effectiveAbsent, counted, percent } = attendanceTotals(counts.absent, counts.present, counts.late);
       const absences = absencesByEnrollment.get(enrollment.id);
       const droppingWarning = absences ? droppingAbsenceStreak(days, id => absences.has(id)) : null;
       const highRisk = percent !== null && percent >= HIGH_RISK_ABSENCE_PERCENT;
@@ -146,8 +146,10 @@ export async function GET(request: Request) {
         title: subject.title,
         academicYear: subject.academicYear,
         term: subject.term,
-        absent: counts.absent,
-        counted: counts.absent + counts.present,
+        absent: effectiveAbsent,
+        late: counts.late,
+        lateAbsences,
+        counted,
         percent,
         highRisk,
         droppingWarning
@@ -162,6 +164,7 @@ export async function GET(request: Request) {
   const attendanceByRemark = new Map(attendanceCounts.map(item => [item.remark, item._count._all]));
   const present = attendanceByRemark.get("PRESENT") ?? 0;
   const absent = attendanceByRemark.get("ABSENT") ?? 0;
+  const late = attendanceByRemark.get("LATE") ?? 0;
   const excused = attendanceByRemark.get("EXCUSED") ?? 0;
   for (const subject of subjects) {
     for (const enrollment of subject.enrollments) {
@@ -223,9 +226,9 @@ export async function GET(request: Request) {
       activities,
       tests,
       pendingReviews: submissions.provisional,
-      attendanceLogs: present + absent + excused
+      attendanceLogs: present + absent + excused + late
     },
-    attendance: { present, absent, excused },
+    attendance: { present, absent, excused, late },
     attendanceRisk,
     submissions,
     enrollment: subjects.map(subject => ({ id: subject.id, label: subject.classId || subject.code, title: subject.title, code: subject.code, count: subject.enrollments.length })),
