@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.10.0-beta.1",
+    "date": "2026-11-18",
+    "kind": "feature",
+    "changes": [
+      "Added school workspace administration, invitations, manual invoicing, billing reminders, and an improved tenant management interface."
+    ]
+  },
+  {
     "version": "0.9.0-beta.1",
     "date": "2026-11-17",
     "kind": "feature",
