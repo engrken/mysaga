@@ -37,7 +37,7 @@ export async function getSession() {
   try {
     const { payload } = await jwtVerify(token, key());
     if (!payload.sub || payload.emailVerified !== true) return null;
-    const user = await prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, schoolId: true, fullName: true, email: true, studentNumber: true, facultyId: true, courseProgram: true, yearLevel: true, profileImagePath: true, passwordChangedAt: true, emailVerifiedAt: true, emailIdentityChangedAt: true, tenantManagerEmail: true, school: { select: { id: true, slug: true, name: true, shortName: true, portalTitle: true, logoText: true, logoPath: true, primaryColor: true, privacyController: true, privacyContactEmail: true, privacyPolicyUrl: true, isActive: true, subscriptionStatus: true, subscriptionExpiresAt: true } } } });
+    const user = await prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, schoolId: true, fullName: true, email: true, studentNumber: true, facultyId: true, courseProgram: true, yearLevel: true, profileImagePath: true, passwordChangedAt: true, emailVerifiedAt: true, emailIdentityChangedAt: true, tenantManagerEmail: true, isSchoolAdmin: true, school: { select: { id: true, slug: true, name: true, shortName: true, portalTitle: true, logoText: true, logoPath: true, primaryColor: true, privacyController: true, privacyContactEmail: true, privacyPolicyUrl: true, billingEmail: true, isActive: true, subscriptionStatus: true, subscriptionExpiresAt: true } } } });
     if (!user || payload.role !== user.role || payload.schoolId !== user.schoolId) return null;
     const isDemo = payload.demo === true;
     if (isDemo && (user.school.slug !== DEMO_SCHOOL_SLUG || !isDemoIdentity(user))) return null;
@@ -51,6 +51,7 @@ export async function getSession() {
     return {
       ...sessionUser,
       isTenantManager,
+      isSchoolAdmin: !isDemo && user.role === "TEACHER" && user.isSchoolAdmin,
       isDemo,
       emailDeliveryEnabled: emailDeliveryConfigured()
     };
@@ -82,4 +83,11 @@ export async function requireTenantManager() {
   const user = await getSession();
   if (!user || user.role !== "TEACHER" || !user.isTenantManager) return null;
   return user;
+}
+
+export async function requireSchoolAdmin(schoolId: string) {
+  const user = await getSession();
+  if (!user || user.role !== "TEACHER") return null;
+  if (user.isTenantManager || (user.isSchoolAdmin && user.schoolId === schoolId)) return user;
+  return null;
 }

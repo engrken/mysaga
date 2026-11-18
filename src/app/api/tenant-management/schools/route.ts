@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
+import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { sendPortalEmail } from "@/lib/mailer";
 import { requireTenantManager } from "@/lib/auth";
+import { createTenantInvitationToken, tenantInvitationUrl } from "@/lib/tenant-invitations";
+import { checkAuthThrottle } from "@/lib/rate-limit";
 
 // Keep the dashboard lightweight as schools and class rosters grow. Do not
 // download every Subject just to calculate the number of enrollments.
@@ -16,12 +20,14 @@ export async function GET() {
         id: true, name: true, shortName: true, slug: true,
         plan: true, isActive: true, subscriptionStatus: true,
         subscriptionExpiresAt: true, createdAt: true, updatedAt: true,
+        portalTitle: true, logoText: true, primaryColor: true,
+        privacyController: true, privacyContactEmail: true, privacyPolicyUrl: true, billingEmail: true,
         _count: { select: { subjects: true, users: true, studentDirectory: true } },
         users: {
           where: { role: "TEACHER" },
           orderBy: { createdAt: "desc" },
           take: 8,
-          select: { id: true, fullName: true, email: true, emailVerifiedAt: true, createdAt: true }
+          select: { id: true, fullName: true, email: true, emailVerifiedAt: true, createdAt: true, isSchoolAdmin: true }
         },
         tenantPayments: { orderBy: { paidAt: "desc" }, take: 5 }
       }
@@ -70,6 +76,92 @@ export async function GET() {
     };
   });
   return NextResponse.json({ schools: data }, { headers: { "Cache-Control": "private, no-store" } });
+}
+
+const createSchema = z.object({
+  name: z.string().trim().min(2).max(160),
+  shortName: z.string().trim().min(1).max(24),
+  billingEmail: z.string().trim().email().max(200).optional().or(z.literal("")),
+  adminEmail: z.string().trim().email().max(200)
+});
+
+export async function POST(request: Request) {
+  const manager = await requireTenantManager();
+  if (!manager) return NextResponse.json({ error: "Tenant manager access is required." }, { status: 403 });
+  const throttle = await checkAuthThrottle(request, `tenant-workspace-create:${manager.id}`, 5, undefined, "identity");
+  if (!throttle.allowed) return NextResponse.json({ error: "Too many workspaces created. Try again in 15 minutes." }, { status: 429 });
+  const parsed = createSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: "Enter a school name, short name, and valid initial administrator email." }, { status: 400 });
+  const { name, shortName, adminEmail, billingEmail } = parsed.data;
+  const normalizedName = name.replace(/\s+/g, " ");
+  const normalizedShortName = shortName.replace(/\s+/g, " ").toUpperCase();
+  const email = adminEmail.trim().toLowerCase();
+  const existing = await prisma.school.findFirst({
+    where: { name: { equals: normalizedName, mode: "insensitive" } },
+    select: { id: true }
+  });
+  if (existing) return NextResponse.json({ error: "A school with this name already exists." }, { status: 409 });
+
+  const slugBase = normalizedName.normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "school";
+  const token = createTenantInvitationToken();
+  const inviteUrl = tenantInvitationUrl(token.token, request.url);
+  const inviteId = randomBytes(16).toString("hex");
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const school = await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${normalizedName.toLowerCase()}))::text`;
+    if (await tx.school.findFirst({
+      where: { name: { equals: normalizedName, mode: "insensitive" } },
+      select: { id: true }
+    })) return null;
+    let slug = slugBase;
+    for (let suffix = 2; await tx.school.findUnique({ where: { slug }, select: { id: true } }); suffix += 1) {
+      slug = `${slugBase.slice(0, 42)}-${suffix}`;
+    }
+    const created = await tx.school.create({
+      data: {
+        name: normalizedName,
+        shortName: normalizedShortName,
+        slug,
+        portalTitle: `${normalizedShortName} Portal`,
+        logoText: normalizedShortName.slice(0, 1),
+        billingEmail: billingEmail?.trim().toLowerCase() || email
+      },
+      select: { id: true, name: true, shortName: true, slug: true, billingEmail: true }
+    });
+    await tx.tenantInvitation.create({
+      data: {
+        id: inviteId,
+        schoolId: created.id,
+        invitedEmail: email,
+        tokenHash: token.tokenHash,
+        role: "SCHOOL_ADMIN",
+        expiresAt,
+        createdById: manager.id
+      }
+    });
+    await tx.auditEvent.create({
+      data: { actorId: manager.id, action: "created school workspace and invited its initial administrator", entity: "school", entityId: created.id }
+    });
+    return created;
+  });
+  if (!school) return NextResponse.json({ error: "A school with this name already exists." }, { status: 409 });
+
+  let emailSent = false;
+  try {
+    await sendPortalEmail({
+      to: email,
+      subject: `Set up ${school.name} on SAGA`,
+      text: `You have been invited to administer ${school.name} on SAGA.\n\nCreate your teacher account using this invitation: ${inviteUrl}\n\nThe invitation expires in 7 days. If you did not expect this message, you can ignore it.`
+    });
+    emailSent = true;
+  } catch (error) {
+    console.error("SAGA_TENANT_ADMIN_INVITATION_EMAIL_FAILED", error instanceof Error ? error.message : "unknown");
+  }
+  return NextResponse.json({
+    ok: true, school, emailSent,
+    invitationUrl: emailSent ? undefined : inviteUrl
+  }, { status: 201, headers: { "Cache-Control": "no-store" } });
 }
 
 const updateSchema = z.object({

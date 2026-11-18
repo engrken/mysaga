@@ -18,7 +18,7 @@
     "db:migrate": "prisma migrate deploy",
     "test:simulation": "node --test tests/grade-simulation.test.cjs",
     "test:scorebook-layout": "node --test tests/scorebook-layout.test.cjs tests/fcu-grade-format.test.cjs",
-    "test:tenant": "node --test tests/tenant-operations.test.cjs",
+    "test:tenant": "node --test tests/tenant-operations.test.cjs tests/tenant-invitations.test.cjs",
     "test:teacher-signup": "node --test tests/teacher-school-registration.test.cjs",
     "test:identity": "node --test tests/account-identity.test.cjs",
     "version:fix": "node scripts/bump-release.mjs fix",

@@ -1,7 +1,7 @@
 import { after, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { configuredTenantManagerEmail, requireTenantManager, tenantManagerIdentity } from "@/lib/auth";
+import { configuredTenantManagerEmail, requireSchoolAdmin, tenantManagerIdentity } from "@/lib/auth";
 import { sendPortalEmail } from "@/lib/mailer";
 import { prisma } from "@/lib/prisma";
 import { checkAuthThrottle, clearAuthThrottle } from "@/lib/rate-limit";
@@ -25,8 +25,8 @@ const listSchema = z.object({
 });
 
 export async function GET(request: Request, { params }: Context) {
-  if (!(await requireTenantManager())) return NextResponse.json({ error: "Tenant manager access is required." }, { status: 403 });
   const { schoolId, roster } = await params;
+  if (!(await requireSchoolAdmin(schoolId))) return NextResponse.json({ error: "School administrator access is required." }, { status: 403 });
   if (roster !== "students" && roster !== "teachers") return NextResponse.json({ error: "Roster not found." }, { status: 404 });
   const search = new URL(request.url).searchParams;
   const parsed = listSchema.safeParse(Object.fromEntries(search));
@@ -117,11 +117,11 @@ const changeSchema = z.discriminatedUnion("kind", [
 ]);
 
 export async function PATCH(request: Request, { params }: Context) {
-  const manager = await requireTenantManager();
-  if (!manager) return NextResponse.json({ error: "Tenant manager access is required." }, { status: 403 });
+  const { schoolId, roster } = await params;
+  const manager = await requireSchoolAdmin(schoolId);
+  if (!manager) return NextResponse.json({ error: "School administrator access is required." }, { status: 403 });
   const parsed = changeSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Check the email address, verification status, and your current password." }, { status: 400 });
-  const { schoolId, roster } = await params;
   if (roster !== "students" && roster !== "teachers") return NextResponse.json({ error: "Roster not found." }, { status: 404 });
   const input = parsed.data;
   if (roster === "teachers" && input.kind === "DIRECTORY") {
@@ -164,9 +164,10 @@ export async function PATCH(request: Request, { params }: Context) {
 
       const account = await tx.user.findUnique({
         where: { id: input.accountId, schoolId, role, updatedAt },
-        select: { id: true, email: true, emailVerifiedAt: true, tenantManagerEmail: true }
+        select: { id: true, email: true, emailVerifiedAt: true, tenantManagerEmail: true, isSchoolAdmin: true }
       });
       if (!account) return null;
+        if (account.isSchoolAdmin && !manager.isTenantManager) throw new Error("SCHOOL_ADMIN_PROTECTED");
       if (role === "TEACHER") {
         if (await tenantManagerIdentity({ ...account, role })) throw new Error("TENANT_MANAGER_PROTECTED");
         if (email === configuredTenantManagerEmail() && email !== account.email) throw new Error("TENANT_MANAGER_EMAIL_RESERVED");
@@ -209,6 +210,9 @@ export async function PATCH(request: Request, { params }: Context) {
   } catch (error) {
     if (error instanceof Error && error.message === "TENANT_MANAGER_PROTECTED") {
       return NextResponse.json({ error: "Tenant-manager email changes must be verified through the account’s Profile." }, { status: 409 });
+    }
+    if (error instanceof Error && error.message === "SCHOOL_ADMIN_PROTECTED") {
+      return NextResponse.json({ error: "Only the platform administrator can edit a school administrator account." }, { status: 409 });
     }
     if (error instanceof Error && error.message === "TENANT_MANAGER_EMAIL_RESERVED") {
       return NextResponse.json({ error: "This address is reserved for tenant management." }, { status: 409 });

@@ -24,6 +24,17 @@ enum SchoolPlan {
   ENTERPRISE
 }
 
+enum TenantInvitationRole {
+  TEACHER
+  SCHOOL_ADMIN
+}
+
+enum TenantInvoiceStatus {
+  ISSUED
+  PAID
+  VOID
+}
+
 model School {
   id                    String             @id @default(cuid())
   slug                  String             @unique
@@ -37,6 +48,7 @@ model School {
   privacyController     String?
   privacyContactEmail   String?
   privacyPolicyUrl      String?
+  billingEmail          String?
   isActive              Boolean            @default(true)
   plan                  SchoolPlan         @default(FREE)
   subscriptionStatus    String             @default("ACTIVE")
@@ -47,6 +59,8 @@ model School {
   subjects              Subject[]
   studentDirectory      StudentDirectory[]
   tenantPayments        TenantPayment[]
+  invitations           TenantInvitation[]
+  invoices              TenantInvoice[]
 }
 
 model TenantPayment {
@@ -75,6 +89,7 @@ model User {
   emailVerifiedAt          DateTime?
   emailIdentityChangedAt   DateTime?
   tenantManagerEmail       String?              @unique
+  isSchoolAdmin          Boolean              @default(false)
   role                    Role
   schoolId                String
   fullName                String
@@ -97,11 +112,60 @@ model User {
   securityOtps            SecurityOtp[]
   gradeChanges            GradeChangeHistory[] @relation("GradeChangeActor")
   bankQuestions           BankQuestion[]
+  sentTenantInvitations   TenantInvitation[]
 
   @@unique([schoolId, email])
   @@unique([schoolId, studentNumber])
   @@unique([schoolId, facultyId])
   @@index([schoolId, role])
+}
+
+model TenantInvitation {
+  id          String                @id @default(cuid())
+  schoolId    String
+  invitedEmail String
+  tokenHash   String                @unique
+  role        TenantInvitationRole
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdById String
+  createdAt   DateTime              @default(now())
+  school      School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdBy   User                  @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([schoolId, acceptedAt, expiresAt])
+}
+
+model TenantInvoice {
+  id            String             @id @default(cuid())
+  schoolId      String
+  invoiceNumber String             @unique
+  description   String
+  amount        Float
+  currency      String             @default("PHP")
+  issuedAt      DateTime           @default(now())
+  dueAt         DateTime
+  status        TenantInvoiceStatus @default(ISSUED)
+  paidAt        DateTime?
+  note          String?
+  recordedBy    String
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  school        School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  reminders     TenantInvoiceReminder[]
+
+  @@index([schoolId, status, dueAt])
+}
+
+model TenantInvoiceReminder {
+  id        String       @id @default(cuid())
+  invoiceId String
+  daysFromDue Int
+  sentAt    DateTime     @default(now())
+  invoice   TenantInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@unique([invoiceId, daysFromDue])
+  @@index([sentAt])
 }
 
 model StudentDirectory {

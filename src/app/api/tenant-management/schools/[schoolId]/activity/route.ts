@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireTenantManager } from "@/lib/auth";
+import { requireSchoolAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 type Context = { params: Promise<{ schoolId: string }> };
@@ -12,9 +12,8 @@ const pageSize = 20;
  * explicitly opens it; no heavy audit queries during dashboard startup.
  */
 export async function GET(request: Request, { params }: Context) {
-  const manager = await requireTenantManager();
-  if (!manager) return NextResponse.json({ error: "Tenant manager access is required." }, { status: 403 });
   const { schoolId } = await params;
+  if (!(await requireSchoolAdmin(schoolId))) return NextResponse.json({ error: "School administrator access is required." }, { status: 403 });
   const parsed = listSchema.safeParse(Object.fromEntries(new URL(request.url).searchParams));
   if (!parsed.success) return NextResponse.json({ error: "Invalid activity page." }, { status: 400 });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AccountMenu, { type AccountTheme } from "./AccountMenu";
@@ -16,9 +16,12 @@ type Plan = "FREE" | "PREMIUM" | "ENTERPRISE";
 type Subscription = "ACTIVE" | "PAST_DUE" | "SUSPENDED" | "CANCELLED";
 type Tenant = {
   id: string; name: string; shortName: string; slug: string; plan: Plan;
+  portalTitle: string; logoText: string; primaryColor: string;
+  privacyController: string | null; privacyContactEmail: string | null;
+  privacyPolicyUrl: string | null; billingEmail: string | null;
   isActive: boolean; subscriptionStatus: Subscription; subscriptionExpiresAt: string | null;
   createdAt: string; updatedAt: string;
-  users: Array<{ id: string; fullName: string; email: string; createdAt: string; emailVerifiedAt: string | null }>;
+  users: Array<{ id: string; fullName: string; email: string; createdAt: string; emailVerifiedAt: string | null; isSchoolAdmin: boolean }>;
   teacherCount: number; verifiedTeacherCount: number;
   studentCount: number; verifiedStudentCount: number; directoryCount: number;
   classCount: number; publishedClasses: number; studentSeats: number;
@@ -27,6 +30,11 @@ type Tenant = {
 type Activity = {
   id: string; entity: string; action: string; createdAt: string;
   actor: { fullName: string; role: string };
+};
+type Invitation = { id: string; invitedEmail: string; role: "TEACHER" | "SCHOOL_ADMIN"; expiresAt: string };
+type Invoice = {
+  id: string; invoiceNumber: string; description: string; amount: number; currency: string;
+  issuedAt: string; dueAt: string; status: "ISSUED" | "PAID" | "VOID"; paidAt: string | null; note: string | null;
 };
 
 const planLabel = planDisplayName;
@@ -83,6 +91,26 @@ export default function TenantManagement({ managerName, managerEmail, managerSch
   const [activityError, setActivityError] = useState("");
   const [activityRevision, setActivityRevision] = useState(0);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [createShortName, setCreateShortName] = useState("");
+  const [createAdminEmail, setCreateAdminEmail] = useState("");
+  const [createBillingEmail, setCreateBillingEmail] = useState("");
+  const [invitationUrl, setInvitationUrl] = useState("");
+  const [profile, setProfile] = useState({
+    name: "", shortName: "", portalTitle: "", logoText: "", primaryColor: "#2457d6",
+    privacyController: "", privacyContactEmail: "", privacyPolicyUrl: "", billingEmail: ""
+  });
+  const [invitationEmail, setInvitationEmail] = useState("");
+  const [invitationRole, setInvitationRole] = useState<"TEACHER" | "SCHOOL_ADMIN">("TEACHER");
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoiceDescription, setInvoiceDescription] = useState("");
+  const [invoiceAmount, setInvoiceAmount] = useState("");
+  const [invoiceDueAt, setInvoiceDueAt] = useState("");
+  const [payingInvoiceId, setPayingInvoiceId] = useState("");
+  const [invoicePaymentMethod, setInvoicePaymentMethod] = useState("Bank transfer");
+  const [invoicePaymentReference, setInvoicePaymentReference] = useState("");
 
   async function load(quiet = false) {
     if (quiet) setRefreshing(true); else setLoading(true);
@@ -128,12 +156,28 @@ export default function TenantManagement({ managerName, managerEmail, managerSch
     if (active) setExpires(active.subscriptionExpiresAt?.slice(0, 10) || "");
   }, [active?.id, active?.subscriptionExpiresAt]);
   useEffect(() => {
+    if (!active) return;
+    setProfile({
+      name: active.name, shortName: active.shortName, portalTitle: active.portalTitle,
+      logoText: active.logoText, primaryColor: active.primaryColor,
+      privacyController: active.privacyController || "", privacyContactEmail: active.privacyContactEmail || "",
+      privacyPolicyUrl: active.privacyPolicyUrl || "", billingEmail: active.billingEmail || ""
+    });
     setAmount(""); setReference(""); setCoverageTo(""); setNote("");
+    setInvitations([]); setInvoices([]);
+    setInvitationEmail(""); setInvitationUrl("");
+    setInvoiceDescription(""); setInvoiceAmount(""); setInvoiceDueAt("");
+    setPayingInvoiceId(""); setInvoicePaymentMethod("Bank transfer"); setInvoicePaymentReference("");
   }, [active?.id]);
 
   const unsaved = !!active && (
     plan !== active.plan || status !== active.subscriptionStatus ||
-    expires !== (active.subscriptionExpiresAt?.slice(0, 10) || "") || amount.trim() !== ""
+    expires !== (active.subscriptionExpiresAt?.slice(0, 10) || "") || amount.trim() !== "" ||
+    profile.name !== active.name || profile.shortName !== active.shortName ||
+    profile.portalTitle !== active.portalTitle || profile.logoText !== active.logoText ||
+    profile.primaryColor !== active.primaryColor || profile.privacyController !== (active.privacyController || "") ||
+    profile.privacyContactEmail !== (active.privacyContactEmail || "") ||
+    profile.privacyPolicyUrl !== (active.privacyPolicyUrl || "") || profile.billingEmail !== (active.billingEmail || "")
   );
   function selectTenant(id: string) {
     if (busy || id === selected) return;
@@ -196,6 +240,31 @@ export default function TenantManagement({ managerName, managerEmail, managerSch
     return () => controller.abort();
   }, [selected, activityOpen, activityPage, activityRevision]);
 
+  useEffect(() => {
+    if (!selected) return;
+    const controller = new AbortController();
+    async function retrieve() {
+      try {
+        const base = `/api/tenant-management/schools/${encodeURIComponent(selected)}`;
+        const [inviteResponse, invoiceResponse] = await Promise.all([
+          fetch(`${base}/invitations`, { cache: "no-store", signal: controller.signal }),
+          fetch(`${base}/invoices`, { cache: "no-store", signal: controller.signal })
+        ]);
+        const [inviteData, invoiceData] = await Promise.all([inviteResponse.json(), invoiceResponse.json()]);
+        if (!inviteResponse.ok) throw new Error(inviteData.error || "Could not load invitations.");
+        if (!invoiceResponse.ok) throw new Error(invoiceData.error || "Could not load invoices.");
+        if (!controller.signal.aborted) {
+          setInvitations(inviteData.invitations || []);
+          setInvoices(invoiceData.invoices || []);
+        }
+      } catch (cause) {
+        if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Could not load school details.");
+      }
+    }
+    void retrieve();
+    return () => controller.abort();
+  }, [selected]);
+
   async function save() {
     if (!active || busy) return;
     if (status !== "ACTIVE" && status !== active.subscriptionStatus &&
@@ -234,6 +303,158 @@ export default function TenantManagement({ managerName, managerEmail, managerSch
       setBusy(false);
     }
   }
+
+      async function createSchool(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (busy) return;
+        setBusy(true); setError(""); setNotice(""); setInvitationUrl("");
+        try {
+          const response = await fetch("/api/tenant-management/schools", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: createName, shortName: createShortName,
+              adminEmail: createAdminEmail, billingEmail: createBillingEmail || undefined
+            })
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "Could not create school.");
+          setCreateName(""); setCreateShortName(""); setCreateAdminEmail(""); setCreateBillingEmail("");
+          setCreateOpen(false);
+          setNotice(data.emailSent
+            ? `Workspace created and administrator invitation sent to ${data.school.name}.`
+            : `Workspace created for ${data.school.name}. Copy the administrator invitation link and share it securely.`);
+          setInvitationUrl(data.invitationUrl || "");
+          await load(true);
+          setSelected(data.school.id);
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "Could not create school.");
+        } finally {
+          setBusy(false);
+        }
+      }
+      async function saveProfile(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (!active || busy) return;
+        setBusy(true); setError(""); setNotice("");
+        try {
+          const response = await fetch(`/api/tenant-management/schools/${encodeURIComponent(active.id)}/settings`, {
+            method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profile)
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "Could not save school profile.");
+          setTenants(current => current.map(tenant => tenant.id === active.id ? { ...tenant, ...data.school } : tenant));
+          setNotice("School profile and contacts saved.");
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "Could not save school profile.");
+        } finally {
+          setBusy(false);
+        }
+      }
+      async function createInvitation(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (!active || busy) return;
+        setBusy(true); setError(""); setNotice(""); setInvitationUrl("");
+        try {
+          const response = await fetch(`/api/tenant-management/schools/${encodeURIComponent(active.id)}/invitations`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: invitationEmail, role: invitationRole })
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "Could not create invitation.");
+          setInvitationEmail(""); setInvitationUrl(data.invitationUrl || "");
+          setNotice(data.emailSent ? `Invitation sent to ${data.invitation.invitedEmail}.` : "Invitation created. Copy the secure link and share it with the invitee.");
+          const list = await fetch(`/api/tenant-management/schools/${encodeURIComponent(active.id)}/invitations`, { cache: "no-store" });
+          const listData = await list.json();
+          if (!list.ok) throw new Error(listData.error || "Invitation saved, but the list could not be refreshed.");
+          setInvitations(listData.invitations || []);
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "Could not create invitation.");
+        } finally {
+          setBusy(false);
+        }
+      }
+      async function revokeInvitation(invitationId: string) {
+        if (!active || busy || !window.confirm("Revoke this pending invitation? Its link will stop working.")) return;
+        setBusy(true); setError(""); setNotice("");
+        try {
+          const response = await fetch(`/api/tenant-management/schools/${encodeURIComponent(active.id)}/invitations`, {
+            method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invitationId })
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "Could not revoke invitation.");
+          setInvitations(current => current.filter(invitation => invitation.id !== invitationId));
+          setNotice("Invitation revoked.");
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "Could not revoke invitation.");
+        } finally {
+          setBusy(false);
+        }
+      }
+        async function setSchoolAdmin(userId: string, isSchoolAdmin: boolean) {
+          if (!active || busy) return;
+          setBusy(true); setError(""); setNotice("");
+          try {
+            const response = await fetch(`/api/tenant-management/schools/${encodeURIComponent(active.id)}/administrators`, {
+              method: "PATCH", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ userId, isSchoolAdmin })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "Could not update school administrator access.");
+            setTenants(current => current.map(tenant => tenant.id !== active.id ? tenant : {
+              ...tenant,
+              users: tenant.users.map(user => user.id === userId ? { ...user, isSchoolAdmin: data.isSchoolAdmin } : user)
+            }));
+            setNotice(data.isSchoolAdmin ? "School administrator access granted." : "School administrator access removed.");
+          } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "Could not update school administrator access.");
+          } finally {
+            setBusy(false);
+          }
+        }
+      async function createInvoice(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (!active || busy) return;
+        setBusy(true); setError(""); setNotice("");
+        try {
+          const response = await fetch(`/api/tenant-management/schools/${encodeURIComponent(active.id)}/invoices`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ description: invoiceDescription, amount: Number(invoiceAmount), dueAt: invoiceDueAt })
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "Could not issue invoice.");
+          setInvoices(current => [data.invoice, ...current]);
+          setInvoiceDescription(""); setInvoiceAmount(""); setInvoiceDueAt("");
+          setNotice(data.emailSent
+            ? `Invoice ${data.invoice.invoiceNumber} issued and emailed. Due-date reminders are scheduled automatically.`
+            : `Invoice ${data.invoice.invoiceNumber} saved. Set a billing email and check SMTP to enable email notices.`);
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "Could not issue invoice.");
+        } finally {
+          setBusy(false);
+        }
+      }
+      async function updateInvoice(invoice: Invoice, status: "PAID" | "VOID", payment?: { method: string; reference?: string }) {
+        if (!active || busy) return;
+        if (status === "VOID" && !window.confirm(`Void invoice ${invoice.invoiceNumber}?`)) return;
+        setBusy(true); setError(""); setNotice("");
+        try {
+          const response = await fetch(`/api/tenant-management/schools/${encodeURIComponent(active.id)}/invoices`, {
+            method: "PATCH", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ invoiceId: invoice.id, status, ...payment })
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "Could not update invoice.");
+          setInvoices(current => current.map(row => row.id === invoice.id ? data.invoice : row));
+          setPayingInvoiceId("");
+          setInvoicePaymentReference("");
+          setNotice(status === "PAID" ? `Invoice ${invoice.invoiceNumber} marked paid and added to the payment ledger.` : `Invoice ${invoice.invoiceNumber} voided.`);
+          await load(true);
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "Could not update invoice.");
+        } finally {
+          setBusy(false);
+        }
+      }
   function extendExpiry() {
     const today = todayManila();
     const date = new Date(`${expires && expires > today ? expires : today}T00:00:00Z`);
@@ -251,7 +472,10 @@ export default function TenantManagement({ managerName, managerEmail, managerSch
   }
   const activeHealth = active ? tenantHealth(active) : null;
   const expiryDays = active ? daysUntil(active.subscriptionExpiresAt) : null;
-  const isPlanUnchanged = !!active && !unsaved;
+  const isPlanUnchanged = !!active && plan === active.plan &&
+    status === active.subscriptionStatus &&
+    expires === (active.subscriptionExpiresAt?.slice(0, 10) || "") &&
+    amount.trim() === "";
 
   return <main className="tenant-operations container-fluid py-4 px-3 px-lg-5" data-bs-theme={theme}>
     <header className="tenant-operations-header">
@@ -261,6 +485,9 @@ export default function TenantManagement({ managerName, managerEmail, managerSch
         <p className="text-secondary mb-0">Schools, access, subscriptions, adoption, and audit-ready records.</p>
       </div>
       <div className="tenant-admin-controls">
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => { setCreateOpen(open => !open); setError(""); setNotice(""); }} disabled={busy}>
+          {createOpen ? "Close setup" : "+ Add school"}
+        </button>
         <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => void load(true)} disabled={refreshing || loading || busy}>
           {refreshing ? "Refreshing…" : "Refresh data"}
         </button>
@@ -279,11 +506,30 @@ export default function TenantManagement({ managerName, managerEmail, managerSch
 
     <div className="tenant-operations-note" role="note">
       Freemium is free; Premium is currently listed at <b>₱499 per school/month</b>; Pro / Enterprise pricing is by agreement.
-      Subscriptions and payment entries are managed manually. This module does not charge customers or automatically suspend a school when an expiry date passes.
+      Invoices and payments are manual records; no customer is charged automatically. Email reminders go out 7 and 1 day before, on the due date, and 1 and 7 days after.
     </div>
 
     {error && <div className="alert alert-danger" role="alert">{error}<button type="button" className="btn-close float-end" aria-label="Dismiss error" onClick={() => setError("")}/></div>}
     {notice && <div className="alert alert-success" role="status">{notice}<button type="button" className="btn-close float-end" aria-label="Dismiss notice" onClick={() => setNotice("")}/></div>}
+    {invitationUrl && <div className="surface tenant-invitation-created" role="status">
+      <div><b>Secure invitation link</b><small>Share this link only with the invited administrator or teacher.</small></div>
+      <div className="input-group"><input className="form-control" aria-label="Invitation link" readOnly value={invitationUrl}/>
+        <button type="button" className="btn btn-outline-primary" onClick={async () => {
+          try { await navigator.clipboard.writeText(invitationUrl); setNotice("Invitation link copied."); }
+          catch { setError("Clipboard access is unavailable. Select and copy the link manually."); }
+        }}>Copy</button>
+      </div>
+    </div>}
+    {createOpen && <form className="surface tenant-create-form mb-3" onSubmit={createSchool}>
+      <div><h2 className="h5 mb-1">Create a school workspace</h2><p className="small text-secondary mb-0">The initial administrator receives a secure, single-use setup link.</p></div>
+      <div className="row g-3">
+        <div className="col-12 col-md-6"><label className="form-label" htmlFor="create-school-name">Official school name</label><input id="create-school-name" className="form-control" value={createName} maxLength={160} required onChange={event => setCreateName(event.target.value)}/></div>
+        <div className="col-12 col-md-6"><label className="form-label" htmlFor="create-school-short">Short name</label><input id="create-school-short" className="form-control" value={createShortName} maxLength={24} required onChange={event => setCreateShortName(event.target.value)}/></div>
+        <div className="col-12 col-md-6"><label className="form-label" htmlFor="create-school-admin">Initial school administrator email</label><input id="create-school-admin" className="form-control" type="email" value={createAdminEmail} maxLength={200} required onChange={event => setCreateAdminEmail(event.target.value)}/></div>
+        <div className="col-12 col-md-6"><label className="form-label" htmlFor="create-school-billing">Billing email <span className="text-secondary">(optional)</span></label><input id="create-school-billing" className="form-control" type="email" value={createBillingEmail} maxLength={200} onChange={event => setCreateBillingEmail(event.target.value)}/></div>
+      </div>
+      <div className="d-flex justify-content-end"><button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Creating…" : "Create workspace & invite admin"}</button></div>
+    </form>}
 
     <section className="tenant-kpi-grid" aria-label="Platform summary">
       {[
@@ -421,9 +667,62 @@ export default function TenantManagement({ managerName, managerEmail, managerSch
               <div className="tenant-panel-header"><div><h3>Teachers in this school</h3><small>Recent accounts · {active.teacherCount} total</small></div>
                 <Link className="btn btn-outline-primary btn-sm" href={`/manage/${encodeURIComponent(active.id)}/teachers`}>View all</Link></div>
               {active.users.length ? <div className="tenant-teacher-list">{active.users.map(teacher => <div key={teacher.id}>
-                <b>{teacher.fullName}</b><small>{teacher.email}</small><span className={`tenant-health tenant-health-${teacher.emailVerifiedAt ? "good" : "warning"}`}>{teacher.emailVerifiedAt ? "Verified" : "Unverified"}</span>
+                <b>{teacher.fullName}</b><small>{teacher.email}{teacher.isSchoolAdmin ? " · School administrator" : ""}</small>
+                <span className={`tenant-health tenant-health-${teacher.emailVerifiedAt ? "good" : "warning"}`}>{teacher.emailVerifiedAt ? "Verified" : "Unverified"}</span>
+                <button type="button" className={`btn btn-sm ${teacher.isSchoolAdmin ? "btn-outline-secondary" : "btn-outline-primary"}`} disabled={busy} onClick={() => void setSchoolAdmin(teacher.id, !teacher.isSchoolAdmin)}>{teacher.isSchoolAdmin ? "Remove admin" : "Make admin"}</button>
               </div>)}</div> : <p className="small text-secondary mb-0">No teachers have registered for this school yet.</p>}
               {active.teacherCount > active.users.length && <p className="tenant-data-hint">Showing the eight newest teachers. Use View all for the full account roster.</p>}
+            </div>
+            <details className="surface tenant-operations-detail tenant-profile-details">
+              <summary><span><b>Workspace profile &amp; contacts</b><small>Brand identity, privacy notice contacts, and billing reminders</small></span><span aria-hidden="true">⌄</span></summary>
+              <form className="row g-3 mt-1" onSubmit={saveProfile}>
+                <div className="col-12"><label className="form-label" htmlFor="profile-name">School name</label><input id="profile-name" className="form-control" value={profile.name} maxLength={160} required disabled={busy} onChange={event => setProfile(current => ({ ...current, name: event.target.value }))}/></div>
+                <div className="col-6"><label className="form-label" htmlFor="profile-short-name">Short name</label><input id="profile-short-name" className="form-control" value={profile.shortName} maxLength={24} required disabled={busy} onChange={event => setProfile(current => ({ ...current, shortName: event.target.value }))}/></div>
+                <div className="col-6"><label className="form-label" htmlFor="profile-logo-text">Logo initials</label><input id="profile-logo-text" className="form-control" value={profile.logoText} maxLength={8} required disabled={busy} onChange={event => setProfile(current => ({ ...current, logoText: event.target.value }))}/></div>
+                <div className="col-12"><label className="form-label" htmlFor="profile-portal-title">Portal title</label><input id="profile-portal-title" className="form-control" value={profile.portalTitle} maxLength={80} required disabled={busy} onChange={event => setProfile(current => ({ ...current, portalTitle: event.target.value }))}/></div>
+                <div className="col-12"><label className="form-label" htmlFor="profile-color">Brand color</label><div className="d-flex align-items-center gap-2"><input id="profile-color" className="form-control form-control-color" type="color" value={profile.primaryColor} disabled={busy} onChange={event => setProfile(current => ({ ...current, primaryColor: event.target.value }))}/><span className="small text-secondary">{profile.primaryColor.toUpperCase()}</span></div></div>
+                <div className="col-12"><label className="form-label" htmlFor="profile-privacy-controller">Privacy controller</label><input id="profile-privacy-controller" className="form-control" value={profile.privacyController} maxLength={160} disabled={busy} onChange={event => setProfile(current => ({ ...current, privacyController: event.target.value }))}/></div>
+                <div className="col-12 col-md-6"><label className="form-label" htmlFor="profile-privacy-email">Privacy contact email</label><input id="profile-privacy-email" className="form-control" type="email" value={profile.privacyContactEmail} maxLength={200} disabled={busy} onChange={event => setProfile(current => ({ ...current, privacyContactEmail: event.target.value }))}/></div>
+                <div className="col-12 col-md-6"><label className="form-label" htmlFor="profile-billing-email">Billing email</label><input id="profile-billing-email" className="form-control" type="email" value={profile.billingEmail} maxLength={200} disabled={busy} onChange={event => setProfile(current => ({ ...current, billingEmail: event.target.value }))}/></div>
+                <div className="col-12"><label className="form-label" htmlFor="profile-privacy-url">Privacy policy URL</label><input id="profile-privacy-url" className="form-control" type="url" placeholder="https://" value={profile.privacyPolicyUrl} maxLength={500} disabled={busy} onChange={event => setProfile(current => ({ ...current, privacyPolicyUrl: event.target.value }))}/></div>
+                <div className="col-12 d-flex justify-content-end"><button className="btn btn-primary btn-sm" type="submit" disabled={busy}>{busy ? "Saving…" : "Save profile"}</button></div>
+              </form>
+            </details>
+            <div className="surface tenant-operations-detail">
+              <div className="tenant-panel-header"><div><h3>Invitations</h3><small>Single-use links expire after 7 days.</small></div><span className="badge text-bg-light">{invitations.length} pending</span></div>
+              <form className="row g-2 align-items-end" onSubmit={createInvitation}>
+                <div className="col-12 col-md"><label className="form-label" htmlFor="invite-email">Email address</label><input id="invite-email" className="form-control" type="email" value={invitationEmail} maxLength={200} required disabled={busy} onChange={event => setInvitationEmail(event.target.value)}/></div>
+                <div className="col-12 col-md-4"><label className="form-label" htmlFor="invite-role">Access</label><select id="invite-role" className="form-select" value={invitationRole} disabled={busy} onChange={event => setInvitationRole(event.target.value as "TEACHER" | "SCHOOL_ADMIN")}><option value="TEACHER">Teacher</option><option value="SCHOOL_ADMIN">School administrator</option></select></div>
+                <div className="col-12 col-md-auto"><button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Working…" : "Invite"}</button></div>
+              </form>
+              {invitations.length ? <div className="tenant-invitation-list mt-3">{invitations.map(invitation => <div key={invitation.id}>
+                <span><b>{invitation.invitedEmail}</b><small>{invitation.role === "SCHOOL_ADMIN" ? "School administrator" : "Teacher"} · expires {dateLabel(invitation.expiresAt)}</small></span>
+                <button type="button" className="btn btn-outline-danger btn-sm" disabled={busy} onClick={() => void revokeInvitation(invitation.id)}>Revoke</button>
+              </div>)}</div> : <p className="small text-secondary mt-3 mb-0">No pending invitations.</p>}
+            </div>
+            <div className="surface tenant-operations-detail">
+              <div className="tenant-panel-header"><div><h3>Invoices &amp; due-date reminders</h3><small>Manual billing records; no automatic charges.</small></div><span className="badge text-bg-light">{invoices.filter(invoice => invoice.status === "ISSUED").length} open</span></div>
+              <form className="row g-2 align-items-end" onSubmit={createInvoice}>
+                <div className="col-12"><label className="form-label" htmlFor="invoice-description">Description</label><input id="invoice-description" className="form-control" value={invoiceDescription} maxLength={200} required disabled={busy} onChange={event => setInvoiceDescription(event.target.value)}/></div>
+                <div className="col-6"><label className="form-label" htmlFor="invoice-amount">Amount (PHP)</label><input id="invoice-amount" className="form-control" type="number" min="0.01" max="10000000" step="0.01" value={invoiceAmount} required disabled={busy} onChange={event => setInvoiceAmount(event.target.value)}/></div>
+                <div className="col-6"><label className="form-label" htmlFor="invoice-due">Due date</label><input id="invoice-due" className="form-control" type="date" value={invoiceDueAt} required disabled={busy} onChange={event => setInvoiceDueAt(event.target.value)}/></div>
+                <div className="col-12 d-flex justify-content-end"><button type="submit" className="btn btn-outline-primary btn-sm" disabled={busy}>{busy ? "Working…" : "Issue invoice"}</button></div>
+              </form>
+              <p className="tenant-data-hint">Automatic email reminders run 7 and 1 day before, on the due date, and 1 and 7 days overdue. Set a billing email to receive them.</p>
+              {invoices.length ? <div className="tenant-invoice-list mt-2">{invoices.map(invoice => <article key={invoice.id}>
+                <div><b>{invoice.invoiceNumber} · {money(invoice.amount)}</b><small>{invoice.description} · due {dateLabel(invoice.dueAt)} · {invoice.status}</small></div>
+                {invoice.status === "ISSUED" && <div className="d-flex gap-2"><button type="button" className="btn btn-outline-success btn-sm" disabled={busy} onClick={() => { setPayingInvoiceId(current => current === invoice.id ? "" : invoice.id); setInvoicePaymentReference(""); }}>Record payment</button><button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy} onClick={() => void updateInvoice(invoice, "VOID")}>Void</button></div>}
+                {payingInvoiceId === invoice.id && <form className="tenant-invoice-payment-form" onSubmit={event => {
+                  event.preventDefault();
+                  void updateInvoice(invoice, "PAID", { method: invoicePaymentMethod, reference: invoicePaymentReference || undefined });
+                }}>
+                  <label className="form-label" htmlFor={`invoice-method-${invoice.id}`}>Payment method</label>
+                  <input id={`invoice-method-${invoice.id}`} className="form-control" value={invoicePaymentMethod} maxLength={40} required disabled={busy} onChange={event => setInvoicePaymentMethod(event.target.value)}/>
+                  <label className="form-label" htmlFor={`invoice-reference-${invoice.id}`}>Reference <span className="text-secondary">(optional)</span></label>
+                  <input id={`invoice-reference-${invoice.id}`} className="form-control" value={invoicePaymentReference} maxLength={120} disabled={busy} onChange={event => setInvoicePaymentReference(event.target.value)}/>
+                  <div className="d-flex gap-2"><button type="submit" className="btn btn-success btn-sm" disabled={busy}>{busy ? "Saving…" : "Confirm payment"}</button><button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy} onClick={() => setPayingInvoiceId("")}>Cancel</button></div>
+                </form>}
+              </article>)}</div> : <p className="small text-secondary mt-3 mb-0">No invoices recorded.</p>}
             </div>
           </> : <div className="surface tenant-settings-panel tenant-select-empty">Select a school to manage its plan, rosters, payments, and audit history.</div>}
         </section>

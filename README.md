@@ -12,6 +12,8 @@ SAGA (School Assessment, Grading & Analytics) is a multi-school grading portal b
 - Profile name/photo editing, sign-in email changes verified through both inboxes, authenticated password changes, hashed passwords, signed HttpOnly sessions, secure production cookies, request validation, database-backed auth throttling, and grade-change audit events for key teacher actions.
 - Responsive Bootstrap UI with a compact mobile score-entry view and a no-horizontal-scroll workbook layout on wider screens.
 - School-scoped page URLs: `/{schoolSlug}/overview`, `/{schoolSlug}/classes`, and `/{schoolSlug}/profile`; tenant management is at `/manage`.
+- Platform administrators can create school workspaces and issue expiring teacher/school-admin invitations. School administrators can manage only their own school profile, contacts, and rosters.
+- Platform administrators can issue manual invoices and record payments. Vercel Cron emails billing contacts reminders 7 and 1 day before invoices are due, on the due date, and 1 and 7 days after; no online charges are collected.
 
 SAGA is an independently operated service and is not an official system of any school unless that school has separately authorized its use. The supplied workbooks are not included in this repository. They contain personal academic information and must be handled securely. Before entering real student data, the portal owner and each participating teacher should establish their respective responsibilities, lawful basis, notice, retention, access, and incident procedures under the Data Privacy Act of 2012. Obtain guidance from the appropriate privacy professional or Data Protection Officer where applicable.
 
@@ -30,10 +32,12 @@ The grade scale and default weights are examples based on the supplied grade she
 ## Deploying on Vercel + Neon
 
 1. Connect this repository to a Vercel project and provision a Neon PostgreSQL database in a region suitable for the intended users and applicable privacy obligations.
-2. Add `DATABASE_URL` (pooled runtime URL), `DIRECT_URL` (direct migration URL), `AUTH_SECRET`, and `TEACHER_INVITE_CODE` to Vercel’s environment variables. Add `GMAIL_SMTP_USER` and `GMAIL_SMTP_APP_PASSWORD` to enable password recovery and email-change verification. Use separate random secrets for production and preview deployments.
+2. Add `DATABASE_URL` (pooled runtime URL), `DIRECT_URL` (direct migration URL), `AUTH_SECRET`, `TEACHER_INVITE_CODE`, and a random `CRON_SECRET` to Vercel’s environment variables. Set `APP_URL` to the canonical production origin used for invitation links. Add `GMAIL_SMTP_USER` and `GMAIL_SMTP_APP_PASSWORD` to enable verification and billing email. Use separate random secrets for production and preview deployments.
 3. Apply reviewed Prisma migrations with `npm run db:migrate` using the production schema administrator’s direct connection before deploying. The production build checks migration status. Set `SAGA_TENANT_MANAGER_EMAIL` to the platform manager’s verified teacher email when granting access. Once that manager changes their sign-in email, keep the configured value to retain the link to the same account. Use a separate database for local and preview deployments.
 4. Deploy and confirm database connection, account creation, student/teacher access separation, roster linking, score calculations, and publication behavior with synthetic records before importing real data.
 5. Configure backups, retention, access to deployment logs, incident response, and a way for authorized staff to fulfill privacy requests.
+
+The daily Vercel Cron job at `/api/cron/tenant-billing-reminders` requires `CRON_SECRET` and a configured billing email (or a school administrator account email). Verify the cron deployment and SMTP delivery before relying on reminders. Invoices and payment records are administrative records only; they do not represent payment-gateway transactions.
 
 ## Before real student records are used
 

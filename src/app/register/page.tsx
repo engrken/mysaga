@@ -16,9 +16,15 @@ export default function RegisterPage() {
   const [studentNumber, setStudentNumber] = useState("");
   const [facultyId, setFacultyId] = useState("");
   const [email, setEmail] = useState("");
+  const [invitationToken, setInvitationToken] = useState("");
+  const [invitation, setInvitation] = useState<{ schoolId: string; schoolName: string; email: string; role: string } | null>(null);
+  const [invitationLoading, setInvitationLoading] = useState(false);
+  const [invitationError, setInvitationError] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const token = params.get("invite") || "";
+    setInvitationToken(token);
     setStudentNumber(params.get("studentNumber") || "");
     setSchoolId(params.get("schoolId") || "");
     const requestedName = params.get("schoolName") || "";
@@ -26,11 +32,26 @@ export default function RegisterPage() {
     setSchoolName(requestedName);
     setTeacherSchoolChoice(requestedName ? NEW_SCHOOL_OPTION : requestedSchoolId);
     setEmail(params.get("email") || "");
+    if (token) {
+      setRole("TEACHER");
+      setInvitationLoading(true);
+      fetch(`/api/auth/invitation?token=${encodeURIComponent(token)}`, { cache: "no-store" })
+        .then(async response => {
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "This invitation link is invalid or expired.");
+          setInvitation({ schoolId: data.school.id, schoolName: data.school.name, email: data.email, role: data.role });
+          setSchoolId(data.school.id);
+          setTeacherSchoolChoice(data.school.id);
+          setEmail(data.email);
+        })
+        .catch(error => setInvitationError(error instanceof Error ? error.message : "This invitation link is invalid or expired."))
+        .finally(() => setInvitationLoading(false));
+    }
   }, []);
 
   const teacherCreatingSchool = teacherSchoolChoice === NEW_SCHOOL_OPTION;
   function chooseRole(nextRole: "STUDENT" | "TEACHER") {
-    if (role === nextRole) return;
+    if (role === nextRole || invitationToken) return;
     setRole(nextRole);
     setChallengeId("");
     setError("");
@@ -59,6 +80,7 @@ export default function RegisterPage() {
           studentNumber: form.get("studentNumber") || undefined,
           facultyId: role === "TEACHER" ? facultyId : undefined,
           inviteCode: form.get("inviteCode") || undefined,
+          invitationToken: invitationToken || undefined,
           role,
           challengeId: challengeId || undefined,
           code: challengeId ? form.get("code") : undefined,
@@ -81,7 +103,7 @@ export default function RegisterPage() {
 
   const canSubmit = !busy && (role === "STUDENT"
     ? !!schoolId
-    : (teacherCreatingSchool ? schoolName.trim().length >= 2 : !!teacherSchoolChoice) && facultyId.trim().length >= 3);
+    : (invitationToken ? !!invitation && !invitationLoading : (teacherCreatingSchool ? schoolName.trim().length >= 2 : !!teacherSchoolChoice)) && facultyId.trim().length >= 3);
   const selectedSchoolId = role === "STUDENT" ? schoolId : teacherCreatingSchool ? "" : teacherSchoolChoice;
   const privacyHref = selectedSchoolId ? `/privacy?schoolId=${encodeURIComponent(selectedSchoolId)}` : "/privacy";
   const termsHref = selectedSchoolId ? `/terms?schoolId=${encodeURIComponent(selectedSchoolId)}` : "/terms";
@@ -91,31 +113,47 @@ export default function RegisterPage() {
     <section className="auth-panel"><div className="auth-form-wrap"><div className="mobile-brand"><span className="brand-mark small">S</span><span>SAGA Portal</span></div><p className="eyebrow text-primary">GET STARTED</p><h2>Create your account</h2><p className="muted mb-4">Students join registered schools. Teachers can select an existing school or register a new school if it is not listed.</p>
       <form onSubmit={submit}>
         <label className="form-label">I am a</label>
-        <div className="role-switch mb-3"><button type="button" className={role === "STUDENT" ? "active" : ""} onClick={() => chooseRole("STUDENT")}>Student</button><button type="button" className={role === "TEACHER" ? "active" : ""} onClick={() => chooseRole("TEACHER")}>Teacher</button></div>
-        {role === "STUDENT" ? <><label className="form-label" htmlFor="schoolId">School</label><SchoolSelect id="schoolId" value={schoolId} onChange={value => { setSchoolId(value); setChallengeId(""); setError(""); }}/><div className="form-text mb-3">Only schools with a registered teacher appear here.</div><label className="form-label" htmlFor="studentNumber">Student ID</label><input className="form-control mb-3" id="studentNumber" name="studentNumber" value={studentNumber} onChange={event=>setStudentNumber(event.target.value)} required maxLength={40}/></> : <>
-          <label className="form-label" htmlFor="teacherSchoolId">School</label>
-          <SchoolSelect id="teacherSchoolId" value={teacherSchoolChoice} onChange={chooseTeacherSchool} audience="teacher" allowNotListed/>
-          {teacherCreatingSchool ? <>
-            <div className="form-text mb-2">Your school is not in the list. Enter its official name to create a new school workspace.</div>
-            <label className="form-label" htmlFor="schoolName">New school name</label>
-            <input className="form-control mb-2" id="schoolName" name="schoolName" placeholder="Enter the complete official school name"
-              value={schoolName} onChange={event => { setSchoolName(event.target.value); setChallengeId(""); setError(""); }}
-              autoComplete="organization" required maxLength={160} minLength={2}/>
-            <div className="form-text mb-3">A new school is created only after your email verification succeeds. Use the official name to avoid duplicate schools.</div>
-          </> : <div className="form-text mb-3">Select your existing school to join its workspace. Additional teacher accounts depend on the school's plan. If your school is missing, select “Not listed” above.</div>}
-          <label className="form-label" htmlFor="fullName">Full name</label><input className="form-control mb-3" id="fullName" name="fullName" required maxLength={120}/><label className="form-label" htmlFor="facultyId">Faculty ID</label>
-            <input className="form-control mb-2" id="facultyId" name="facultyId" type="text"
-              autoComplete="off" placeholder="e.g., FAC-2026-001" value={facultyId}
-              onChange={event => { setFacultyId(event.target.value); setChallengeId(""); setError(""); }}
-              required minLength={3} maxLength={40} pattern="[A-Za-z0-9][A-Za-z0-9._/-]{2,39}"/>
-            <div className="form-text mb-3">Use the Faculty ID assigned by your school (3–40 letters, numbers, hyphens, dots, underscores, or slashes). It must be unique within your school.</div>
-            <label className="form-label" htmlFor="inviteCode">Teacher invitation code</label><input className="form-control mb-3" id="inviteCode" name="inviteCode" required/></>}
-        <label className="form-label" htmlFor="regEmail">Email address</label><input className="form-control mb-3" id="regEmail" name="email" type="email" autoComplete="email" placeholder="name@example.com" value={email} onChange={event=>{setEmail(event.target.value);setChallengeId("");setError("");}} required maxLength={200}/>
+        <div className="role-switch mb-3"><button type="button" className={role === "STUDENT" ? "active" : ""} onClick={() => chooseRole("STUDENT")} disabled={!!invitationToken}>Student</button><button type="button" className={role === "TEACHER" ? "active" : ""} onClick={() => chooseRole("TEACHER")} disabled={!!invitationToken}>Teacher</button></div>
+        {role === "STUDENT" ? <>
+          <label className="form-label" htmlFor="schoolId">School</label>
+          <SchoolSelect id="schoolId" value={schoolId} onChange={value => { setSchoolId(value); setChallengeId(""); setError(""); }}/>
+          <div className="form-text mb-3">Only schools with a registered teacher appear here.</div>
+          <label className="form-label" htmlFor="studentNumber">Student ID</label>
+          <input className="form-control mb-3" id="studentNumber" name="studentNumber" value={studentNumber} onChange={event=>setStudentNumber(event.target.value)} required maxLength={40}/>
+        </> : <>
+          {invitationToken ? <div className="alert alert-primary py-3" role={invitationError ? "alert" : "status"}>
+            {invitationLoading ? "Checking your invitation…" : invitationError || (invitation ? <>Invited to <b>{invitation.schoolName}</b> as {invitation.role === "SCHOOL_ADMIN" ? "school administrator" : "teacher"}.</> : "Invitation unavailable.")}
+          </div> : <>
+            <label className="form-label" htmlFor="teacherSchoolId">School</label>
+            <SchoolSelect id="teacherSchoolId" value={teacherSchoolChoice} onChange={chooseTeacherSchool} audience="teacher" allowNotListed/>
+            {teacherCreatingSchool ? <>
+              <div className="form-text mb-2">Your school is not in the list. Enter its official name to create a new school workspace.</div>
+              <label className="form-label" htmlFor="schoolName">New school name</label>
+              <input className="form-control mb-2" id="schoolName" name="schoolName" placeholder="Enter the complete official school name"
+                value={schoolName} onChange={event => { setSchoolName(event.target.value); setChallengeId(""); setError(""); }}
+                autoComplete="organization" required maxLength={160} minLength={2}/>
+              <div className="form-text mb-3">A new school is created only after your email verification succeeds. Use the official name to avoid duplicate schools.</div>
+            </> : <div className="form-text mb-3">Select your existing school to join its workspace. Additional teacher accounts depend on the school's plan. If your school is missing, select “Not listed” above.</div>}
+          </>}
+          <label className="form-label" htmlFor="fullName">Full name</label>
+          <input className="form-control mb-3" id="fullName" name="fullName" required maxLength={120}/>
+          <label className="form-label" htmlFor="facultyId">Faculty ID</label>
+          <input className="form-control mb-2" id="facultyId" name="facultyId" type="text"
+            autoComplete="off" placeholder="e.g., FAC-2026-001" value={facultyId}
+            onChange={event => { setFacultyId(event.target.value); setChallengeId(""); setError(""); }}
+            required minLength={3} maxLength={40} pattern="[A-Za-z0-9][A-Za-z0-9._/-]{2,39}"/>
+          <div className="form-text mb-3">Use the Faculty ID assigned by your school (3–40 letters, numbers, hyphens, dots, underscores, or slashes). It must be unique within your school.</div>
+          {!invitationToken && <>
+            <label className="form-label" htmlFor="inviteCode">Teacher invitation code</label>
+            <input className="form-control mb-3" id="inviteCode" name="inviteCode" required/>
+          </>}
+        </>}
+        <label className="form-label" htmlFor="regEmail">Email address</label><input className="form-control mb-3" id="regEmail" name="email" type="email" autoComplete="email" placeholder="name@example.com" value={email} onChange={event=>{setEmail(event.target.value);setChallengeId("");setError("");}} readOnly={!!invitationToken} required maxLength={200}/>
         <label className="form-label" htmlFor="regPassword">Password</label><input className="form-control" id="regPassword" name="password" type="password" minLength={12} required autoComplete="new-password"/><div className="form-text mb-3">Use at least 12 characters.</div>
         <div className="form-check mb-2"><input className="form-check-input" type="checkbox" id="termsOfService" name="termsOfService" required/><label className="form-check-label small" htmlFor="termsOfService">I agree to the <Link href={termsHref} target="_blank" rel="noreferrer">Terms of Service</Link>.</label></div>
         <div className="form-check mb-3"><input className="form-check-input" type="checkbox" id="privacyNotice" name="privacyNotice" required/><label className="form-check-label small" htmlFor="privacyNotice">I have read the <Link href={privacyHref} target="_blank" rel="noreferrer">Privacy Notice</Link>.</label></div>
         {challengeId && <div className="mt-3"><label className="form-label" htmlFor="verificationCode">Email verification code</label><input className="form-control" id="verificationCode" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required/><p className="form-text">Enter the six-digit code sent to your email. It expires in 10 minutes.</p><button type="button" className="btn btn-link px-0" onClick={() => { setChallengeId(""); setError(""); }}>Request another code</button></div>}
-        {error && <div className="alert alert-danger py-2">{error}</div>}
+        {(error || invitationError) && <div className="alert alert-danger py-2" role="alert">{error || invitationError}</div>}
         <button className="btn btn-primary w-100 mt-2" disabled={!canSubmit}>{busy ? "Please wait…" : challengeId ? "Verify and create account" : "Send verification code"}</button>
       </form>
       <p className="auth-bottom">Already registered? <Link href={`/login?schoolId=${encodeURIComponent(schoolId)}`}>Sign in</Link></p><p className="privacy-note">Student registration requires an existing class directory entry with a matching Student ID and email address.</p>

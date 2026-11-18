@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { tenantInvitationDigest } from "@/lib/tenant-invitations";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -14,7 +15,8 @@ const bodySchema = z.object({
   schoolId: z.string().min(1).optional(), schoolName: z.string().trim().min(2).max(160).optional(),
   fullName: z.string().trim().min(2).max(120).optional(), email: z.string().trim().email().max(200),
   password: z.string().min(12).max(100), role: z.enum(["TEACHER", "STUDENT"]),
-  studentNumber: z.string().trim().max(40).optional(), facultyId: z.string().trim().max(40).optional(), inviteCode: z.string().optional(), acknowledgedPrivacyNotice: z.literal(true),
+  studentNumber: z.string().trim().max(40).optional(), facultyId: z.string().trim().max(40).optional(), inviteCode: z.string().optional(),
+  invitationToken: z.string().regex(/^[a-f0-9]{64}$/).optional(), acknowledgedPrivacyNotice: z.literal(true),
   acknowledgedTerms: z.literal(true), termsVersion: z.literal("2026-11-12"),
   ...emailVerificationFields
 });
@@ -39,11 +41,26 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ error: "Check the required fields. Passwords must be at least 12 characters." }, { status: 400 });
     }
-    const { schoolId, schoolName, fullName, email, password, role, studentNumber, facultyId, inviteCode, termsVersion, challengeId, code } = parsed.data;
+    const { schoolId, schoolName, fullName, email, password, role, studentNumber, facultyId, inviteCode, invitationToken, termsVersion, challengeId, code } = parsed.data;
     const normalizedEmail = email.toLowerCase();
     const normalizedFacultyId = role === "TEACHER" ? normalizeFacultyId(facultyId || "") : null;
     if (role === "TEACHER" && !normalizedFacultyId) return NextResponse.json({ error: "Enter a valid Faculty ID (3–40 letters, numbers or . _ / -)." }, { status: 400 });
-    const teacherSchoolTarget = role === "TEACHER" ? resolveTeacherSchoolTarget(schoolId, schoolName) : null;
+    const invitation = invitationToken ? await prisma.tenantInvitation.findUnique({
+      where: { tokenHash: tenantInvitationDigest(invitationToken) },
+      select: {
+        id: true, tokenHash: true, invitedEmail: true, role: true, schoolId: true,
+        expiresAt: true, acceptedAt: true, school: { select: { isActive: true } }
+      }
+    }) : null;
+    if (invitationToken && (!invitation || invitation.acceptedAt || invitation.expiresAt <= new Date() || !invitation.school.isActive)) {
+      return NextResponse.json({ error: "This invitation link is invalid or expired. Ask your school administrator for a new one." }, { status: 410 });
+    }
+    if (invitation && (role !== "TEACHER" || invitation.invitedEmail.toLowerCase() !== normalizedEmail)) {
+      return NextResponse.json({ error: "Use the email address that received this school invitation." }, { status: 403 });
+    }
+    const teacherSchoolTarget = role === "TEACHER" && invitation
+      ? { kind: "existing" as const, schoolId: invitation.schoolId }
+      : role === "TEACHER" ? resolveTeacherSchoolTarget(schoolId, schoolName) : null;
     if (Boolean(challengeId) !== Boolean(code)) return NextResponse.json({ error: "Request a code and enter all six digits." }, { status: 400 });
     const phase = challengeId ? "verify" : "send";
     const throttle = await checkAuthThrottle(request, `register:${phase}:${role}:${normalizedEmail}`, challengeId ? 8 : 4, undefined, "identity");
@@ -51,7 +68,7 @@ export async function POST(request: Request) {
     if (!network.allowed) return NextResponse.json({ error: "Too many account creation attempts. Try again in 15 minutes." }, { status: 429 });
     if (!throttle.allowed) return NextResponse.json({ error: "Too many account creation attempts. Try again in 15 minutes." }, { status: 429 });
 
-    if (role === "TEACHER" && (!process.env.TEACHER_INVITE_CODE || inviteCode !== process.env.TEACHER_INVITE_CODE)) {
+    if (role === "TEACHER" && !invitation && (!process.env.TEACHER_INVITE_CODE || inviteCode !== process.env.TEACHER_INVITE_CODE)) {
       return NextResponse.json({ error: "Teacher registration requires an invitation code from the portal owner." }, { status: 403 });
     }
     if (role === "TEACHER" && !fullName) return NextResponse.json({ error: "Enter your full name." }, { status: 400 });
@@ -99,7 +116,8 @@ export async function POST(request: Request) {
       "register", role,
       teacherSchoolTarget?.kind === "existing" ? teacherSchoolTarget.schoolId : role === "STUDENT" ? schoolId || "" : "",
       teacherSchoolTarget?.kind === "new" ? teacherSchoolTarget.schoolName.toLowerCase() : "",
-      normalizedStudentNumber || "", normalizedEmail, normalizedFacultyId || ""
+      normalizedStudentNumber || "", normalizedEmail, normalizedFacultyId || "",
+      invitation?.id || "", invitation?.tokenHash || ""
     ];
     if (!challengeId || !code) {
       const id = await issueEmailChallenge(binding, normalizedEmail);
@@ -108,6 +126,16 @@ export async function POST(request: Request) {
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await prisma.$transaction(async tx => {
       if (!(await consumeEmailChallenge(tx, binding, challengeId, code))) return null;
+      if (invitation) {
+        const claimed = await tx.tenantInvitation.updateMany({
+          where: {
+            id: invitation.id, tokenHash: invitation.tokenHash, acceptedAt: null,
+            expiresAt: { gt: new Date() }, schoolId: invitation.schoolId
+          },
+          data: { acceptedAt: new Date() }
+        });
+        if (claimed.count !== 1) throw new Error("INVITATION_EXPIRED");
+      }
       let school: School | null = null;
       if (role === "TEACHER") {
         if (teacherSchoolTarget?.kind === "existing") {
@@ -153,7 +181,7 @@ export async function POST(request: Request) {
         if (!school) throw new Error("SCHOOL_NOT_READY");
       }
       if (!school) throw new Error("SCHOOL_NOT_READY");
-      const created = await tx.user.create({ data: { schoolId: school.id, fullName: studentProfile?.fullName ?? fullName!, email: normalizedEmail, emailVerifiedAt: new Date(), passwordHash, role, studentNumber: role === "STUDENT" ? studentProfile?.studentNumber : null, facultyId: role === "TEACHER" ? normalizedFacultyId : null, courseProgram: studentProfile?.courseProgram ?? null, yearLevel: studentProfile?.yearLevel ?? null, privacyNoticeAcceptedAt: new Date(), termsAcceptedAt: new Date(), termsOfServiceVersion: termsVersion }, select: { id: true, role: true, schoolId: true } });
+      const created = await tx.user.create({ data: { schoolId: school.id, fullName: studentProfile?.fullName ?? fullName!, email: normalizedEmail, emailVerifiedAt: new Date(), passwordHash, role, isSchoolAdmin: invitation?.role === "SCHOOL_ADMIN", studentNumber: role === "STUDENT" ? studentProfile?.studentNumber : null, facultyId: role === "TEACHER" ? normalizedFacultyId : null, courseProgram: studentProfile?.courseProgram ?? null, yearLevel: studentProfile?.yearLevel ?? null, privacyNoticeAcceptedAt: new Date(), termsAcceptedAt: new Date(), termsOfServiceVersion: termsVersion }, select: { id: true, role: true, schoolId: true } });
       if (studentProfile) await tx.enrollment.updateMany({ where: { studentNumber: studentProfile.studentNumber, studentUserId: null, subject: { schoolId: school.id } }, data: { studentUserId: created.id } });
       return created;
     });
@@ -165,6 +193,7 @@ export async function POST(request: Request) {
     if (error instanceof Error && error.message === "SCHOOL_INACTIVE") return NextResponse.json({ error: "This school workspace is currently inactive. Contact SAGA support to restore access." }, { status: 403 });
     if (error instanceof Error && error.message === "FACULTY_ID_TAKEN") return NextResponse.json({ error: "This Faculty ID is already registered at your school. Please use a different ID." }, { status: 409 });
     if (error instanceof Error && error.message === "SCHOOL_NOT_FOUND") return NextResponse.json({ error: "School not found. Refresh the school list and try again." }, { status: 404 });
+    if (error instanceof Error && error.message === "INVITATION_EXPIRED") return NextResponse.json({ error: "This invitation is no longer available. Ask your school administrator for a new one." }, { status: 410 });
     if (error instanceof Error && error.message === "SCHOOL_ALREADY_EXISTS") return NextResponse.json({ error: "This school already exists. Select it from the dropdown instead of creating a duplicate." }, { status: 409 });
     if (error instanceof Error && error.message === "STUDENT_EMAIL_CHANGED") return NextResponse.json({ error: "Your school roster email changed. Check it with your school and start registration again." }, { status: 409 });
     if (error instanceof Error && error.message === "SCHOOL_NOT_READY") return NextResponse.json({ error: "That school is not accepting student registration yet." }, { status: 400 });
