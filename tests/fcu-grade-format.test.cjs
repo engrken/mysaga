@@ -96,5 +96,5 @@ test("FCU export keeps the same three assessment headings regardless of configur
   assert.match(sheet, /<c r="I15"[^>]*>.*?: TG :/s);
   assert.match(sheet, /<c r="J15"[^>]*>.*?: FG :/s);
   assert.match(sheet, /<c r="K15"[^>]*>.*?: REMARKS :/s);
-  assert.doesNotMatch(sheet, /<mergeCell ref="E17:F17"/);
+  assert.match(sheet, /<mergeCell ref="E17:F17"/);
 });
