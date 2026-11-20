@@ -252,6 +252,35 @@ function gradeSheetAttendancePercent(detail: Detail, enrollment: Enrollment) {
     }))
   });
 }
+function gradeSheetComponentPercent(detail: Detail, enrollment: Enrollment, component: GradeSheetComponent) {
+  const root = detail.categories.find(category => !category.parentId && category.name.trim().toLocaleLowerCase() === component.name.trim().toLocaleLowerCase());
+  if (!root) return null;
+  const leaves = detail.categories.filter(category => {
+    let current: Category | undefined = category;
+    const seen = new Set<string>();
+    while (current?.parentId && !seen.has(current.id)) {
+      seen.add(current.id);
+      current = detail.categories.find(parent => parent.id === current?.parentId);
+    }
+    return current?.id === root.id && !detail.categories.some(child => child.parentId === category.id);
+  });
+  let weighted = 0;
+  let totalWeight = 0;
+  for (const category of leaves) {
+    const items = detail.assessments.filter(item => item.categoryId === category.id && !item.title.toLocaleLowerCase().startsWith("attendance ·"));
+    const percent = calculateCategoryPercent({
+      conversionBase: root.conversionBase,
+      assessments: items.map(item => ({
+        id: item.id, title: item.title, dueDate: item.dueDate, maxScore: item.maxScore, weight: item.weight,
+        scores: [enrollment.scores.find(score => score.assessmentId === item.id) || { points: null, remark: null }]
+      }))
+    });
+    const weight = effectiveCategoryWeight(category, detail.categories);
+    if (percent !== null && weight > 0) { weighted += percent * weight; totalWeight += weight; }
+  }
+  return totalWeight > 0 ? Number((weighted / totalWeight).toFixed(2)) : null;
+}
+
 function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Detail, schoolName: string, schoolAddress: string, teacherName: string, deanName: string) {
   const academicAssessments = detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·"));
   const assessmentColumns = academicAssessments.map(item => {
@@ -2009,25 +2038,32 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         </>}
       </section>}
       </div></main>
-          {printMode === "grades" && <style media="print">{`@page { size: 13in 8.5in; margin: .3in; }
+          {printMode === "grades" && <style media="print">{`@page { size: 8.5in 13in; margin: .35in; }
         @media print {
           .generic-print-sheet { display:block!important; width:100%!important; color:#000!important; background:#fff!important; font-family:Arial,Helvetica,sans-serif!important; }
-          .generic-print-sheet>header { position:relative; text-align:center; border:0; padding:0 0 7px; margin:0 0 10px; }
-          .generic-print-logo { position:absolute; left:0; top:0; width:58px; height:58px; object-fit:contain; }
-          .generic-print-sheet>header h1 { margin:0; font-size:15pt; font-weight:700; }
-          .generic-print-sheet>header p { margin:2px 0 5px; font-size:8pt; min-height:10px; }
-          .generic-print-sheet>header strong { display:block; font-size:12pt; letter-spacing:.06em; }
-          .generic-print-course-details { display:grid; grid-template-columns:1fr 1.6fr 1fr; gap:5px 16px; margin:8px 0 10px; font-size:8pt; }
-          .generic-print-course-details>div { display:flex; gap:5px; border-bottom:1px solid #777; padding:3px 0; min-width:0; }
+          .generic-print-sheet { font-size:9pt; }
+          .generic-print-sheet>header { position:relative; display:grid; grid-template-columns:68px 1fr 68px; align-items:center; gap:10px; text-align:center; border:0; padding:0 0 8px; margin:0 0 6px; }
+          .generic-print-logo { width:62px; height:62px; object-fit:contain; }
+          .generic-print-sheet>header h1 { margin:0; font-size:14pt; font-weight:700; }
+          .generic-print-sheet>header p { margin:2px 0 5px; font-size:8.5pt; min-height:10px; }
+          .generic-print-sheet>header strong { display:block; font-size:12pt; letter-spacing:.04em; }
+          .generic-print-doc-control { border:1px solid #333; margin:5px 0 8px; font-size:7pt; }
+          .generic-print-doc-control .doc-control-row { display:grid; grid-template-columns:1fr 1fr 1fr; }
+          .generic-print-doc-control span { padding:3px 5px; border-right:1px solid #777; border-bottom:1px solid #777; }
+          .generic-print-membership { font-size:7pt; line-height:1.25; margin:4px 0 8px; }
+          .generic-print-course-details { display:grid; grid-template-columns:1fr 1.4fr 1fr 1fr; gap:0; margin:6px 0 10px; font-size:8pt; border:1px solid #333; }
+          .generic-print-course-details>div { display:flex; gap:5px; border-right:1px solid #777; border-bottom:1px solid #777; padding:5px; min-width:0; }
           .generic-print-course-details b { white-space:nowrap; }
           .generic-print-course-details span { overflow-wrap:anywhere; }
-          .generic-print-grade-table { width:100%; border-collapse:collapse; table-layout:auto; font-size:7pt; line-height:1.15; }
+          .generic-print-grade-table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:8pt; line-height:1.15; }
           .generic-print-grade-table thead { display:table-header-group; }
-          .generic-print-grade-table th,.generic-print-grade-table td { border:1px solid #555!important; padding:4px 5px!important; vertical-align:middle; }
-          .generic-print-grade-table th { background:#eaf0f8!important; font-size:6.5pt; text-align:center; overflow-wrap:anywhere; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-          .generic-print-grade-table th:first-child,.generic-print-grade-table td:first-child { min-width:150px; width:22%; text-align:left; }
-          .generic-print-grade-table td:not(:first-child) { text-align:center; }
+          .generic-print-grade-table th,.generic-print-grade-table td { border:1px solid #333!important; padding:5px 4px!important; vertical-align:middle; }
+          .generic-print-grade-table th { background:#fff!important; font-size:7.5pt; text-align:center; overflow-wrap:anywhere; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+          .generic-print-grade-table th:nth-child(1),.generic-print-grade-table td:nth-child(1) { width:13%; text-align:center; }
+          .generic-print-grade-table th:nth-child(2),.generic-print-grade-table td:nth-child(2) { width:31%; text-align:left; }
+          .generic-print-grade-table td:not(:nth-child(2)) { text-align:center; }
           .generic-print-grade-table tbody tr { break-inside:avoid; page-break-inside:avoid; }
+          .generic-print-grade-table small { display:block; font-weight:400; font-size:6.5pt; }
           .grade-sheet-calculation-note { margin:6px 0 0; font-size:6.5pt; line-height:1.2; color:#222; }
           .generic-print-sheet .print-signatures { display:grid; grid-template-columns:1fr 1fr; gap:50px; margin-top:24px; break-inside:avoid; page-break-inside:avoid; font-size:8pt; }
           .generic-print-sheet .print-signatures>div { min-height:60px; }
@@ -2037,53 +2073,37 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         }`}</style>}
       {printMode === "grades" && detail && <article className="print-grade-sheet generic-print-sheet">
         <header>
-          {schoolLogoPath && <img className="generic-print-logo" src={`/api/media?pathname=${encodeURIComponent(schoolLogoPath)}`} alt="School / Department logo"/>}
-          <h1>{user.school.name}</h1>
-          <p>{user.school.address || "School address not set"}</p>
-          <strong>GRADING SHEET</strong>
+          {schoolLogoPath ? <img className="generic-print-logo" src={`/api/media?pathname=${encodeURIComponent(schoolLogoPath)}`} alt="School / institution logo"/> : <span/>}
+          <div><h1>{user.school.name}</h1><p>{user.school.address || "School address not set"}</p><strong>GRADING SHEETS</strong></div>
+          {departmentLogoPath ? <img className="generic-print-logo" src={`/api/media?pathname=${encodeURIComponent(departmentLogoPath)}`} alt="College / department logo"/> : <span/>}
         </header>
+        <div className="generic-print-doc-control">
+          <div className="doc-control-row"><span><b>Form Name:</b> GRADING SHEETS</span><span><b>Effectivity:</b> —</span><span><b>Form No.:</b> —</span></div>
+          <div className="doc-control-row"><span><b>Issuing Office:</b> —</span><span><b>Revision No.:</b> —</span><span><b>Page No.:</b> 1</span></div>
+        </div>
+        <div className="generic-print-membership"><b>Institutional membership / accreditation:</b> —</div>
         <div className="generic-print-course-details">
-          <div><b>Course Number:</b><span>{detail.code}</span></div>
+          <div><b>Course No.:</b><span>{detail.code}</span></div>
           <div><b>Descriptive Title:</b><span>{detail.title}</span></div>
-          <div><b>Class ID:</b><span>{detail.classId || "—"}</span></div>
+          <div><b>Class I.D.:</b><span>{detail.classId || "—"}</span></div>
           <div><b>Semester:</b><span>{detail.term}</span></div>
           <div><b>Academic Year:</b><span>{detail.academicYear}</span></div>
-          <div><b>Course and Year:</b><span>{detail.courseYear || "—"}</span></div>
-          <div><b>Schedule:</b><span>{formatSchedule(detail.schedule) || "—"}</span></div>
-          <div><b>Teacher:</b><span>{user.fullName}</span></div>
+          <div><b>Course &amp; Year:</b><span>{detail.courseYear || "—"}</span></div>
         </div>
         <table className="print-grade-table generic-print-grade-table">
-          <thead><tr><th>NAME OF STUDENTS</th>{detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·")).map(item => {
-            const category = detail.categories.find(value => value.id === item.categoryId);
-            const categoryItems = detail.assessments.filter(value => value.categoryId === item.categoryId && !value.title.toLocaleLowerCase().startsWith("attendance ·"));
-            const hasExplicitWeights = categoryItems.some(value => value.weight != null);
-            const itemWeightLabel = item.weight == null ? (hasExplicitWeights ? "0.00% (unset)" : "Points-based") : item.weight.toFixed(2) + "%";
-            const categoryWeight = category ? effectiveCategoryWeight(category, detail.categories) : null;
-            return <th key={item.id}>{category ? categoryPath(category, detail.categories) + " · " : ""}{item.title}<small>Max: {item.maxScore} · Item wt: {itemWeightLabel}{categoryWeight === null ? "" : " · Course wt: " + categoryWeight.toFixed(2) + "%"}</small></th>;
-          })}<th>ATTENDANCE (%)</th><th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
-          <tbody>{detail.enrollments.map((enrollment,index) => {
-            const band = detail.gradeBands.slice().sort((a,b) => b.minPercent-a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
+          <thead><tr><th>NO.</th><th>NAME OF STUDENTS</th>{gradeSheetComponents.map((component,index)=><th key={index}>{component.name.toLocaleUpperCase()}<small>{component.percentage.toFixed(2)}%</small></th>)}<th>TG</th><th>FG</th><th>REMARKS</th></tr></thead>
+          <tbody>{detail.enrollments.map((enrollment,index)=>{
+            const band = detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>enrollment.finalPercent!==null&&enrollment.finalPercent>=item.minPercent);
             const special = ["INC","NP","DROPPED"].includes(enrollment.remarks || "");
-            const attendancePercent = gradeSheetAttendancePercent(detail, enrollment);
-            return <tr key={enrollment.id}>
-              <td>{index + 1}. {enrollment.studentName}</td>
-              {detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·")).map(item => {
-                const score = enrollment.scores.find(value => value.assessmentId === item.id);
-                return <td key={item.id}>{score?.remark || (score?.points == null ? "" : score.points + " / " + item.maxScore)}</td>;
-              })}
-              <td>{attendancePercent === null ? "" : attendancePercent.toFixed(2) + "%"}</td>
-              <td>{special || enrollment.finalPercent === null ? "" : enrollment.finalPercent.toFixed(2) + "%"}</td>
-              <td>{special ? "" : enrollment.finalGradeOverride || band?.finalGrade || ""}</td>
-              <td>{enrollment.remarks || band?.remarks || ""}</td>
-            </tr>;
+            return <tr key={enrollment.id}><td>{enrollment.studentNumber || index+1}</td><td>{enrollment.studentName.toLocaleUpperCase()}</td>{gradeSheetComponents.map((component,componentIndex)=>{const percent=gradeSheetComponentPercent(detail,enrollment,component);return <td key={componentIndex}>{percent===null?"":percent.toFixed(2)+"%"}</td>;})}<td>{special||enrollment.finalPercent===null?"":enrollment.finalPercent.toFixed(2)+"%"}</td><td>{special?"":enrollment.finalGradeOverride||band?.finalGrade||""}</td><td>{enrollment.remarks||band?.remarks||""}</td></tr>;
           })}</tbody>
         </table>
-        <p className="grade-sheet-calculation-note">Assessment item weights are shown in the column headings. Course weights reflect each assessment category's effective share of the final grade. Attendance (%) summarizes attendance records; any grading effect follows the configured class grading setup.</p>
+        <p className="grade-sheet-calculation-note">Component labels and percentages are presentation settings only. Official grades continue to use the class grading categories and configured calculation rules. Component scores are shown when a matching class category exists.</p>
         <div className="print-signatures">
-          <div>Submitted by:<p><u>{user.fullName}</u><small>Teacher's Signature over Printed Name</small></p></div>
-          <div>Noted:<p><u>{deanName || " "}</u><small>Dean's Signature over Printed Name</small></p></div>
+          <div>Submitted by:<p><u>{user.fullName}</u><small>TEACHER&apos;S SIGNATURE OVER PRINTED NAME</small></p></div>
+          <div>Noted:<p><u>{deanName || " "}</u><small>DEAN&apos;S SIGNATURE OVER PRINTED NAME</small></p></div>
         </div>
-      </article>}
+      </article>
       {teacher && visibilityManagerQuery !== null && <GradeVisibilityManager subjects={subjects} initialQuery={visibilityManagerQuery} onClose={() => setVisibilityManagerQuery(null)} onChanged={(subjectIds, visible) => { const ids = new Set(subjectIds); setSubjects(current => current.map(subject => ids.has(subject.id) ? { ...subject, isPublished: visible } : subject)); setDetail(current => current && ids.has(current.id) ? { ...current, isPublished: visible } : current); }} />}
        {rosterEdit && detail && <div className="modal-backdrop-custom" onMouseDown={e=>{if(e.target===e.currentTarget)setRosterEdit(null)}}><div className="modal-card"><button className="modal-x" onClick={()=>setRosterEdit(null)}>×</button><span className="eyebrow">CLASS ROSTER</span><h2>Edit student details</h2><p className="muted">Update the name or class student ID. Changing the ID unlinks the previous portal account.</p><form onSubmit={saveRosterStudent}><label className="form-label">Student name</label><input className="form-control mb-3" value={rosterEdit.studentName} onChange={e=>setRosterEdit({...rosterEdit,studentName:e.target.value})} required maxLength={120}/><label className="form-label">Student ID</label><input className="form-control mb-3" value={rosterEdit.studentNumber} onChange={e=>setRosterEdit({...rosterEdit,studentNumber:e.target.value})} maxLength={40}/><button className="btn btn-primary w-100" disabled={busy}>Save student details</button></form></div></div>}
       {bulkScoresOpen&&detail&&<div className="modal-backdrop-custom" onMouseDown={e=>{if(e.target===e.currentTarget)setBulkScoresOpen(false)}}><div className="modal-card bulk-scores-modal"><button className="modal-x" onClick={()=>setBulkScoresOpen(false)}>×</button><span className="eyebrow">SCOREBOOK · BULK IMPORT</span><h2>Import scores</h2><p className="muted">Download the CSV template, edit scores, then preview and validate before saving. Blank cells stay unchanged. This import does not edit attendance.</p><button type="button" className="btn btn-outline-primary btn-sm mb-3" onClick={()=>downloadScoreCsv(true)}>↓ Download score template</button><label className="form-label" htmlFor="bulk-score-file">Choose completed CSV</label><input id="bulk-score-file" className="form-control" type="file" accept=".csv,text/csv" onChange={event=>{const file=event.currentTarget.files?.[0];if(file)void previewBulkScores(file)}}/>{bulkFileName&&<div className="small muted mt-2">Previewing {bulkFileName}</div>}{bulkErrors.length>0&&<div className="bulk-validation-errors" role="alert"><b>Fix these issues before saving:</b><ul>{bulkErrors.slice(0,30).map((error,index)=><li key={`${index}-${error}`}>{error}</li>)}</ul>{bulkErrors.length>30&&<small>And {bulkErrors.length-30} more validation errors.</small>}</div>}{bulkRowsPreview.length>0&&<><div className={`bulk-validation-summary ${bulkErrors.length?"invalid":"valid"}`}>{bulkErrors.length?`${bulkErrors.length} validation issue(s)`: `${bulkRowsPreview.length} students checked · ${bulkOperations.length} score cells ready to save`}</div><div className="bulk-preview-scroll"><table className="table table-sm"><thead><tr><th>CSV ROW</th><th>STUDENT</th><th>CELLS</th><th>RESULT</th></tr></thead><tbody>{bulkRowsPreview.slice(0,50).map(row=><tr key={row.row}><td>{row.row}</td><td>{row.student}</td><td>{row.cells}</td><td>{row.errors.length?<span className="text-danger">{row.errors.join("; ")}</span>:<span className="text-success">Valid</span>}</td></tr>)}</tbody></table>{bulkRowsPreview.length>50&&<small className="muted">Showing first 50 of {bulkRowsPreview.length} rows.</small>}</div></>}<button className="btn btn-primary w-100 mt-3" onClick={applyBulkScores} disabled={busy||bulkErrors.length>0||bulkOperations.length===0}>Validate and save {bulkOperations.length?`(${bulkOperations.length} cells)`:""}</button></div></div>}
