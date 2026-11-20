@@ -11,6 +11,9 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const summaryOnly = params.get("view") === "summary";
   const enrollmentId = params.get("enrollmentId")?.trim();
+  const academicYear = params.get("academicYear")?.trim();
+  const term = params.get("term")?.trim();
+  if (academicYear && !/^\d{4}-\d{4}$/.test(academicYear)) return NextResponse.json({ error: "Choose a valid academic year." }, { status: 400 });
   if (enrollmentId && enrollmentId.length > 160) {
     return NextResponse.json({ error: "Invalid class record." }, { status: 400 });
   }
@@ -19,7 +22,7 @@ export async function GET(request: Request) {
     ...(student.studentNumber ? [{ studentUserId: null, studentNumber: { equals: student.studentNumber.trim(), mode: "insensitive" as const } }] : [])
   ];
   const enrollments = await prisma.enrollment.findMany({
-    where: { OR: enrollmentIdentity, subject: { schoolId: student.schoolId, isPublished: true }, ...(enrollmentId ? { id: enrollmentId } : {}) },
+    where: { OR: enrollmentIdentity, subject: { schoolId: student.schoolId, isPublished: true, ...(academicYear ? { academicYear } : {}), ...(term ? { term: term === "3rd Trimester" ? { in: ["3rd Trimester", "3rd Semester"] } : term } : {}) }, ...(enrollmentId ? { id: enrollmentId } : {}) },
     select: {
       id: true, remarks: true, finalGradeOverride: true,
       scores: { select: { assessmentId: true, points: true, remark: true } },
