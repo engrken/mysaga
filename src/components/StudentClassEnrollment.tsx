@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 
 type StudentClass = { id: string; code: string; title: string; term: string; academicYear: string; isPublished: boolean };
 
-export default function StudentClassEnrollment({ onJoined }: { onJoined: () => void }) {
+export default function StudentClassEnrollment({ onJoined, academicYear, term }: { onJoined: () => void; academicYear?: string; term?: string }) {
   const [code, setCode] = useState("");
   const [classes, setClasses] = useState<StudentClass[]>([]);
   const [loading, setLoading] = useState(true);
@@ -12,8 +12,10 @@ export default function StudentClassEnrollment({ onJoined }: { onJoined: () => v
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
+  const classesUrl = `/api/student/classes${academicYear && term ? `?academicYear=${encodeURIComponent(academicYear)}&term=${encodeURIComponent(term)}` : ""}`;
+
   async function loadClasses() {
-    const response = await fetch("/api/student/classes", { cache: "no-store" });
+    const response = await fetch(classesUrl, { cache: "no-store" });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || "Could not load enrolled classes.");
     setClasses(data.classes || []);
@@ -21,13 +23,13 @@ export default function StudentClassEnrollment({ onJoined }: { onJoined: () => v
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/student/classes", { cache: "no-store" })
+    fetch(classesUrl, { cache: "no-store" })
       .then(async response => { const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || "Could not load enrolled classes."); return data; })
       .then(data => { if (!cancelled) setClasses(data.classes || []); })
       .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : "Could not load classes."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [classesUrl]);
 
   async function join(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaving(true); setError(""); setMessage("");
