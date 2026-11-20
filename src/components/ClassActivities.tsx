@@ -368,7 +368,7 @@ export function RecentActivitySubmissions({ onOpen }: { onOpen: (subjectId: stri
   </section>;
 }
 
-export function StudentActivities({ readOnly, subjectId }: { readOnly?: boolean; subjectId?: string }) {
+export function StudentActivities({ readOnly, subjectId, academicYear, term }: { readOnly?: boolean; subjectId?: string; academicYear?: string; term?: string }) {
   const [classes, setClasses] = useState<ClassInfo[]>([]);
   const classId = subjectId ?? "";
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -377,7 +377,11 @@ export function StudentActivities({ readOnly, subjectId }: { readOnly?: boolean;
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   const [revision, setRevision] = useState(0);
-  const query = classId ? `?subjectId=${encodeURIComponent(classId)}` : "";
+  const activityParams = new URLSearchParams();
+  if (classId) activityParams.set("subjectId", classId);
+  if (academicYear) activityParams.set("academicYear", academicYear);
+  if (term) activityParams.set("term", term);
+  const query = activityParams.size ? `?${activityParams.toString()}` : "";
   const selected = classes.find(item => item.id === classId);
   useEffect(() => {
     const controller = new AbortController();
@@ -392,7 +396,7 @@ export function StudentActivities({ readOnly, subjectId }: { readOnly?: boolean;
   async function open(id: string) {
     setFailure(""); setBusy(true);
     try {
-      const data = await request(`${studentPath}?activityId=${encodeURIComponent(id)}`);
+      const data = await request(`${studentPath}?activityId=${encodeURIComponent(id)}${academicYear && term ? `&academicYear=${encodeURIComponent(academicYear)}&term=${encodeURIComponent(term)}` : ""}`);
       setActive(data.activities[0]);
     } catch (error) { setFailure(error instanceof Error ? error.message : "Could not open activity."); }
     finally { setBusy(false); }
