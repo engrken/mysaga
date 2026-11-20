@@ -9,7 +9,10 @@ const schema = z.object({ classId: z.string().trim().min(1).max(40), code: z.str
 export async function GET() {
   const teacher = await requireRole("TEACHER");
   if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const subjects = await prisma.subject.findMany({ where: { teacherId: teacher.id, schoolId: teacher.schoolId }, orderBy: [{ academicYear: "desc" }, { code: "asc" }], include: { _count: { select: { enrollments: true } } } });
+  const params = new URL(request.url).searchParams;
+  const academicYear = params.get("academicYear")?.trim();
+  const term = params.get("term")?.trim();
+  const subjects = await prisma.subject.findMany({ where: { teacherId: teacher.id, schoolId: teacher.schoolId, ...(academicYear && /^\d{4}-\d{4}$/.test(academicYear) ? { academicYear } : {}), ...(term ? { term: term === "3rd Trimester" ? { in: ["3rd Trimester", "3rd Semester"] } : term } : {}) }, orderBy: [{ academicYear: "desc" }, { code: "asc" }], include: { _count: { select: { enrollments: true } } } });
   return NextResponse.json({ subjects });
 }
 export async function POST(request: Request) {
