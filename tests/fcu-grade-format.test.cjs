@@ -98,3 +98,87 @@ test("FCU export keeps the same three assessment headings regardless of configur
   assert.match(sheet, /<c r="K15"[^>]*>.*?: REMARKS :/s);
   assert.match(sheet, /<mergeCell ref="G17:H17"/);
 });
+
+
+test("generic grading sheet export uses class records, actual assessment scores, and editable Dean name", () => {
+  const start = source.indexOf("function downloadGradeSheetXlsx(");
+  const end = source.indexOf("async function downloadFcuGradeXlsx(", start);
+  assert.ok(start > 0 && end > start, "generic grading-sheet exporter is present");
+  const compiledGeneric = ts.transpileModule(source.slice(start, end), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  let saved;
+  const context = {
+    Uint8Array, Number, String, Math, Blob, TextEncoder,
+    URL: { createObjectURL: () => "blob:test", revokeObjectURL() {} },
+    document: { createElement: () => ({ click() {} }) },
+    setTimeout() {},
+    zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
+    excelColumn: columns,
+    xmlEscape: escape,
+    categoryPath: category => category.name
+  };
+  vm.runInNewContext(compiledGeneric + "\nthis.generateGeneric = downloadGradeSheetXlsx;", context);
+  const detail = {
+    code: "ECE 16", title: "Design Project", classId: "BSECE-4A",
+    term: "1st Semester", academicYear: "2026-2027",
+    categories: [{ id: "QUIZ", name: "Quizzes" }, { id: "EXAM", name: "Major Exam" }],
+    assessments: [
+      { id: "Q1", categoryId: "QUIZ", title: "Quiz 1", maxScore: 10 },
+      { id: "M1", categoryId: "EXAM", title: "Midterm", maxScore: 50 }
+    ],
+    enrollments: [
+      { studentName: "Ana Reyes", scores: [{ assessmentId: "Q1", points: 8, remark: null }, { assessmentId: "M1", points: 42, remark: null }], finalPercent: 90, finalGradeOverride: null, remarks: null },
+      { studentName: "Ben Cruz", scores: [{ assessmentId: "Q1", points: null, remark: "EXCUSED" }, { assessmentId: "M1", points: 35, remark: null }], finalPercent: 80, finalGradeOverride: "2.00", remarks: "PASSED" }
+    ],
+    gradeBands: [{ minPercent: 75, finalGrade: "2.25", remarks: "PASSED" }]
+  };
+  context.generateGeneric("grading.xlsx", "Grading Sheet", detail, "Example University", "", "Teacher One", "Dean Two");
+  const files = Object.fromEntries(saved.map(file => [file.name, file.content]));
+  const sheet = files["xl/worksheets/sheet1.xml"];
+  assert.match(sheet, /Example University/);
+  assert.match(sheet, /School Address:/);
+  assert.match(sheet, /GRADING SHEET/);
+  assert.match(sheet, /Course Number: ECE 16/);
+  assert.match(sheet, /Descriptive Title: Design Project/);
+  assert.match(sheet, /Class ID: BSECE-4A/);
+  assert.match(sheet, /Semester: 1st Semester/);
+  assert.match(sheet, /Academic Year: 2026-2027/);
+  assert.match(sheet, /NAME OF STUDENTS/);
+  assert.match(sheet, /Quizzes · Quiz 1 \(Max 10\)/);
+  assert.match(sheet, /8 \/ 10/);
+  assert.match(sheet, /EXCUSED/);
+  assert.match(sheet, /42 \/ 50/);
+  assert.match(sheet, /90\.00%/);
+  assert.match(sheet, /2\.00/);
+  assert.match(sheet, /Teacher One/);
+  assert.match(sheet, /Dean Two/);
+  assert.match(sheet, /Teacher&apos;s Signature over Printed Name/);
+  assert.match(sheet, /Dean&apos;s Signature over Printed Name/);
+  assert.match(sheet, /orientation="landscape" fitToWidth="1"/);
+  assert.doesNotMatch(sheet, /Class Summary|Certification/);
+  assert.ok(files["xl/styles.xml"]);
+});
+
+test("generic grading sheet supports a class with no assessment items without invalid Excel column ranges", () => {
+  const start = source.indexOf("function downloadGradeSheetXlsx(");
+  const end = source.indexOf("async function downloadFcuGradeXlsx(", start);
+  const compiledGeneric = ts.transpileModule(source.slice(start, end), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  let saved;
+  const context = {
+    Uint8Array, Number, String, Math, Blob, TextEncoder,
+    URL: { createObjectURL: () => "blob:test", revokeObjectURL() {} },
+    document: { createElement: () => ({ click() {} }) },
+    setTimeout() {},
+    zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
+    excelColumn: columns, xmlEscape: escape, categoryPath: category => category.name
+  };
+  vm.runInNewContext(compiledGeneric + "\nthis.generateGeneric = downloadGradeSheetXlsx;", context);
+  const detail = { code:"X",title:"No Assessments",classId:"A",term:"1st",academicYear:"2026",categories:[],assessments:[],enrollments:[],gradeBands:[] };
+  context.generateGeneric("empty.xlsx","Grading Sheet",detail,"School","Address","Teacher","");
+  const sheet = saved.find(file => file.name === "xl/worksheets/sheet1.xml").content;
+  assert.match(sheet, /<col min="2" max="4"/);
+  assert.match(sheet, /orientation="landscape"/);
+});
