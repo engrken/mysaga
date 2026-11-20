@@ -8,11 +8,14 @@ import { enrollVerifiedStudent, classEnrollmentError } from "@/lib/class-enrollm
 
 const joinSchema = z.object({ code: z.string().trim().min(12).max(32) });
 
-export async function GET() {
+export async function GET(request: Request) {
   const student = await requireRole("STUDENT");
   if (!student) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const params = new URL(request.url).searchParams;
+  const academicYear = params.get("academicYear")?.trim();
+  const term = params.get("term")?.trim();
   const records = await prisma.enrollment.findMany({
-    where: { subject: { schoolId: student.schoolId }, OR: [
+    where: { subject: { schoolId: student.schoolId, ...(academicYear && /^\d{4}-\d{4}$/.test(academicYear) ? { academicYear } : {}), ...(term ? { term: term === "3rd Trimester" ? { in: ["3rd Trimester", "3rd Semester"] } : term } : {}) }, OR: [
       { studentUserId: student.id },
       ...(student.studentNumber ? [{ studentUserId: null, studentNumber: { equals: student.studentNumber.trim(), mode: "insensitive" as const } }] : [])
     ] },

@@ -6,10 +6,13 @@ import { SAMPLE_GRADE_BANDS } from "@/lib/grades";
 import { SCHOOL_PLAN_LIMITS } from "@/lib/plans";
 
 const schema = z.object({ classId: z.string().trim().min(1).max(40), code: z.string().trim().min(1).max(30), title: z.string().trim().min(2).max(160), term: z.string().trim().min(1).max(40), academicYear: z.string().trim().min(4).max(20), schedule: z.string().trim().max(4000).optional(), courseYear: z.string().trim().max(80).optional() });
-export async function GET() {
+export async function GET(request: Request) {
   const teacher = await requireRole("TEACHER");
   if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const subjects = await prisma.subject.findMany({ where: { teacherId: teacher.id, schoolId: teacher.schoolId }, orderBy: [{ academicYear: "desc" }, { code: "asc" }], include: { _count: { select: { enrollments: true } } } });
+  const params = new URL(request.url).searchParams;
+  const academicYear = params.get("academicYear")?.trim();
+  const term = params.get("term")?.trim();
+  const subjects = await prisma.subject.findMany({ where: { teacherId: teacher.id, schoolId: teacher.schoolId, ...(academicYear && /^\d{4}-\d{4}$/.test(academicYear) ? { academicYear } : {}), ...(term ? { term: term === "3rd Trimester" ? { in: ["3rd Trimester", "3rd Semester"] } : term } : {}) }, orderBy: [{ academicYear: "desc" }, { code: "asc" }], include: { _count: { select: { enrollments: true } } } });
   return NextResponse.json({ subjects });
 }
 export async function POST(request: Request) {

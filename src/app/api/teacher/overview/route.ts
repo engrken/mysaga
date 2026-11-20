@@ -37,7 +37,10 @@ export async function GET(request: Request) {
   const rangeEnd = nextDay(to);
   const manilaDate = todayManila();
   const today = new Date(`${manilaDate}T00:00:00.000Z`);
-  const subjectScope = { teacherId: teacher.id, schoolId: teacher.schoolId };
+  const academicYear = params.get("academicYear")?.trim();
+  const term = params.get("term")?.trim();
+  if (academicYear && !/^\d{4}-\d{4}$/.test(academicYear)) return NextResponse.json({ error: "Choose a valid academic year." }, { status: 400 });
+  const subjectScope = { teacherId: teacher.id, schoolId: teacher.schoolId, ...(academicYear ? { academicYear } : {}), ...(term ? { term: term === "3rd Trimester" ? { in: ["3rd Trimester", "3rd Semester"] } : term } : {}) };
 
   const [subjects, upcomingAttendance, upcomingAssessments, attendanceCounts, todaysAttendance, attendanceSessions] = await Promise.all([
     prisma.subject.findMany({
