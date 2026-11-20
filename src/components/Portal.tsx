@@ -277,6 +277,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
   for (const [index, enrollment] of detail.enrollments.entries()) {
     const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
     const special = ["INC", "NP", "DROPPED"].includes(enrollment.remarks || "");
+    const attendancePercent = gradeSheetAttendancePercent(detail, enrollment);
     const scores = academicAssessments.map(item => {
       const score = enrollment.scores.find(value => value.assessmentId === item.id);
       if (score?.remark) return score.remark;
@@ -285,7 +286,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     const values = [
       (index + 1) + ". " + enrollment.studentName,
       ...scores,
-      gradeSheetAttendancePercent(detail, enrollment) === null ? "" : gradeSheetAttendancePercent(detail, enrollment)!.toFixed(2) + "%",
+      attendancePercent === null ? "" : attendancePercent.toFixed(2) + "%",
       special || enrollment.finalPercent === null ? "" : enrollment.finalPercent.toFixed(2) + "%",
       special ? "" : enrollment.finalGradeOverride || band?.finalGrade || "",
       enrollment.remarks || band?.remarks || ""
@@ -2001,17 +2002,18 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <thead><tr><th>NAME OF STUDENTS</th>{detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·")).map(item => {
             const category = detail.categories.find(value => value.id === item.categoryId);
             return <th key={item.id}>{category ? categoryPath(category, detail.categories) + " · " : ""}{item.title}<small>Max: {item.maxScore}</small></th>;
-          })}<th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
+          })}<th>ATTENDANCE (%)</th><th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
           <tbody>{detail.enrollments.map((enrollment,index) => {
             const band = detail.gradeBands.slice().sort((a,b) => b.minPercent-a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
             const special = ["INC","NP","DROPPED"].includes(enrollment.remarks || "");
+            const attendancePercent = gradeSheetAttendancePercent(detail, enrollment);
             return <tr key={enrollment.id}>
               <td>{index + 1}. {enrollment.studentName}</td>
               {detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·")).map(item => {
                 const score = enrollment.scores.find(value => value.assessmentId === item.id);
                 return <td key={item.id}>{score?.remark || (score?.points == null ? "" : score.points + " / " + item.maxScore)}</td>;
               })}
-              <td>{gradeSheetAttendancePercent(detail, enrollment) === null ? "" : gradeSheetAttendancePercent(detail, enrollment)!.toFixed(2) + "%"}</td>
+              <td>{attendancePercent === null ? "" : attendancePercent.toFixed(2) + "%"}</td>
               <td>{special || enrollment.finalPercent === null ? "" : enrollment.finalPercent.toFixed(2) + "%"}</td>
               <td>{special ? "" : enrollment.finalGradeOverride || band?.finalGrade || ""}</td>
               <td>{enrollment.remarks || band?.remarks || ""}</td>
