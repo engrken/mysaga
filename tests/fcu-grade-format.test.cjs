@@ -163,6 +163,7 @@ test("generic grading sheet export uses class records, actual assessment scores,
   assert.match(sheet, /Academic Year: 2026-2027/);
   assert.match(sheet, /Schedule: Lecture · Monday, 04:00 PM–05:30 PM/);
   assert.match(sheet, /Dean: Dean Two/);
+  assert.match(sheet, /Display Components: EXAM 50\.00% · ACT 40\.00% · ARP 10\.00%/);
   assert.doesNotMatch(sheet, /\[\{"label":"Lecture"/);
   assert.match(sheet, /NAME OF STUDENTS/);
   assert.match(sheet, /Quizzes · Quiz 1 \(Max 10 · Item wt Points-based · Course wt 30\.00%\)/);
@@ -180,7 +181,7 @@ test("generic grading sheet export uses class records, actual assessment scores,
   assert.match(sheet, /50\.00%/);
   assert.doesNotMatch(sheet, /Attendance · 2026-11-02|Attendance · 2026-11-03|Attendance · 2026-11-04/);
   assert.match(sheet, /paperSize="256" orientation="landscape"/);
-  assert.match(source, /@page \{ size: 13in 8\.5in/);
+  assert.match(source, /@page \{ size: 8\.5in 13in/);
   assert.doesNotMatch(sheet, /Class Summary|Certification/);
   assert.ok(files["xl/styles.xml"]);
 });
