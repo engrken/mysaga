@@ -19,8 +19,11 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const classId = searchParams.get("subjectId");
   const activityId = searchParams.get("activityId");
+  const academicYear = searchParams.get("academicYear")?.trim();
+  const term = searchParams.get("term")?.trim();
+  if (academicYear && !/^\d{4}-\d{4}$/.test(academicYear)) return error("Choose a valid academic year.");
   const enrollments = await prisma.enrollment.findMany({
-    where: { OR: activityEnrollmentIdentity(student), subject: { schoolId: student.schoolId } },
+    where: { OR: activityEnrollmentIdentity(student), subject: { schoolId: student.schoolId, ...(academicYear ? { academicYear } : {}), ...(term ? { term: term === "3rd Trimester" ? { in: ["3rd Trimester", "3rd Semester"] } : term } : {}) } },
     orderBy: { id: "asc" }, take: 200, select: {
       id: true, subjectId: true, studentUserId: true,
       subject: { select: { id: true, code: true, title: true, term: true, academicYear: true,
