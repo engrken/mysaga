@@ -63,8 +63,8 @@ test("FCU export keeps three fixed assessment headers and the approved Folio pri
   assert.match(sheet, /<mergeCell ref="A1:K9"/);
   assert.match(sheet, /<mergeCell ref="A15:D15"/);
   assert.match(sheet, /<mergeCell ref="A17:D17"/);
-  assert.match(sheet, /<mergeCell ref="E15:F15"/);
-  assert.match(sheet, /<mergeCell ref="E17:F17"/);
+  assert.match(sheet, /<mergeCell ref="G15:H15"/);
+  assert.match(sheet, /<mergeCell ref="G17:H17"/);
   assert.match(sheet, /<pageSetup paperSize="14" orientation="portrait" fitToWidth="1"/);
   assert.match(sheet, /showGridLines="0" zoomScale="90"/);
   assert.match(sheet, /<selection pane="bottomLeft" activeCell="A17"/);
@@ -74,8 +74,8 @@ test("FCU export keeps three fixed assessment headers and the approved Folio pri
   assert.match(sheet, /<c r="A13"[^>]*><is>.*?First Semester/s);
   assert.match(sheet, /<c r="A15"[^>]*>.*?NAME OF STUDENTS/s);
   assert.match(sheet, /<c r="E15"[^>]*>.*?: MAJOR EXAM :/s);
-  assert.match(sheet, /<c r="G15"[^>]*>.*?: ATTENDANCE :/s);
-  assert.match(sheet, /<c r="H15"[^>]*>.*?: ASSESSMENT :/s);
+  assert.match(sheet, /<c r="F15"[^>]*>.*?: ATTENDANCE :/s);
+  assert.match(sheet, /<c r="G15"[^>]*>.*?: ASSESSMENT :/s);
   assert.match(sheet, /<c r="A17"[^>]*>.*?1\. EXAMPLE STUDENT/s);
   assert.match(sheet, /<c r="I17"[^>]*><v>95<\/v>/);
   assert.match(sheet, /<c r="K18"[^>]*>.*?INC/s);
@@ -96,5 +96,5 @@ test("FCU export keeps the same three assessment headings regardless of configur
   assert.match(sheet, /<c r="I15"[^>]*>.*?: TG :/s);
   assert.match(sheet, /<c r="J15"[^>]*>.*?: FG :/s);
   assert.match(sheet, /<c r="K15"[^>]*>.*?: REMARKS :/s);
-  assert.match(sheet, /<mergeCell ref="E17:F17"/);
+  assert.match(sheet, /<mergeCell ref="G17:H17"/);
 });
