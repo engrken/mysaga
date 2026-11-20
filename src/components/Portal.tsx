@@ -678,7 +678,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [gradingSetupType, setGradingSetupType] = useState<"SINGLE" | "COMBINED">("SINGLE"); const [singleGroupType, setSingleGroupType] = useState<"LECTURE" | "LABORATORY">("LECTURE");
   const [theme, setTheme] = useState<"light" | "dark">("light"); const [academicYear, setAcademicYear] = useState("2026-2027"); const [calendarSystem, setCalendarSystem] = useState<"SEMESTER" | "TRIMESTER">("SEMESTER"); const [activeTerm, setActiveTerm] = useState("1st Semester"); const [academicPeriodReady, setAcademicPeriodReady] = useState(false); const academicYears = [...Array.from({length: 10}, (_, index) => 2016 + index), ...Array.from({length: 10}, (_, index) => 2026 + index)].map(start => `${start}-${start + 1}`).sort((a,b) => b.localeCompare(a)); const [schoolYearFilter, setSchoolYearFilter] = useState("All School Years"); const [termFilter, setTermFilter] = useState("All Terms"); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | null>(null); const [deanName, setDeanName] = useState(user.school.deanName || "");
   const [schoolAddress, setSchoolAddress] = useState(user.school.address || "");
-  const defaultGradeSheetComponents: GradeSheetComponent[] = (() => { try { const value = JSON.parse(user.defaultGradeSheetComponents || ""); return Array.isArray(value) && value.length ? value : [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }]; } catch { return [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }]; } })();
+  const defaultGradeSheetComponents = useMemo<GradeSheetComponent[]>(() => { try { const value = JSON.parse(user.defaultGradeSheetComponents || ""); return Array.isArray(value) && value.length ? value : [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }]; } catch { return [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }]; } }, [user.defaultGradeSheetComponents]);
   const [gradeSheetComponents, setGradeSheetComponents] = useState<GradeSheetComponent[]>(defaultGradeSheetComponents);
   const [componentDraft, setComponentDraft] = useState<GradeSheetComponent[]>(defaultGradeSheetComponents);
   const [componentEditorOpen, setComponentEditorOpen] = useState(false);
@@ -751,7 +751,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     return () => window.removeEventListener("resize", recalc);
   }, [classSection, activeId, detail?.id, sidebarCollapsed]);
   useEffect(() => { setScorebookPage(0); setScorebookView("auto"); }, [activeId]);
-  useEffect(() => { if (!detail) return; try { const saved = detail.gradeSheetComponents ? JSON.parse(detail.gradeSheetComponents) : null; const next = Array.isArray(saved) && saved.length ? saved : defaultGradeSheetComponents; setGradeSheetComponents(next); setComponentDraft(next); } catch { setGradeSheetComponents(defaultGradeSheetComponents); setComponentDraft(defaultGradeSheetComponents); } }, [detail?.id, detail?.gradeSheetComponents]);
+  useEffect(() => { if (!detail) return; try { const saved = detail.gradeSheetComponents ? JSON.parse(detail.gradeSheetComponents) : null; const next = Array.isArray(saved) && saved.length ? saved : defaultGradeSheetComponents; setGradeSheetComponents(next); setComponentDraft(next); } catch { setGradeSheetComponents(defaultGradeSheetComponents); setComponentDraft(defaultGradeSheetComponents); } }, [detail?.id, detail?.gradeSheetComponents, defaultGradeSheetComponents]);
   const [visibilityManagerQuery, setVisibilityManagerQuery] = useState<string | null>(null);
   const [simulatingGradeId, setSimulatingGradeId] = useState<string | null>(null);
   useEffect(() => { if (!notice && !err) return; const timer = window.setTimeout(() => { setNotice(""); setErr(""); }, err ? 20000 : 5500); return () => window.clearTimeout(timer); }, [notice, err]);
@@ -1349,6 +1349,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     await run(async () => {
       await api("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName: profileName, facultyId: profileFacultyId, schoolAddress, deanName, defaultGradeSheetComponents: componentDraft }) });
       setGradeSheetComponents(componentDraft);
+      router.refresh();
     }, "Saved as your default grading sheet components.");
   }
   function printClass(mode: "roster" | "grades") { setPrintMode(mode); }
