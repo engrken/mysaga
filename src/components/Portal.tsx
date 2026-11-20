@@ -256,8 +256,8 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
   const assessmentColumns = academicAssessments.map(item => {
     const category = detail.categories.find(value => value.id === item.categoryId);
     const categoryItems = academicAssessments.filter(value => value.categoryId === item.categoryId);
-    const hasExplicitWeights = categoryItems.some(value => value.weight !== null);
-    const itemWeightLabel = item.weight === null
+    const hasExplicitWeights = categoryItems.some(value => value.weight != null);
+    const itemWeightLabel = item.weight == null
       ? (hasExplicitWeights ? "0.00% (unset)" : "Points-based")
       : item.weight.toFixed(2) + "%";
     const categoryWeight = category ? effectiveCategoryWeight(category, detail.categories) : null;
@@ -1549,7 +1549,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     if (emptyCategories.length) problems.push(`${emptyCategories.length} weighted category/categories have no assessment items.`);
     const badItemWeights = leaves.filter(category => {
       const items = detail.assessments.filter(item => item.categoryId === category.id);
-      return items.some(item => item.weight !== null) && (items.some(item => item.weight === null) || Math.abs(items.reduce((sum, item) => sum + (item.weight ?? 0), 0) - 100) > 0.01);
+      return items.some(item => item.weight !== null) && (items.some(item => item.weight == null) || Math.abs(items.reduce((sum, item) => sum + (item.weight ?? 0), 0) - 100) > 0.01);
     });
     if (badItemWeights.length) problems.push(`Assessment weights must total 100% in ${badItemWeights.length} category/categories.`);
     const missingScoreRows = detail.enrollments.filter(enrollment => !enrollment.remarks && detail.assessments.some(item => !enrollment.scores.some(score => score.assessmentId === item.id && (score.points !== null || !!score.remark)))).length;
@@ -2013,8 +2013,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <thead><tr><th>NAME OF STUDENTS</th>{detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·")).map(item => {
             const category = detail.categories.find(value => value.id === item.categoryId);
             const categoryItems = detail.assessments.filter(value => value.categoryId === item.categoryId && !value.title.toLocaleLowerCase().startsWith("attendance ·"));
-            const hasExplicitWeights = categoryItems.some(value => value.weight !== null);
-            const itemWeightLabel = item.weight === null ? (hasExplicitWeights ? "0.00% (unset)" : "Points-based") : item.weight.toFixed(2) + "%";
+            const hasExplicitWeights = categoryItems.some(value => value.weight != null);
+            const itemWeightLabel = item.weight == null ? (hasExplicitWeights ? "0.00% (unset)" : "Points-based") : item.weight.toFixed(2) + "%";
             const categoryWeight = category ? effectiveCategoryWeight(category, detail.categories) : null;
             return <th key={item.id}>{category ? categoryPath(category, detail.categories) + " · " : ""}{item.title}<small>Max: {item.maxScore} · Item wt: {itemWeightLabel}{categoryWeight === null ? "" : " · Course wt: " + categoryWeight.toFixed(2) + "%"}</small></th>;
           })}<th>ATTENDANCE (%)</th><th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
