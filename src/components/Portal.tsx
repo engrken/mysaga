@@ -255,7 +255,14 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
   const academicAssessments = detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·"));
   const assessmentColumns = academicAssessments.map(item => {
     const category = detail.categories.find(value => value.id === item.categoryId);
-    return (category ? categoryPath(category, detail.categories) + " · " : "") + item.title + " (Max " + item.maxScore + ")";
+    const categoryItems = academicAssessments.filter(value => value.categoryId === item.categoryId);
+    const hasExplicitWeights = categoryItems.some(value => value.weight !== null);
+    const itemWeightLabel = item.weight === null
+      ? (hasExplicitWeights ? "0.00% (unset)" : "Points-based")
+      : item.weight.toFixed(2) + "%";
+    const categoryWeight = category ? effectiveCategoryWeight(category, detail.categories) : null;
+    const weightNote = " · Item wt " + itemWeightLabel + (categoryWeight === null ? "" : " · Course wt " + categoryWeight.toFixed(2) + "%");
+    return (category ? categoryPath(category, detail.categories) + " · " : "") + item.title + " (Max " + item.maxScore + weightNote + ")";
   });
   const headers = ["NAME OF STUDENTS", ...assessmentColumns, "ATTENDANCE (%)", "TOTAL GRADE", "FINAL GRADE", "REMARKS"];
   const columnCount = headers.length;
@@ -271,7 +278,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
   addRow([{ col: 0, value: "GRADING SHEET", style: 3 }]);
   addRow([]);
   addRow([{ col: 0, value: "Course Number: " + detail.code + "     |     Descriptive Title: " + detail.title, style: 4 }]);
-  addRow([{ col: 0, value: "Class ID: " + (detail.classId || "—") + "     |     Semester: " + detail.term + "     |     Academic Year: " + detail.academicYear, style: 4 }]);
+  addRow([{ col: 0, value: "Class ID: " + (detail.classId || "—") + "     |     Semester: " + detail.term + "     |     Academic Year: " + detail.academicYear + "     |     Course & Year: " + (detail.courseYear || "—") + "     |     Schedule: " + (detail.schedule || "—") + "     |     Teacher: " + teacherName, style: 4 }]);
   addRow([]);
   addRow(headers.map((value, col) => ({ col, value, style: 5 })));
   for (const [index, enrollment] of detail.enrollments.entries()) {
@@ -1979,6 +1986,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           .generic-print-grade-table th:first-child,.generic-print-grade-table td:first-child { min-width:150px; width:22%; text-align:left; }
           .generic-print-grade-table td:not(:first-child) { text-align:center; }
           .generic-print-grade-table tbody tr { break-inside:avoid; page-break-inside:avoid; }
+          .grade-sheet-calculation-note { margin:6px 0 0; font-size:6.5pt; line-height:1.2; color:#222; }
           .generic-print-sheet .print-signatures { display:grid; grid-template-columns:1fr 1fr; gap:50px; margin-top:24px; break-inside:avoid; page-break-inside:avoid; font-size:8pt; }
           .generic-print-sheet .print-signatures>div { min-height:60px; }
           .generic-print-sheet .print-signatures p { margin:24px 0 0; text-align:center; }
@@ -1997,11 +2005,18 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <div><b>Class ID:</b><span>{detail.classId || "—"}</span></div>
           <div><b>Semester:</b><span>{detail.term}</span></div>
           <div><b>Academic Year:</b><span>{detail.academicYear}</span></div>
+          <div><b>Course and Year:</b><span>{detail.courseYear || "—"}</span></div>
+          <div><b>Schedule:</b><span>{detail.schedule || "—"}</span></div>
+          <div><b>Teacher:</b><span>{user.fullName}</span></div>
         </div>
         <table className="print-grade-table generic-print-grade-table">
           <thead><tr><th>NAME OF STUDENTS</th>{detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·")).map(item => {
             const category = detail.categories.find(value => value.id === item.categoryId);
-            return <th key={item.id}>{category ? categoryPath(category, detail.categories) + " · " : ""}{item.title}<small>Max: {item.maxScore}</small></th>;
+            const categoryItems = detail.assessments.filter(value => value.categoryId === item.categoryId && !value.title.toLocaleLowerCase().startsWith("attendance ·"));
+            const hasExplicitWeights = categoryItems.some(value => value.weight !== null);
+            const itemWeightLabel = item.weight === null ? (hasExplicitWeights ? "0.00% (unset)" : "Points-based") : item.weight.toFixed(2) + "%";
+            const categoryWeight = category ? effectiveCategoryWeight(category, detail.categories) : null;
+            return <th key={item.id}>{category ? categoryPath(category, detail.categories) + " · " : ""}{item.title}<small>Max: {item.maxScore} · Item wt: {itemWeightLabel}{categoryWeight === null ? "" : " · Course wt: " + categoryWeight.toFixed(2) + "%"}</small></th>;
           })}<th>ATTENDANCE (%)</th><th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
           <tbody>{detail.enrollments.map((enrollment,index) => {
             const band = detail.gradeBands.slice().sort((a,b) => b.minPercent-a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
@@ -2020,6 +2035,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
             </tr>;
           })}</tbody>
         </table>
+        <p className="grade-sheet-calculation-note">Assessment item weights are shown in the column headings. Course weights reflect each assessment category's effective share of the final grade. Attendance (%) summarizes attendance records; any grading effect follows the configured class grading setup.</p>
         <div className="print-signatures">
           <div>Submitted by:<p><u>{user.fullName}</u><small>Teacher's Signature over Printed Name</small></p></div>
           <div>Noted:<p><u>{deanName || " "}</u><small>Dean's Signature over Printed Name</small></p></div>
