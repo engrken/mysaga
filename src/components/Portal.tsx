@@ -274,7 +274,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     rows.push(row);
   };
   addRow([{ col: 0, value: schoolName, style: 1 }]);
-  addRow([{ col: 0, value: schoolAddress || "School address not set", style: 2 }]);
+  addRow([{ col: 0, value: "School Address: " + (schoolAddress || "School address not set"), style: 2 }]);
   addRow([{ col: 0, value: "GRADING SHEET", style: 3 }]);
   addRow([]);
   addRow([{ col: 0, value: "Course Number: " + detail.code, style: 4 }]);
