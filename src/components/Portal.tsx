@@ -274,11 +274,18 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     rows.push(row);
   };
   addRow([{ col: 0, value: schoolName, style: 1 }]);
-  addRow([{ col: 0, value: "School Address: " + (schoolAddress || "____________________________________________"), style: 2 }]);
+  addRow([{ col: 0, value: schoolAddress || "School address not set", style: 2 }]);
   addRow([{ col: 0, value: "GRADING SHEET", style: 3 }]);
   addRow([]);
-  addRow([{ col: 0, value: "Course Number: " + detail.code + "     |     Descriptive Title: " + detail.title, style: 4 }]);
-  addRow([{ col: 0, value: "Class ID: " + (detail.classId || "—") + "     |     Semester: " + detail.term + "     |     Academic Year: " + detail.academicYear + "     |     Course & Year: " + (detail.courseYear || "—") + "     |     Schedule: " + (detail.schedule || "—") + "     |     Teacher: " + teacherName, style: 4 }]);
+  addRow([{ col: 0, value: "Course Number: " + detail.code, style: 4 }]);
+  addRow([{ col: 0, value: "Descriptive Title: " + detail.title, style: 4 }]);
+  addRow([{ col: 0, value: "Class ID: " + (detail.classId || "—"), style: 4 }]);
+  addRow([{ col: 0, value: "Semester: " + detail.term, style: 4 }]);
+  addRow([{ col: 0, value: "Academic Year: " + detail.academicYear, style: 4 }]);
+  addRow([{ col: 0, value: "Course & Year: " + (detail.courseYear || "—"), style: 4 }]);
+  addRow([{ col: 0, value: "Schedule: " + (formatSchedule(detail.schedule) || "—"), style: 4 }]);
+  addRow([{ col: 0, value: "Teacher: " + teacherName, style: 4 }]);
+  addRow([{ col: 0, value: "Dean: " + (deanName || "—"), style: 4 }]);
   addRow([]);
   addRow(headers.map((value, col) => ({ col, value, style: 5 })));
   for (const [index, enrollment] of detail.enrollments.entries()) {
@@ -308,7 +315,9 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
   addRow([{ col: 0, value: "Teacher's Signature over Printed Name", style: 10 }, { col: split + 1, value: "Dean's Signature over Printed Name", style: 10 }]);
   const mergeRanges = [
     "A1:" + last + "1", "A2:" + last + "2", "A3:" + last + "3",
-    "A5:" + last + "5", "A6:" + last + "6",
+    "A5:" + last + "5", "A6:" + last + "6", "A7:" + last + "7",
+    "A8:" + last + "8", "A9:" + last + "9", "A10:" + last + "10",
+    "A11:" + last + "11", "A12:" + last + "12", "A13:" + last + "13",
     "A" + signatureRow + ":" + excelColumn(split) + signatureRow,
     excelColumn(split + 1) + signatureRow + ":" + last + signatureRow,
     "A" + (signatureRow + 1) + ":" + excelColumn(split) + (signatureRow + 1),
@@ -323,7 +332,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
       if (typeof cell.value === "number" && Number.isFinite(cell.value)) return '<c r="' + reference + '" s="' + cell.style + '"><v>' + cell.value + '</v></c>';
       return '<c r="' + reference + '" s="' + cell.style + '" t="inlineStr"><is><t xml:space="preserve">' + xmlEscape(cell.value) + '</t></is></c>';
     }).join("");
-    const height = rowIndex === 0 ? ' ht="26" customHeight="1"' : rowIndex === 2 ? ' ht="24" customHeight="1"' : rowIndex === 7 ? ' ht="42" customHeight="1"' : rowIndex >= 8 && rowIndex < 8 + detail.enrollments.length ? ' ht="22" customHeight="1"' : ' ht="20" customHeight="1"';
+    const height = rowIndex === 0 ? ' ht="26" customHeight="1"' : rowIndex === 2 ? ' ht="24" customHeight="1"' : rowIndex === 14 ? ' ht="42" customHeight="1"' : rowIndex >= 15 && rowIndex < 15 + detail.enrollments.length ? ' ht="22" customHeight="1"' : ' ht="20" customHeight="1"';
     return '<row r="' + rowNumber + '"' + height + '>' + xmlCells + '</row>';
   }).join("");
   const assessmentCount = academicAssessments.length;
@@ -334,7 +343,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     '<col min="' + (attendanceColumn + 1) + '" max="' + columnCount + '" width="13" customWidth="1"/></cols>';
   const worksheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" zoomScale="85" workbookViewId="0"><pane ySplit="8" topLeftCell="A9" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A9" sqref="A9"/></sheetView></sheetViews>' +
+    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" zoomScale="85" workbookViewId="0"><pane ySplit="15" topLeftCell="A16" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A16" sqref="A16"/></sheetView></sheetViews>' +
     '<sheetFormatPr defaultRowHeight="18"/>' + widths + '<sheetData>' + xmlRows + '</sheetData>' +
     '<mergeCells count="' + mergeRanges.length + '">' + mergeRanges.map(range => '<mergeCell ref="' + range + '"/>').join("") + '</mergeCells>' +
     '<printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.35" bottom="0.35" header="0.15" footer="0.15"/>' +
