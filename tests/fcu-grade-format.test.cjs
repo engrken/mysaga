@@ -52,7 +52,7 @@ const student = (name, equivalents, finalPercent = 95, remarks = "") => ({
   studentName: name, equivalents, finalPercent, finalGradeOverride: null, remarks
 });
 
-test("FCU export reproduces the approved sheet hierarchy and Folio print format", async () => {
+test("FCU export keeps three fixed assessment headers and the approved Folio print format", async () => {
   const cats = [{ id: "EXAM", name: "EXAM", weight: 25 }, { id: "LECT", name: "LECT", weight: 75 }];
   const files = await generate(cats, [
     student("Example Student", { EXAM: 80, LECT: 100 }),
@@ -64,9 +64,7 @@ test("FCU export reproduces the approved sheet hierarchy and Folio print format"
   assert.match(sheet, /<mergeCell ref="A15:D15"/);
   assert.match(sheet, /<mergeCell ref="A17:D17"/);
   assert.match(sheet, /<mergeCell ref="E15:F15"/);
-  assert.match(sheet, /<mergeCell ref="G15:H15"/);
   assert.match(sheet, /<mergeCell ref="E17:F17"/);
-  assert.match(sheet, /<mergeCell ref="G17:H17"/);
   assert.match(sheet, /<pageSetup paperSize="14" orientation="portrait" fitToWidth="1"/);
   assert.match(sheet, /showGridLines="0" zoomScale="90"/);
   assert.match(sheet, /<selection pane="bottomLeft" activeCell="A17"/);
@@ -75,6 +73,9 @@ test("FCU export reproduces the approved sheet hierarchy and Folio print format"
   assert.match(sheet, /<c r="A11"[^>]*><is>.*?<u\/>.*?ECE 16/s);
   assert.match(sheet, /<c r="A13"[^>]*><is>.*?First Semester/s);
   assert.match(sheet, /<c r="A15"[^>]*>.*?NAME OF STUDENTS/s);
+  assert.match(sheet, /<c r="E15"[^>]*>.*?: MAJOR EXAM :/s);
+  assert.match(sheet, /<c r="G15"[^>]*>.*?: ATTENDANCE :/s);
+  assert.match(sheet, /<c r="H15"[^>]*>.*?: ASSESSMENT :/s);
   assert.match(sheet, /<c r="A17"[^>]*>.*?1\. EXAMPLE STUDENT/s);
   assert.match(sheet, /<c r="I17"[^>]*><v>95<\/v>/);
   assert.match(sheet, /<c r="K18"[^>]*>.*?INC/s);
@@ -85,12 +86,13 @@ test("FCU export reproduces the approved sheet hierarchy and Folio print format"
   assert.doesNotMatch(sheet, /Example Student ID/);
 });
 
-test("FCU export retains individual columns for four grading components", async () => {
+test("FCU export keeps the same three assessment headings regardless of configured categories", async () => {
   const cats = ["EXAM", "SE", "LECT", "LAB"].map((id, i) => ({ id, name: id, weight: [30, 20, 30, 20][i] }));
   const files = await generate(cats, [student("Student Name", { EXAM: 100, SE: 100, LECT: 100, LAB: 100 }, 100)]);
   const sheet = files["xl/worksheets/sheet1.xml"];
-  assert.match(sheet, /<c r="E15"[^>]*>.*?: EXAM :/s);
-  assert.match(sheet, /<c r="H15"[^>]*>.*?: LAB :/s);
+  assert.match(sheet, /<c r="E15"[^>]*>.*?: MAJOR EXAM :/s);
+  assert.match(sheet, /<c r="G15"[^>]*>.*?: ATTENDANCE :/s);
+  assert.match(sheet, /<c r="H15"[^>]*>.*?: ASSESSMENT :/s);
   assert.match(sheet, /<c r="I15"[^>]*>.*?: TG :/s);
   assert.match(sheet, /<c r="J15"[^>]*>.*?: FG :/s);
   assert.match(sheet, /<c r="K15"[^>]*>.*?: REMARKS :/s);
