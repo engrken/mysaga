@@ -9,7 +9,7 @@ const schema = z.object({
   facultyId: z.string().trim().max(40).optional(),
   schoolAddress: z.string().trim().max(300).optional(),
   deanName: z.string().trim().max(120).optional(),
-  defaultGradeSheetComponents: z.array(z.object({ name: z.string().trim().min(1).max(40), percentage: z.number().min(0).max(100) })).min(1).max(8).optional()
+  defaultGradeSheetComponents: z.array(z.object({ name: z.string().trim().min(1).max(40), percentage: z.number().min(0).max(100) })).length(3).optional()
 });
 
 export async function PATCH(request: Request) {
