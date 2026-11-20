@@ -117,6 +117,7 @@ test("generic grading sheet export uses class records, actual assessment scores,
     excelColumn: columns,
     xmlEscape: escape,
     categoryPath: category => category.name,
+    formatSchedule: raw => { try { return JSON.parse(raw).map(row => `${row.label || "Class"} · ${row.day}, ${row.startTime}–${row.endTime}`).join(" / "); } catch { return raw || ""; } },
     effectiveCategoryWeight: (category, categories) => {
       let root = category;
       const visited = new Set([category.id]);
@@ -134,7 +135,7 @@ test("generic grading sheet export uses class records, actual assessment scores,
   vm.runInNewContext(compiledGeneric + "\nthis.generateGeneric = downloadGradeSheetXlsx;", context);
   const detail = {
     code: "ECE 16", title: "Design Project", classId: "BSECE-4A",
-    term: "1st Semester", academicYear: "2026-2027",
+    term: "1st Semester", academicYear: "2026-2027", schedule: JSON.stringify([{ label: "Lecture", day: "Monday", startTime: "04:00 PM", endTime: "05:30 PM" }]),
     categories: [{ id: "QUIZ", name: "Quizzes", weight: 30 }, { id: "EXAM", name: "Major Exam", weight: 50 }, { id: "ATT", name: "Attendance", weight: 20 }],
     assessments: [
       { id: "Q1", categoryId: "QUIZ", title: "Quiz 1", maxScore: 10 },
@@ -149,17 +150,20 @@ test("generic grading sheet export uses class records, actual assessment scores,
     ],
     gradeBands: [{ minPercent: 75, finalGrade: "2.25", remarks: "PASSED" }]
   };
-  context.generateGeneric("grading.xlsx", "Grading Sheet", detail, "Example University", "", "Teacher One", "Dean Two");
+  context.generateGeneric("grading.xlsx", "Grading Sheet", detail, "Example University", "123 College Road", "Teacher One", "Dean Two");
   const files = Object.fromEntries(saved.map(file => [file.name, file.content]));
   const sheet = files["xl/worksheets/sheet1.xml"];
   assert.match(sheet, /Example University/);
-  assert.match(sheet, /School Address:/);
+  assert.match(sheet, /School Address: 123 College Road/);
   assert.match(sheet, /GRADING SHEET/);
   assert.match(sheet, /Course Number: ECE 16/);
   assert.match(sheet, /Descriptive Title: Design Project/);
   assert.match(sheet, /Class ID: BSECE-4A/);
   assert.match(sheet, /Semester: 1st Semester/);
   assert.match(sheet, /Academic Year: 2026-2027/);
+  assert.match(sheet, /Schedule: Lecture · Monday, 04:00 PM–05:30 PM/);
+  assert.match(sheet, /Dean: Dean Two/);
+  assert.doesNotMatch(sheet, /\[\{"label":"Lecture"/);
   assert.match(sheet, /NAME OF STUDENTS/);
   assert.match(sheet, /Quizzes · Quiz 1 \(Max 10 · Item wt Points-based · Course wt 30\.00%\)/);
   assert.match(sheet, /8 \/ 10/);
@@ -194,7 +198,8 @@ test("generic grading sheet supports a class with no assessment items without in
     document: { createElement: () => ({ click() {} }) },
     setTimeout() {},
     zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
-    excelColumn: columns, xmlEscape: escape, categoryPath: category => category.name
+    excelColumn: columns, xmlEscape: escape, categoryPath: category => category.name,
+    formatSchedule: raw => { try { return JSON.parse(raw).map(row => `${row.label || "Class"} · ${row.day}, ${row.startTime}–${row.endTime}`).join(" / "); } catch { return raw || ""; } }
   };
   vm.runInNewContext(compiledGeneric + "\nthis.generateGeneric = downloadGradeSheetXlsx;", context);
   const detail = { code:"X",title:"No Assessments",classId:"A",term:"1st",academicYear:"2026",categories:[],assessments:[],enrollments:[],gradeBands:[] };

@@ -26,7 +26,7 @@ import { absenceDates, attendanceDays as orderedAttendanceDays, attendanceRiskSu
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 import { buildWorkbookPages, workbookWidths } from "@/lib/scorebook-layout";
 
-type User = { id: string; role: string; fullName: string; email: string; isDemo?: boolean; isTenantManager?: boolean; isSchoolAdmin?: boolean; emailDeliveryEnabled?: boolean; profileImagePath: string | null; facultyId?: string | null; courseProgram?: string | null; yearLevel?: string | null; school: { id: string; slug: string; name: string; shortName: string; portalTitle: string; logoText: string; logoPath: string | null; primaryColor: string; address?: string | null } };
+type User = { id: string; role: string; fullName: string; email: string; isDemo?: boolean; isTenantManager?: boolean; isSchoolAdmin?: boolean; emailDeliveryEnabled?: boolean; profileImagePath: string | null; facultyId?: string | null; courseProgram?: string | null; yearLevel?: string | null; school: { id: string; slug: string; name: string; shortName: string; portalTitle: string; logoText: string; logoPath: string | null; primaryColor: string; address: string | null; deanName: string | null } };
 type WorkbookChange = { subjectId: string; enrollmentId: string; assessmentId: string; points: number | null; remark: "EXCUSED" | "ABSENT" | "DID_NOT_SUBMIT" | null };
 type AttendanceMark = { subjectId: string; enrollmentId: string; assessmentId: string; remark: "PRESENT" | "LATE" | "ABSENT" | "EXCUSED" | null };
 type Subject = { id: string; classId: string | null; code: string; title: string; term: string; academicYear: string; schedule: string | null; courseYear: string | null; isPublished: boolean; gradeStatus: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; _count?: { enrollments: number } };
@@ -274,11 +274,18 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     rows.push(row);
   };
   addRow([{ col: 0, value: schoolName, style: 1 }]);
-  addRow([{ col: 0, value: "School Address: " + (schoolAddress || "____________________________________________"), style: 2 }]);
+  addRow([{ col: 0, value: "School Address: " + (schoolAddress || "School address not set"), style: 2 }]);
   addRow([{ col: 0, value: "GRADING SHEET", style: 3 }]);
   addRow([]);
-  addRow([{ col: 0, value: "Course Number: " + detail.code + "     |     Descriptive Title: " + detail.title, style: 4 }]);
-  addRow([{ col: 0, value: "Class ID: " + (detail.classId || "—") + "     |     Semester: " + detail.term + "     |     Academic Year: " + detail.academicYear + "     |     Course & Year: " + (detail.courseYear || "—") + "     |     Schedule: " + (detail.schedule || "—") + "     |     Teacher: " + teacherName, style: 4 }]);
+  addRow([{ col: 0, value: "Course Number: " + detail.code, style: 4 }]);
+  addRow([{ col: 0, value: "Descriptive Title: " + detail.title, style: 4 }]);
+  addRow([{ col: 0, value: "Class ID: " + (detail.classId || "—"), style: 4 }]);
+  addRow([{ col: 0, value: "Semester: " + detail.term, style: 4 }]);
+  addRow([{ col: 0, value: "Academic Year: " + detail.academicYear, style: 4 }]);
+  addRow([{ col: 0, value: "Course & Year: " + (detail.courseYear || "—"), style: 4 }]);
+  addRow([{ col: 0, value: "Schedule: " + (formatSchedule(detail.schedule) || "—"), style: 4 }]);
+  addRow([{ col: 0, value: "Teacher: " + teacherName, style: 4 }]);
+  addRow([{ col: 0, value: "Dean: " + (deanName || "—"), style: 4 }]);
   addRow([]);
   addRow(headers.map((value, col) => ({ col, value, style: 5 })));
   for (const [index, enrollment] of detail.enrollments.entries()) {
@@ -308,7 +315,9 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
   addRow([{ col: 0, value: "Teacher's Signature over Printed Name", style: 10 }, { col: split + 1, value: "Dean's Signature over Printed Name", style: 10 }]);
   const mergeRanges = [
     "A1:" + last + "1", "A2:" + last + "2", "A3:" + last + "3",
-    "A5:" + last + "5", "A6:" + last + "6",
+    "A5:" + last + "5", "A6:" + last + "6", "A7:" + last + "7",
+    "A8:" + last + "8", "A9:" + last + "9", "A10:" + last + "10",
+    "A11:" + last + "11", "A12:" + last + "12", "A13:" + last + "13",
     "A" + signatureRow + ":" + excelColumn(split) + signatureRow,
     excelColumn(split + 1) + signatureRow + ":" + last + signatureRow,
     "A" + (signatureRow + 1) + ":" + excelColumn(split) + (signatureRow + 1),
@@ -323,7 +332,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
       if (typeof cell.value === "number" && Number.isFinite(cell.value)) return '<c r="' + reference + '" s="' + cell.style + '"><v>' + cell.value + '</v></c>';
       return '<c r="' + reference + '" s="' + cell.style + '" t="inlineStr"><is><t xml:space="preserve">' + xmlEscape(cell.value) + '</t></is></c>';
     }).join("");
-    const height = rowIndex === 0 ? ' ht="26" customHeight="1"' : rowIndex === 2 ? ' ht="24" customHeight="1"' : rowIndex === 7 ? ' ht="42" customHeight="1"' : rowIndex >= 8 && rowIndex < 8 + detail.enrollments.length ? ' ht="22" customHeight="1"' : ' ht="20" customHeight="1"';
+    const height = rowIndex === 0 ? ' ht="26" customHeight="1"' : rowIndex === 2 ? ' ht="24" customHeight="1"' : rowIndex === 14 ? ' ht="42" customHeight="1"' : rowIndex >= 15 && rowIndex < 15 + detail.enrollments.length ? ' ht="22" customHeight="1"' : ' ht="20" customHeight="1"';
     return '<row r="' + rowNumber + '"' + height + '>' + xmlCells + '</row>';
   }).join("");
   const assessmentCount = academicAssessments.length;
@@ -334,7 +343,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     '<col min="' + (attendanceColumn + 1) + '" max="' + columnCount + '" width="13" customWidth="1"/></cols>';
   const worksheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" zoomScale="85" workbookViewId="0"><pane ySplit="8" topLeftCell="A9" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A9" sqref="A9"/></sheetView></sheetViews>' +
+    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" zoomScale="85" workbookViewId="0"><pane ySplit="15" topLeftCell="A16" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A16" sqref="A16"/></sheetView></sheetViews>' +
     '<sheetFormatPr defaultRowHeight="18"/>' + widths + '<sheetData>' + xmlRows + '</sheetData>' +
     '<mergeCells count="' + mergeRanges.length + '">' + mergeRanges.map(range => '<mergeCell ref="' + range + '"/>').join("") + '</mergeCells>' +
     '<printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.35" bottom="0.35" header="0.15" footer="0.15"/>' +
@@ -636,7 +645,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>([]); const [copyFromId, setCopyFromId] = useState(""); const [rosterText, setRosterText] = useState(""); const [rosterFileName, setRosterFileName] = useState(""); const [categoryName, setCategoryName] = useState(""); const [categoryParent, setCategoryParent] = useState(""); const [categoryWeight, setCategoryWeight] = useState("50"); const [categoryOpen, setCategoryOpen] = useState(false);
   const [lectureCourseWeight, setLectureCourseWeight] = useState("60"); const [laboratoryCourseWeight, setLaboratoryCourseWeight] = useState("40");
   const [gradingSetupType, setGradingSetupType] = useState<"SINGLE" | "COMBINED">("SINGLE"); const [singleGroupType, setSingleGroupType] = useState<"LECTURE" | "LABORATORY">("LECTURE");
-  const [theme, setTheme] = useState<"light" | "dark">("light"); const [academicYear, setAcademicYear] = useState("2026-2027"); const [calendarSystem, setCalendarSystem] = useState<"SEMESTER" | "TRIMESTER">("SEMESTER"); const [activeTerm, setActiveTerm] = useState("1st Semester"); const [academicPeriodReady, setAcademicPeriodReady] = useState(false); const academicYears = [...Array.from({length: 10}, (_, index) => 2016 + index), ...Array.from({length: 10}, (_, index) => 2026 + index)].map(start => `${start}-${start + 1}`).sort((a,b) => b.localeCompare(a)); const [schoolYearFilter, setSchoolYearFilter] = useState("All School Years"); const [termFilter, setTermFilter] = useState("All Terms"); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | null>(null); const [deanName, setDeanName] = useState("");
+  const [theme, setTheme] = useState<"light" | "dark">("light"); const [academicYear, setAcademicYear] = useState("2026-2027"); const [calendarSystem, setCalendarSystem] = useState<"SEMESTER" | "TRIMESTER">("SEMESTER"); const [activeTerm, setActiveTerm] = useState("1st Semester"); const [academicPeriodReady, setAcademicPeriodReady] = useState(false); const academicYears = [...Array.from({length: 10}, (_, index) => 2016 + index), ...Array.from({length: 10}, (_, index) => 2026 + index)].map(start => `${start}-${start + 1}`).sort((a,b) => b.localeCompare(a)); const [schoolYearFilter, setSchoolYearFilter] = useState("All School Years"); const [termFilter, setTermFilter] = useState("All Terms"); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | null>(null); const [deanName, setDeanName] = useState(user.school.deanName || "");
+  const [schoolAddress, setSchoolAddress] = useState(user.school.address || "");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false); const [classNavOpen, setClassNavOpen] = useState(false); const [onboardingOpen, setOnboardingOpen] = useState(false); const [helpOpen, setHelpOpen] = useState(false); const [helpInitialTab, setHelpInitialTab] = useState<"quick" | "faq" | "student" | "faculty">("quick"); const [subjectPage, setSubjectPage] = useState(1); const [classPage, setClassPage] = useState(1); const [rosterPage, setRosterPage] = useState(1);
   const [studentLookupQuery, setStudentLookupQuery] = useState(""); const [studentLookupMatches, setStudentLookupMatches] = useState<StudentSearchMatch[]>([]); const [studentLookupBusy, setStudentLookupBusy] = useState(false); const [classStudentFilter, setClassStudentFilter] = useState(initialClassStudent);
   const [lookupSchoolYearFilter, setLookupSchoolYearFilter] = useState("All School Years"); const [lookupTermFilter, setLookupTermFilter] = useState("All Terms");
@@ -1287,7 +1297,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     await run(async () => { await api(`/api/teacher/subjects/${detail.id}`, { method: "PATCH", body: JSON.stringify({ deleteEnrollmentId: enrollment.id }) }); setDetail(current => current ? { ...current, enrollments: current.enrollments.filter(item => item.id !== enrollment.id) } : current); setSubjects(current => current.map(subject => subject.id === detail.id ? { ...subject, _count: { enrollments: Math.max(0, (subject._count?.enrollments || 0) - 1) } } : subject)); }, "Student removed from the class roster.");
   }
   function printClass(mode: "roster" | "grades") { setPrintMode(mode); }
-  async function saveProfile(e: FormEvent<HTMLFormElement>) { e.preventDefault(); await run(async () => { await api("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName: profileName, ...(teacher ? { facultyId: profileFacultyId } : {}) }) }); router.refresh(); }, "Profile updated."); }
+  async function saveProfile(e: FormEvent<HTMLFormElement>) { e.preventDefault(); await run(async () => { await api("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName: profileName, ...(teacher ? { facultyId: profileFacultyId, schoolAddress, deanName } : {}) }) }); router.refresh(); }, "Profile updated."); }
   async function requestPasswordOtp() { await run(async () => { const result = await api("/api/profile/security-otp", { method: "POST", body: JSON.stringify({ purpose: "PASSWORD_CHANGE", currentPassword: passwordCurrent }) }); setPasswordOtpSent(true); setPasswordOtp(""); setNotice(result.message); }, ""); }
   async function changePassword(e: FormEvent<HTMLFormElement>) { e.preventDefault(); if (passwordNew !== passwordConfirm) { setErr("The new passwords do not match."); return; } await run(async () => { await api("/api/profile/password", { method: "POST", body: JSON.stringify({ currentPassword: passwordCurrent, newPassword: passwordNew, code: passwordOtp }) }); setPasswordCurrent(""); setPasswordNew(""); setPasswordConfirm(""); setPasswordOtp(""); setPasswordOtpSent(false); window.setTimeout(() => { void logout(); }, 1200); }, "Password changed. Signing you out; sign in again with your new password."); }
   async function uploadProfileImage(kind: "profile" | "school-logo", file?: File) {
@@ -1606,13 +1616,19 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       onTenantDashboard={teacher && (user.isTenantManager || user.isSchoolAdmin) ? () => router.push("/manage") : undefined}
     /></div></header>
       <div className="content-wrap">{(err||notice)&&!(teacher && tab === "classes" && classSection === "record" && detail)&&<div className="portal-toast-stack" aria-live="polite" aria-atomic="false">{err&&<div className="portal-toast error" role="alert"><div><b>Needs attention</b><p>{err}</p>{notificationTarget(err)&&<button className="toast-location" onClick={goToNotificationTarget}>Check {notificationTarget(err)?.label} ↗</button>}</div><button className="toast-dismiss" aria-label="Dismiss error" onClick={()=>setErr("")}>×</button></div>}{notice&&<div className="portal-toast success" role="status"><div><b>Saved</b><p>{notice}</p></div><button className="toast-dismiss" aria-label="Dismiss notification" onClick={()=>setNotice("")}>×</button></div>}</div>}
-      {tab === "profile" ? <section className="surface profile-surface"><div className="section-heading"><div><span className="eyebrow">PERSONAL DETAILS</span><h2>Profile information</h2><p className="muted">Manage your profile image, sign-in email, and password.</p></div><span className="profile-avatar">{profileImagePath ? <img src={`/api/media?pathname=${encodeURIComponent(profileImagePath)}`} alt="Profile"/> : initials(user.fullName)}</span></div><div className="profile-media-grid"><div className="profile-media-card"><label className="form-label">Profile picture</label><p className="muted small">Private to your account. JPG, PNG, or WebP up to 3 MB.</p><input className="form-control" type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>{void uploadProfileImage("profile",e.currentTarget.files?.[0]);e.currentTarget.value=""}}/></div>{teacher && <div className="profile-media-card"><label className="form-label">School logo</label><p className="muted small">Used on your school’s printed grading sheet. Visible only to signed-in users from this school.</p>{schoolLogoPath && <img className="school-logo-preview" src={`/api/media?pathname=${encodeURIComponent(schoolLogoPath)}`} alt="Current school logo"/>}<input className="form-control" type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>{void uploadProfileImage("school-logo",e.currentTarget.files?.[0]);e.currentTarget.value=""}}/></div>}</div><form className="profile-form mt-4" onSubmit={saveProfile}><label className="form-label">Full name</label><input className="form-control" value={profileName} onChange={e => setProfileName(e.target.value)} required maxLength={120}/><label className="form-label mt-3">Sign-in email</label><input className="form-control" value={user.email} readOnly/><label className="form-label mt-3">Role</label><input className="form-control" readOnly value={teacher ? "Teacher" : "Student"}/>
+      {tab === "profile" ? <section className="surface profile-surface"><div className="section-heading"><div><span className="eyebrow">PERSONAL DETAILS</span><h2>Profile information</h2><p className="muted">Manage your personal details and the school letterhead used on grading sheets.</p></div><span className="profile-avatar">{profileImagePath ? <img src={`/api/media?pathname=${encodeURIComponent(profileImagePath)}`} alt="Profile"/> : initials(user.fullName)}</span></div><div className="profile-media-grid"><div className="profile-media-card"><label className="form-label">Profile picture</label><p className="muted small">Private to your account. JPG, PNG, or WebP up to 3 MB.</p><input className="form-control" type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>{void uploadProfileImage("profile",e.currentTarget.files?.[0]);e.currentTarget.value=""}}/></div>{teacher && <div className="profile-media-card"><label className="form-label">School / Department logo</label><p className="muted small">Used on your school’s printed grading sheet. Visible only to signed-in users from this school.</p>{schoolLogoPath && <img className="school-logo-preview" src={`/api/media?pathname=${encodeURIComponent(schoolLogoPath)}`} alt="Current school logo"/>}<input className="form-control" type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>{void uploadProfileImage("school-logo",e.currentTarget.files?.[0]);e.currentTarget.value=""}}/></div>}</div><form className="profile-form mt-4" onSubmit={saveProfile}><label className="form-label">Full name</label><input className="form-control" value={profileName} onChange={e => setProfileName(e.target.value)} required maxLength={120}/><label className="form-label mt-3">Sign-in email</label><input className="form-control" value={user.email} readOnly/><label className="form-label mt-3">Role</label><input className="form-control" readOnly value={teacher ? "Teacher" : "Student"}/>
         {teacher && <>
           <label className="form-label mt-3" htmlFor="profileFacultyId">Faculty ID</label>
           <input className="form-control" id="profileFacultyId" value={profileFacultyId}
             onChange={event => setProfileFacultyId(event.target.value)} minLength={3} maxLength={40}
             pattern="[A-Za-z0-9][A-Za-z0-9._/-]{2,39}" autoComplete="off" required/>
           <div className="form-text">This ID is unique within your school. You can replace your assigned Faculty ID with your official school-issued ID.</div>
+          <h3 className="mt-4">School / Department letterhead</h3>
+          <p className="muted small">These details are shared by teacher accounts in your school and are used automatically in grading-sheet exports.</p>
+          <label className="form-label mt-3" htmlFor="profileSchoolAddress">School address</label>
+          <textarea className="form-control" id="profileSchoolAddress" value={schoolAddress} onChange={event => setSchoolAddress(event.target.value)} maxLength={300} rows={2} placeholder="Complete school or campus address"/>
+          <label className="form-label mt-3" htmlFor="profileDeanName">Dean’s name</label>
+          <input className="form-control" id="profileDeanName" value={deanName} onChange={event => setDeanName(event.target.value)} maxLength={120} placeholder="Dean’s full name"/>
         </>}{!teacher && <>{user.courseProgram && <><label className="form-label mt-3">Course / Program</label><input className="form-control" readOnly value={user.courseProgram}/></>}{user.yearLevel && <><label className="form-label mt-3">Year level</label><input className="form-control" readOnly value={user.yearLevel}/></>}</>}<button className="btn btn-primary mt-4" disabled={busy}>Save profile</button></form><ChangeEmailForm schoolId={user.school.id} emailDeliveryEnabled={user.emailDeliveryEnabled}/><div className="account-security-section"><h3>Change password</h3><p className="muted">Use at least 12 characters. A verification code will be sent to your current sign-in email. Changing your password signs out existing sessions.</p><form className="profile-form" onSubmit={changePassword}><label className="form-label">Current password</label><input className="form-control" type="password" autoComplete="current-password" value={passwordCurrent} onChange={e=>setPasswordCurrent(e.target.value)} required maxLength={100}/><label className="form-label mt-3">New password</label><input className="form-control" type="password" autoComplete="new-password" value={passwordNew} onChange={e=>setPasswordNew(e.target.value)} required minLength={12} maxLength={100}/><label className="form-label mt-3">Confirm new password</label><input className="form-control" type="password" autoComplete="new-password" value={passwordConfirm} onChange={e=>setPasswordConfirm(e.target.value)} required minLength={12} maxLength={100}/>{passwordOtpSent && <><label className="form-label mt-3">Six-digit code</label><input className="form-control" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" value={passwordOtp} onChange={e=>setPasswordOtp(e.target.value.replace(/\D/g, "").slice(0,6))} required/></>}<button type={passwordOtpSent ? "submit" : "button"} className="btn btn-primary mt-3" disabled={busy} onClick={!passwordOtpSent ? ()=>void requestPasswordOtp() : undefined}>{passwordOtpSent ? "Verify code and update password" : "Send verification code"}</button></form></div></section> : teacher ? <>{tab === "overview" && <><section className="welcome-strip"><div className="welcome-copy"><span className="eyebrow">YOUR TEACHING DESK</span><h2>Good day, {user.fullName.split(" ")[0]}.</h2><p>Manage class lists, grading rules, and published student results.</p></div><button className="btn btn-light" onClick={() => setCreateOpen(true)}><b>＋</b> Add subject</button><div className="welcome-decoration">✳</div></section><section className="surface rounded-3 p-3 mb-4 academic-period-panel" aria-label="Academic period selection">
   <div className="d-flex flex-wrap align-items-end justify-content-between gap-3">
     <div><span className="eyebrow">ACADEMIC PERIOD</span><h3 className="h6 mb-1">Viewing records for</h3><small className="muted">Dashboard data follows your selected academic year and term.</small></div>
@@ -1971,7 +1987,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           {printMode === "grades" && <style media="print">{`@page { size: 13in 8.5in; margin: .3in; }
         @media print {
           .generic-print-sheet { display:block!important; width:100%!important; color:#000!important; background:#fff!important; font-family:Arial,Helvetica,sans-serif!important; }
-          .generic-print-sheet>header { text-align:center; border:0; padding:0 0 7px; margin:0 0 10px; }
+          .generic-print-sheet>header { position:relative; text-align:center; border:0; padding:0 0 7px; margin:0 0 10px; }
+          .generic-print-logo { position:absolute; left:0; top:0; width:58px; height:58px; object-fit:contain; }
           .generic-print-sheet>header h1 { margin:0; font-size:15pt; font-weight:700; }
           .generic-print-sheet>header p { margin:2px 0 5px; font-size:8pt; min-height:10px; }
           .generic-print-sheet>header strong { display:block; font-size:12pt; letter-spacing:.06em; }
@@ -1995,8 +2012,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         }`}</style>}
       {printMode === "grades" && detail && <article className="print-grade-sheet generic-print-sheet">
         <header>
+          {schoolLogoPath && <img className="generic-print-logo" src={`/api/media?pathname=${encodeURIComponent(schoolLogoPath)}`} alt="School / Department logo"/>}
           <h1>{user.school.name}</h1>
-          <p>School Address: {user.school.address || "____________________________________________"}</p>
+          <p>{user.school.address || "School address not set"}</p>
           <strong>GRADING SHEET</strong>
         </header>
         <div className="generic-print-course-details">
@@ -2006,7 +2024,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <div><b>Semester:</b><span>{detail.term}</span></div>
           <div><b>Academic Year:</b><span>{detail.academicYear}</span></div>
           <div><b>Course and Year:</b><span>{detail.courseYear || "—"}</span></div>
-          <div><b>Schedule:</b><span>{detail.schedule || "—"}</span></div>
+          <div><b>Schedule:</b><span>{formatSchedule(detail.schedule) || "—"}</span></div>
           <div><b>Teacher:</b><span>{user.fullName}</span></div>
         </div>
         <table className="print-grade-table generic-print-grade-table">

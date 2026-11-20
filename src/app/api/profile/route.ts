@@ -6,7 +6,9 @@ import { normalizeFacultyId } from "@/lib/account-identifiers";
 
 const schema = z.object({
   fullName: z.string().trim().min(2).max(120),
-  facultyId: z.string().trim().max(40).optional()
+  facultyId: z.string().trim().max(40).optional(),
+  schoolAddress: z.string().trim().max(300).optional(),
+  deanName: z.string().trim().max(120).optional()
 });
 
 export async function PATCH(request: Request) {
@@ -15,8 +17,8 @@ export async function PATCH(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Enter a valid full name and Faculty ID." }, { status: 400 });
 
-  if (parsed.data.facultyId !== undefined && user.role !== "TEACHER") {
-    return NextResponse.json({ error: "Only faculty accounts can edit a Faculty ID." }, { status: 403 });
+  if ((parsed.data.facultyId !== undefined || parsed.data.schoolAddress !== undefined || parsed.data.deanName !== undefined) && user.role !== "TEACHER") {
+    return NextResponse.json({ error: "Only faculty accounts can edit faculty and school letterhead details." }, { status: 403 });
   }
   const facultyId = parsed.data.facultyId === undefined
     ? undefined : normalizeFacultyId(parsed.data.facultyId);
@@ -42,6 +44,13 @@ export async function PATCH(request: Request) {
           action: "updated Faculty ID",
           entity: "user",
           entityId: user.id
+        }
+      });
+      if (result.count && (parsed.data.schoolAddress !== undefined || parsed.data.deanName !== undefined)) await tx.school.update({
+        where: { id: user.schoolId },
+        data: {
+          ...(parsed.data.schoolAddress !== undefined ? { address: parsed.data.schoolAddress || null } : {}),
+          ...(parsed.data.deanName !== undefined ? { deanName: parsed.data.deanName || null } : {})
         }
       });
       return result;
