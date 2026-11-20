@@ -45,6 +45,8 @@ model School {
   logoText              String             @default("S")
   primaryColor          String             @default("#2457d6")
   logoPath              String?
+  address               String?
+  deanName              String?
   privacyController     String?
   privacyContactEmail   String?
   privacyPolicyUrl      String?
