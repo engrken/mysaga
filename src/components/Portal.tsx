@@ -256,9 +256,12 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
   const assessmentColumns = academicAssessments.map(item => {
     const category = detail.categories.find(value => value.id === item.categoryId);
     const categoryItems = academicAssessments.filter(value => value.categoryId === item.categoryId);
-    const itemWeight = item.weight ?? (categoryItems.length ? 100 / categoryItems.length : 0);
+    const hasExplicitWeights = categoryItems.some(value => value.weight !== null);
+    const itemWeightLabel = item.weight === null
+      ? (hasExplicitWeights ? "0.00% (unset)" : "Points-based")
+      : item.weight.toFixed(2) + "%";
     const categoryWeight = category ? effectiveCategoryWeight(category, detail.categories) : null;
-    const weightNote = " · Item wt " + itemWeight.toFixed(2) + "%" + (categoryWeight === null ? "" : " · Course wt " + categoryWeight.toFixed(2) + "%");
+    const weightNote = " · Item wt " + itemWeightLabel + (categoryWeight === null ? "" : " · Course wt " + categoryWeight.toFixed(2) + "%");
     return (category ? categoryPath(category, detail.categories) + " · " : "") + item.title + " (Max " + item.maxScore + weightNote + ")";
   });
   const headers = ["NAME OF STUDENTS", ...assessmentColumns, "ATTENDANCE (%)", "TOTAL GRADE", "FINAL GRADE", "REMARKS"];
@@ -2010,9 +2013,10 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <thead><tr><th>NAME OF STUDENTS</th>{detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·")).map(item => {
             const category = detail.categories.find(value => value.id === item.categoryId);
             const categoryItems = detail.assessments.filter(value => value.categoryId === item.categoryId && !value.title.toLocaleLowerCase().startsWith("attendance ·"));
-            const itemWeight = item.weight ?? (categoryItems.length ? 100 / categoryItems.length : 0);
+            const hasExplicitWeights = categoryItems.some(value => value.weight !== null);
+            const itemWeightLabel = item.weight === null ? (hasExplicitWeights ? "0.00% (unset)" : "Points-based") : item.weight.toFixed(2) + "%";
             const categoryWeight = category ? effectiveCategoryWeight(category, detail.categories) : null;
-            return <th key={item.id}>{category ? categoryPath(category, detail.categories) + " · " : ""}{item.title}<small>Max: {item.maxScore} · Item wt: {itemWeight.toFixed(2)}%{categoryWeight === null ? "" : " · Course wt: " + categoryWeight.toFixed(2) + "%"}</small></th>;
+            return <th key={item.id}>{category ? categoryPath(category, detail.categories) + " · " : ""}{item.title}<small>Max: {item.maxScore} · Item wt: {itemWeightLabel}{categoryWeight === null ? "" : " · Course wt: " + categoryWeight.toFixed(2) + "%"}</small></th>;
           })}<th>ATTENDANCE (%)</th><th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
           <tbody>{detail.enrollments.map((enrollment,index) => {
             const band = detail.gradeBands.slice().sort((a,b) => b.minPercent-a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
