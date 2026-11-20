@@ -117,13 +117,25 @@ test("generic grading sheet export uses class records, actual assessment scores,
     excelColumn: columns,
     xmlEscape: escape,
     categoryPath: category => category.name,
+    effectiveCategoryWeight: (category, categories) => {
+      let root = category;
+      const visited = new Set([category.id]);
+      while (root.parentId) {
+        if (visited.has(root.parentId)) return 0;
+        visited.add(root.parentId);
+        const parent = categories.find(item => item.id === root.parentId);
+        if (!parent) return 0;
+        root = parent;
+      }
+      return category.id === root.id ? root.weight : root.weight * category.weight / 100;
+    },
     calculateCategoryPercent: category => { const active = category.assessments.filter(item => item.scores[0]?.remark !== "EXCUSED" && (item.scores[0]?.remark || item.scores[0]?.points != null)); if (!active.length) return null; const earned = active.filter(item => ["PRESENT", "LATE"].includes(item.scores[0]?.remark) || (item.scores[0]?.points ?? 0) > 0).length; return Math.round(earned / active.length * 10000) / 100; }
   };
   vm.runInNewContext(compiledGeneric + "\nthis.generateGeneric = downloadGradeSheetXlsx;", context);
   const detail = {
     code: "ECE 16", title: "Design Project", classId: "BSECE-4A",
     term: "1st Semester", academicYear: "2026-2027",
-    categories: [{ id: "QUIZ", name: "Quizzes" }, { id: "EXAM", name: "Major Exam" }, { id: "ATT", name: "Attendance" }],
+    categories: [{ id: "QUIZ", name: "Quizzes", weight: 30 }, { id: "EXAM", name: "Major Exam", weight: 50 }, { id: "ATT", name: "Attendance", weight: 20 }],
     assessments: [
       { id: "Q1", categoryId: "QUIZ", title: "Quiz 1", maxScore: 10 },
       { id: "M1", categoryId: "EXAM", title: "Midterm", maxScore: 50, dueDate: null, weight: null },
