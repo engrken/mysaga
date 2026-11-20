@@ -101,7 +101,7 @@ test("FCU export keeps the same three assessment headings regardless of configur
 
 
 test("generic grading sheet export uses class records, actual assessment scores, and editable Dean name", () => {
-  const start = source.indexOf("function downloadGradeSheetXlsx(");
+  const start = source.indexOf("function gradeSheetAttendancePercent(");
   const end = source.indexOf("async function downloadFcuGradeXlsx(", start);
   assert.ok(start > 0 && end > start, "generic grading-sheet exporter is present");
   const compiledGeneric = ts.transpileModule(source.slice(start, end), {
@@ -116,20 +116,24 @@ test("generic grading sheet export uses class records, actual assessment scores,
     zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
     excelColumn: columns,
     xmlEscape: escape,
-    categoryPath: category => category.name
+    categoryPath: category => category.name,
+    calculateCategoryPercent: category => { const active = category.assessments.filter(item => item.scores[0]?.remark !== "EXCUSED" && (item.scores[0]?.remark || item.scores[0]?.points != null)); if (!active.length) return null; const earned = active.filter(item => ["PRESENT", "LATE"].includes(item.scores[0]?.remark) || (item.scores[0]?.points ?? 0) > 0).length; return Math.round(earned / active.length * 10000) / 100; }
   };
   vm.runInNewContext(compiledGeneric + "\nthis.generateGeneric = downloadGradeSheetXlsx;", context);
   const detail = {
     code: "ECE 16", title: "Design Project", classId: "BSECE-4A",
     term: "1st Semester", academicYear: "2026-2027",
-    categories: [{ id: "QUIZ", name: "Quizzes" }, { id: "EXAM", name: "Major Exam" }],
+    categories: [{ id: "QUIZ", name: "Quizzes" }, { id: "EXAM", name: "Major Exam" }, { id: "ATT", name: "Attendance" }],
     assessments: [
       { id: "Q1", categoryId: "QUIZ", title: "Quiz 1", maxScore: 10 },
-      { id: "M1", categoryId: "EXAM", title: "Midterm", maxScore: 50 }
+      { id: "M1", categoryId: "EXAM", title: "Midterm", maxScore: 50, dueDate: null, weight: null },
+      { id: "A1", categoryId: "ATT", title: "Attendance · 2026-11-02", maxScore: 1, dueDate: "2026-11-02", weight: null },
+      { id: "A2", categoryId: "ATT", title: "Attendance · 2026-11-03", maxScore: 1, dueDate: "2026-11-03", weight: null },
+      { id: "A3", categoryId: "ATT", title: "Attendance · 2026-11-04", maxScore: 1, dueDate: "2026-11-04", weight: null }
     ],
     enrollments: [
-      { studentName: "Ana Reyes", scores: [{ assessmentId: "Q1", points: 8, remark: null }, { assessmentId: "M1", points: 42, remark: null }], finalPercent: 90, finalGradeOverride: null, remarks: null },
-      { studentName: "Ben Cruz", scores: [{ assessmentId: "Q1", points: null, remark: "EXCUSED" }, { assessmentId: "M1", points: 35, remark: null }], finalPercent: 80, finalGradeOverride: "2.00", remarks: "PASSED" }
+      { studentName: "Ana Reyes", scores: [{ assessmentId: "Q1", points: 8, remark: null }, { assessmentId: "M1", points: 42, remark: null }, { assessmentId: "A1", points: null, remark: "PRESENT" }, { assessmentId: "A2", points: null, remark: "ABSENT" }, { assessmentId: "A3", points: null, remark: "EXCUSED" }], finalPercent: 90, finalGradeOverride: null, remarks: null },
+      { studentName: "Ben Cruz", scores: [{ assessmentId: "Q1", points: null, remark: "EXCUSED" }, { assessmentId: "M1", points: 35, remark: null }, { assessmentId: "A1", points: null, remark: "PRESENT" }, { assessmentId: "A2", points: null, remark: "PRESENT" }, { assessmentId: "A3", points: null, remark: "PRESENT" }], finalPercent: 80, finalGradeOverride: "2.00", remarks: "PASSED" }
     ],
     gradeBands: [{ minPercent: 75, finalGrade: "2.25", remarks: "PASSED" }]
   };
@@ -156,12 +160,17 @@ test("generic grading sheet export uses class records, actual assessment scores,
   assert.match(sheet, /Teacher&apos;s Signature over Printed Name/);
   assert.match(sheet, /Dean&apos;s Signature over Printed Name/);
   assert.match(sheet, /orientation="landscape" fitToWidth="1"/);
+  assert.match(sheet, /ATTENDANCE \\(\\%\\)/);
+  assert.match(sheet, /50\\.00%/);
+  assert.doesNotMatch(sheet, /Attendance · 2026-11-02|Attendance · 2026-11-03|Attendance · 2026-11-04/);
+  assert.match(sheet, /paperSize="256" orientation="landscape"/);
+  assert.match(source, /@page \\{ size: 13in 8\\.5in/);
   assert.doesNotMatch(sheet, /Class Summary|Certification/);
   assert.ok(files["xl/styles.xml"]);
 });
 
 test("generic grading sheet supports a class with no assessment items without invalid Excel column ranges", () => {
-  const start = source.indexOf("function downloadGradeSheetXlsx(");
+  const start = source.indexOf("function gradeSheetAttendancePercent(");
   const end = source.indexOf("async function downloadFcuGradeXlsx(", start);
   const compiledGeneric = ts.transpileModule(source.slice(start, end), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
@@ -179,6 +188,6 @@ test("generic grading sheet supports a class with no assessment items without in
   const detail = { code:"X",title:"No Assessments",classId:"A",term:"1st",academicYear:"2026",categories:[],assessments:[],enrollments:[],gradeBands:[] };
   context.generateGeneric("empty.xlsx","Grading Sheet",detail,"School","Address","Teacher","");
   const sheet = saved.find(file => file.name === "xl/worksheets/sheet1.xml").content;
-  assert.match(sheet, /<col min="2" max="4"/);
+  assert.match(sheet, /<col min="2" max="2"/);
   assert.match(sheet, /orientation="landscape"/);
 });
