@@ -253,15 +253,16 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     console.error("FCU grade-sheet header unavailable:", error);
     return;
   }
-  // The supplied ISO template uses A:K, with student names merged across A:D.
-  // E:H are grading components, I is Total Grade, J is Final Grade, K is Remarks.
-  const gradeSlots = Math.max(4, categories.length);
-  // FCU's original form reserves E:H for components. When fewer than four
-  // components are configured, merge unused slots into the visible columns.
-  const componentRanges = categories.map((category, index) => ({
-    category,
-    start: 4 + Math.floor(index * gradeSlots / categories.length),
-    end: 3 + Math.floor((index + 1) * gradeSlots / categories.length)
+  // Keep the FCU grading-sheet header consistent across every export.
+  // The three assessment columns occupy the original E:H component area;
+  // their score values still come from matching configured grading categories.
+  const assessmentHeaders = ["MAJOR EXAM", "ATTENDANCE", "ASSESSMENT"];
+  const gradeSlots = 4;
+  const componentRanges = assessmentHeaders.map((name, index) => ({
+    name,
+    category: categories.find(category => category.name.trim().toLocaleUpperCase() === name),
+    start: 4 + Math.floor(index * gradeSlots / assessmentHeaders.length),
+    end: 3 + Math.floor((index + 1) * gradeSlots / assessmentHeaders.length)
   }));
   const columnCount = gradeSlots + 7;
   const last = excelColumn(columnCount - 1);
@@ -292,7 +293,7 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
   row([{ col: 0, value: "-----------------------------------------------------------------------------------------------------------------------------------------------", style: 6 }]);
   row([
     { col: 0, value: "NAME OF STUDENTS", style: 4 },
-    ...componentRanges.map(range => ({ col: range.start, value: ": " + range.category.name.toUpperCase() + " :", style: 4 })),
+    ...componentRanges.map(range => ({ col: range.start, value: ": " + range.name + " :", style: 4 })),
     { col: totalCol, value: ": TG :", style: 4 },
     { col: totalCol + 1, value: ": FG :", style: 4 },
     { col: totalCol + 2, value: ": REMARKS :", style: 4 }
@@ -302,8 +303,10 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
     const suppress = ["INC", "DROPPED"].includes(enrollment.remarks || "");
     const componentValues = componentRanges.map(range => {
-      const percent = weightedCategoryPercent(enrollment, range.category, detail.categories, detail.assessments);
-      return { col: range.start, value: suppress || percent === null ? "" : Number((percent * effectiveCategoryWeight(range.category, detail.categories) / 100).toFixed(2)), style: 5 };
+      const percent = range.category
+        ? weightedCategoryPercent(enrollment, range.category, detail.categories, detail.assessments)
+        : null;
+      return { col: range.start, value: suppress || percent === null || !range.category ? "" : Number((percent * effectiveCategoryWeight(range.category, detail.categories) / 100).toFixed(2)), style: 5 };
     });
     const gradeString = suppress ? "" : enrollment.finalGradeOverride || band?.finalGrade || "";
     const gradeNumber = gradeString && /^[0-9]+(?:\.[0-9]+)?$/.test(gradeString) ? Number(gradeString) : gradeString;
