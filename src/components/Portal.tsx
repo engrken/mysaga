@@ -281,7 +281,7 @@ function gradeSheetComponentPercent(detail: Detail, enrollment: Enrollment, comp
   return totalWeight > 0 ? Number((weighted / totalWeight).toFixed(2)) : null;
 }
 
-function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Detail, schoolName: string, schoolAddress: string, teacherName: string, deanName: string) {
+function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Detail, schoolName: string, schoolAddress: string, teacherName: string, deanName: string, components: GradeSheetComponent[]) {
   const academicAssessments = detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·"));
   const assessmentColumns = academicAssessments.map(item => {
     const category = detail.categories.find(value => value.id === item.categoryId);
@@ -316,6 +316,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
   addRow([{ col: 0, value: "Schedule: " + (formatSchedule(detail.schedule) || "—"), style: 4 }]);
   addRow([{ col: 0, value: "Teacher: " + teacherName, style: 4 }]);
   addRow([{ col: 0, value: "Dean: " + (deanName || "—"), style: 4 }]);
+  addRow([{ col: 0, value: "Display Components: " + components.map(item => item.name + " " + item.percentage.toFixed(2) + "%").join(" · "), style: 4 }]);
   addRow([]);
   addRow(headers.map((value, col) => ({ col, value, style: 5 })));
   for (const [index, enrollment] of detail.enrollments.entries()) {
@@ -347,7 +348,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     "A1:" + last + "1", "A2:" + last + "2", "A3:" + last + "3",
     "A5:" + last + "5", "A6:" + last + "6", "A7:" + last + "7",
     "A8:" + last + "8", "A9:" + last + "9", "A10:" + last + "10",
-    "A11:" + last + "11", "A12:" + last + "12", "A13:" + last + "13",
+    "A11:" + last + "11", "A12:" + last + "12", "A13:" + last + "13", "A14:" + last + "14",
     "A" + signatureRow + ":" + excelColumn(split) + signatureRow,
     excelColumn(split + 1) + signatureRow + ":" + last + signatureRow,
     "A" + (signatureRow + 1) + ":" + excelColumn(split) + (signatureRow + 1),
@@ -362,7 +363,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
       if (typeof cell.value === "number" && Number.isFinite(cell.value)) return '<c r="' + reference + '" s="' + cell.style + '"><v>' + cell.value + '</v></c>';
       return '<c r="' + reference + '" s="' + cell.style + '" t="inlineStr"><is><t xml:space="preserve">' + xmlEscape(cell.value) + '</t></is></c>';
     }).join("");
-    const height = rowIndex === 0 ? ' ht="26" customHeight="1"' : rowIndex === 2 ? ' ht="24" customHeight="1"' : rowIndex === 14 ? ' ht="42" customHeight="1"' : rowIndex >= 15 && rowIndex < 15 + detail.enrollments.length ? ' ht="22" customHeight="1"' : ' ht="20" customHeight="1"';
+    const height = rowIndex === 0 ? ' ht="26" customHeight="1"' : rowIndex === 2 ? ' ht="24" customHeight="1"' : rowIndex === 15 ? ' ht="42" customHeight="1"' : rowIndex >= 16 && rowIndex < 16 + detail.enrollments.length ? ' ht="22" customHeight="1"' : ' ht="20" customHeight="1"';
     return '<row r="' + rowNumber + '"' + height + '>' + xmlCells + '</row>';
   }).join("");
   const assessmentCount = academicAssessments.length;
@@ -373,7 +374,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     '<col min="' + (attendanceColumn + 1) + '" max="' + columnCount + '" width="13" customWidth="1"/></cols>';
   const worksheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" zoomScale="85" workbookViewId="0"><pane ySplit="15" topLeftCell="A16" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A16" sqref="A16"/></sheetView></sheetViews>' +
+    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" zoomScale="85" workbookViewId="0"><pane ySplit="16" topLeftCell="A17" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A17" sqref="A17"/></sheetView></sheetViews>' +
     '<sheetFormatPr defaultRowHeight="18"/>' + widths + '<sheetData>' + xmlRows + '</sheetData>' +
     '<mergeCells count="' + mergeRanges.length + '">' + mergeRanges.map(range => '<mergeCell ref="' + range + '"/>').join("") + '</mergeCells>' +
     '<printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.35" bottom="0.35" header="0.15" footer="0.15"/>' +
@@ -1371,7 +1372,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       user.school.name,
       user.school.address || "",
       user.fullName,
-      deanName.trim()
+      deanName.trim(),
+      gradeSheetComponents
     );
   }
   function downloadScoreCsv(blank=false) {
