@@ -68,6 +68,10 @@ test("FCU export reproduces the approved sheet hierarchy and Folio print format"
   assert.match(sheet, /<mergeCell ref="E17:F17"/);
   assert.match(sheet, /<mergeCell ref="G17:H17"/);
   assert.match(sheet, /<pageSetup paperSize="14" orientation="portrait" fitToWidth="1"/);
+  assert.match(sheet, /showGridLines="0" zoomScale="90"/);
+  assert.match(sheet, /<selection pane="bottomLeft" activeCell="A17"/);
+  assert.match(source, /display:table-header-group/);
+  assert.match(source, /Print \/ Save PDF/);
   assert.match(sheet, /<c r="A11"[^>]*><is>.*?<u\/>.*?ECE 16/s);
   assert.match(sheet, /<c r="A13"[^>]*><is>.*?First Semester/s);
   assert.match(sheet, /<c r="A15"[^>]*>.*?NAME OF STUDENTS/s);
