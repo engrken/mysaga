@@ -45,6 +45,7 @@ model School {
   logoText              String             @default("S")
   primaryColor          String             @default("#2457d6")
   logoPath              String?
+  departmentLogoPath    String?
   address               String?
   deanName              String?
   privacyController     String?
@@ -98,6 +99,7 @@ model User {
   profileImagePath        String?
   studentNumber           String?
   facultyId               String?
+  defaultGradeSheetComponents String?
   courseProgram           String?
   yearLevel               String?
   privacyNoticeAcceptedAt DateTime?
@@ -199,6 +201,7 @@ model Subject {
   academicYear String
   schedule     String?
   courseYear   String?
+  gradeSheetComponents String?
   isPublished  Boolean         @default(false)
   gradeStatus  GradeStatus     @default(DRAFT)
   joinCodeHash String?         @unique
