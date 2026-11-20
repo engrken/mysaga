@@ -91,8 +91,8 @@ test("FCU export keeps the same three assessment headings regardless of configur
   const files = await generate(cats, [student("Student Name", { EXAM: 100, SE: 100, LECT: 100, LAB: 100 }, 100)]);
   const sheet = files["xl/worksheets/sheet1.xml"];
   assert.match(sheet, /<c r="E15"[^>]*>.*?: MAJOR EXAM :/s);
-  assert.match(sheet, /<c r="G15"[^>]*>.*?: ATTENDANCE :/s);
-  assert.match(sheet, /<c r="H15"[^>]*>.*?: ASSESSMENT :/s);
+  assert.match(sheet, /<c r="F15"[^>]*>.*?: ATTENDANCE :/s);
+  assert.match(sheet, /<c r="G15"[^>]*>.*?: ASSESSMENT :/s);
   assert.match(sheet, /<c r="I15"[^>]*>.*?: TG :/s);
   assert.match(sheet, /<c r="J15"[^>]*>.*?: FG :/s);
   assert.match(sheet, /<c r="K15"[^>]*>.*?: REMARKS :/s);
