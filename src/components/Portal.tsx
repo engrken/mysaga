@@ -255,7 +255,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     rows.push(row);
   };
   addRow([{ col: 0, value: schoolName, style: 1 }]);
-  addRow([{ col: 0, value: schoolAddress || " ", style: 2 }]);
+  addRow([{ col: 0, value: "School Address: " + (schoolAddress || "____________________________________________"), style: 2 }]);
   addRow([{ col: 0, value: "GRADING SHEET", style: 3 }]);
   addRow([]);
   addRow([{ col: 0, value: "Course Number: " + detail.code + "     |     Descriptive Title: " + detail.title, style: 4 }]);
@@ -305,10 +305,10 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     const height = rowIndex === 0 ? ' ht="26" customHeight="1"' : rowIndex === 2 ? ' ht="24" customHeight="1"' : rowIndex === 7 ? ' ht="42" customHeight="1"' : rowIndex >= 8 && rowIndex < 8 + detail.enrollments.length ? ' ht="22" customHeight="1"' : ' ht="20" customHeight="1"';
     return '<row r="' + rowNumber + '"' + height + '>' + xmlCells + '</row>';
   }).join("");
-  const assessmentEnd = Math.max(2, columnCount - 3);
+  const assessmentCount = detail.assessments.length;
   const widths = '<cols><col min="1" max="1" width="30" customWidth="1"/>' +
-    (assessmentEnd >= 2 ? '<col min="2" max="' + (assessmentEnd - 1) + '" width="16" customWidth="1"/>' : '') +
-    '<col min="' + (columnCount - 2) + '" max="' + columnCount + '" width="15" customWidth="1"/></cols>';
+    (assessmentCount > 0 ? '<col min="2" max="' + (assessmentCount + 1) + '" width="16" customWidth="1"/>' : '') +
+    '<col min="' + (assessmentCount + 2) + '" max="' + columnCount + '" width="15" customWidth="1"/></cols>';
   const worksheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
     '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" zoomScale="85" workbookViewId="0"><pane ySplit="8" topLeftCell="A9" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A9" sqref="A9"/></sheetView></sheetViews>' +
@@ -1972,7 +1972,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       {printMode === "grades" && detail && <article className="print-grade-sheet generic-print-sheet">
         <header>
           <h1>{user.school.name}</h1>
-          <p>{user.school.address || " "}</p>
+          <p>School Address: {user.school.address || "____________________________________________"}</p>
           <strong>GRADING SHEET</strong>
         </header>
         <div className="generic-print-course-details">
