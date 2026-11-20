@@ -106,9 +106,9 @@ export async function PATCH(request: Request, context: Context) {
       saveGradeSheetComponents: z.array(z.object({
         name: z.string().trim().min(1).max(40),
         percentage: z.number().min(0).max(100)
-      })).min(1).max(8)
+      })).length(3)
     }).safeParse(input);
-    if (!parsed.success) return NextResponse.json({ error: "Enter between 1 and 8 valid grading components." }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: "Define exactly 3 valid grading components." }, { status: 400 });
     const components = parsed.data.saveGradeSheetComponents;
     const total = components.reduce((sum, item) => sum + item.percentage, 0);
     if (Math.abs(total - 100) > 0.01 || new Set(components.map(item => item.name.toLocaleLowerCase())).size !== components.length) return NextResponse.json({ error: "Component names must be unique and percentages must total exactly 100%." }, { status: 400 });
