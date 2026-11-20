@@ -745,9 +745,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       .finally(() => { if (!controller.signal.aborted) setGradeHistoryLoading(false); });
     return () => controller.abort();
   }, [teacher, gradeChangeEnrollmentId, detail?.id]);
-  useEffect(() => { (teacher ? loadSubjects() : loadGrades()).catch(e => setErr(e.message)).finally(() => setLoading(false)); }, []);
+  useEffect(() => { if (!academicPeriodReady) return; setLoading(true); (teacher ? loadSubjects() : loadGrades()).catch(e => setErr(e.message)).finally(() => setLoading(false)); }, [academicPeriodReady, academicYear, activeTerm, teacher]);
   useEffect(() => {
-    if (!teacher || tab !== "overview" || !overviewFrom || !overviewTo || overviewFrom > overviewTo) return;
+    if (!academicPeriodReady || !teacher || tab !== "overview" || !overviewFrom || !overviewTo || overviewFrom > overviewTo) return;
     const controller = new AbortController();
     setOverviewLoading(true);
     api(`/api/teacher/overview?from=${encodeURIComponent(overviewFrom)}&to=${encodeURIComponent(overviewTo)}&academicYear=${encodeURIComponent(academicYear)}&term=${encodeURIComponent(activeTerm)}`, { signal: controller.signal, cache: "no-store" })
@@ -755,7 +755,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       .catch(error => { if (error?.name !== "AbortError") setErr(error instanceof Error ? error.message : "Could not load teaching analytics."); })
       .finally(() => { if (!controller.signal.aborted) setOverviewLoading(false); });
     return () => controller.abort();
-  }, [teacher, tab, overviewFrom, overviewTo, overviewRefresh, academicYear, activeTerm]);
+  }, [academicPeriodReady, teacher, tab, overviewFrom, overviewTo, overviewRefresh, academicYear, activeTerm]);
   useEffect(() => {
     const query = studentLookupQuery.trim();
     if (!teacher || tab !== "overview" || query.length < 2) {
@@ -1725,7 +1725,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <div className="student-stat"><small>IN PROGRESS</small><strong>{studentGradeStats.inProgress}</strong><span>Draft or provisional records</span></div>
           <div className="student-stat"><small>UNRECORDED ITEMS</small><strong>{studentGradeStats.pendingAssessments}</strong><span>Across visible classes</span></div>
         </div>
-        <StudentActivities readOnly={user.isDemo}/>
+        <StudentActivities readOnly={user.isDemo} academicYear={academicYear} term={activeTerm}/>
         {studentAttendanceWarnings.length > 0 && (
           <section className="alert alert-warning" aria-labelledby="student-attendance-warning-heading" aria-live="polite">
             <h3 className="h6" id="student-attendance-warning-heading">Attendance warning</h3>
@@ -1746,7 +1746,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
             <p className="mb-0">Review your attendance entries under My grades and contact your instructor about any discrepancies.</p>
           </section>
         )}
-        <StudentClassEnrollment onJoined={() => { void refreshStudentGrades(); }}/>
+        <StudentClassEnrollment academicYear={academicYear} term={activeTerm} onJoined={() => { void refreshStudentGrades(); }}/>
         <section className="section-block student-grade-section">
           <div className="section-heading student-grade-section-heading"><div><h2>My grades</h2>
             <p className="muted">Your own course results and recorded assessment details.</p>
