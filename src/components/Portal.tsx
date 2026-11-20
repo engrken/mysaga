@@ -240,12 +240,24 @@ function downloadXlsx(filename: string, sheetName: string, headers: string[], ro
   const link = document.createElement("a"); link.href = url; link.download = filename; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+function gradeSheetAttendancePercent(detail: Detail, enrollment: Enrollment) {
+  const attendanceAssessments = detail.assessments.filter(item => item.title.toLocaleLowerCase().startsWith("attendance ·"));
+  if (!attendanceAssessments.length) return null;
+  return calculateCategoryPercent({
+    conversionBase: 100,
+    assessments: attendanceAssessments.map(item => ({
+      id: item.id, title: item.title, dueDate: item.dueDate, maxScore: item.maxScore, weight: item.weight,
+      scores: [enrollment.scores.find(score => score.assessmentId === item.id) || { points: null, remark: null }]
+    }))
+  });
+}
 function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Detail, schoolName: string, schoolAddress: string, teacherName: string, deanName: string) {
-  const assessmentColumns = detail.assessments.map(item => {
+  const academicAssessments = detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·"));
+  const assessmentColumns = academicAssessments.map(item => {
     const category = detail.categories.find(value => value.id === item.categoryId);
     return (category ? categoryPath(category, detail.categories) + " · " : "") + item.title + " (Max " + item.maxScore + ")";
   });
-  const headers = ["NAME OF STUDENTS", ...assessmentColumns, "TOTAL GRADE", "FINAL GRADE", "REMARKS"];
+  const headers = ["NAME OF STUDENTS", ...assessmentColumns, "ATTENDANCE (%)", "TOTAL GRADE", "FINAL GRADE", "REMARKS"];
   const columnCount = headers.length;
   const last = excelColumn(columnCount - 1);
   const rows: Array<Array<{ value: unknown; style: number }>> = [];
@@ -265,7 +277,8 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
   for (const [index, enrollment] of detail.enrollments.entries()) {
     const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
     const special = ["INC", "NP", "DROPPED"].includes(enrollment.remarks || "");
-    const scores = detail.assessments.map(item => {
+    const attendancePercent = gradeSheetAttendancePercent(detail, enrollment);
+    const scores = academicAssessments.map(item => {
       const score = enrollment.scores.find(value => value.assessmentId === item.id);
       if (score?.remark) return score.remark;
       return score?.points == null ? "" : score.points + " / " + item.maxScore;
@@ -273,6 +286,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     const values = [
       (index + 1) + ". " + enrollment.studentName,
       ...scores,
+      attendancePercent === null ? "" : attendancePercent.toFixed(2) + "%",
       special || enrollment.finalPercent === null ? "" : enrollment.finalPercent.toFixed(2) + "%",
       special ? "" : enrollment.finalGradeOverride || band?.finalGrade || "",
       enrollment.remarks || band?.remarks || ""
@@ -305,17 +319,19 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     const height = rowIndex === 0 ? ' ht="26" customHeight="1"' : rowIndex === 2 ? ' ht="24" customHeight="1"' : rowIndex === 7 ? ' ht="42" customHeight="1"' : rowIndex >= 8 && rowIndex < 8 + detail.enrollments.length ? ' ht="22" customHeight="1"' : ' ht="20" customHeight="1"';
     return '<row r="' + rowNumber + '"' + height + '>' + xmlCells + '</row>';
   }).join("");
-  const assessmentCount = detail.assessments.length;
+  const assessmentCount = academicAssessments.length;
+  const attendanceColumn = assessmentCount + 2;
   const widths = '<cols><col min="1" max="1" width="30" customWidth="1"/>' +
-    (assessmentCount > 0 ? '<col min="2" max="' + (assessmentCount + 1) + '" width="16" customWidth="1"/>' : '') +
-    '<col min="' + (assessmentCount + 2) + '" max="' + columnCount + '" width="15" customWidth="1"/></cols>';
+    (assessmentCount > 0 ? '<col min="2" max="' + (assessmentCount + 1) + '" width="14" customWidth="1"/>' : '') +
+    '<col min="' + attendanceColumn + '" max="' + attendanceColumn + '" width="13" customWidth="1"/>' +
+    '<col min="' + (attendanceColumn + 1) + '" max="' + columnCount + '" width="13" customWidth="1"/></cols>';
   const worksheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
     '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" zoomScale="85" workbookViewId="0"><pane ySplit="8" topLeftCell="A9" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A9" sqref="A9"/></sheetView></sheetViews>' +
     '<sheetFormatPr defaultRowHeight="18"/>' + widths + '<sheetData>' + xmlRows + '</sheetData>' +
     '<mergeCells count="' + mergeRanges.length + '">' + mergeRanges.map(range => '<mergeCell ref="' + range + '"/>').join("") + '</mergeCells>' +
     '<printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.35" bottom="0.35" header="0.15" footer="0.15"/>' +
-    '<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
+    '<pageSetup paperSize="256" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
   const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
     '<fonts count="4"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="15"/><name val="Arial"/></font><font><sz val="9"/><name val="Arial"/><color rgb="FF5B6573"/></font><font><b/><sz val="12"/><name val="Arial"/></font></fonts>' +
@@ -1945,7 +1961,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         </>}
       </section>}
       </div></main>
-          {printMode === "grades" && <style media="print">{`@page { size: A4 landscape; margin: .35in; }
+          {printMode === "grades" && <style media="print">{`@page { size: 13in 8.5in; margin: .3in; }
         @media print {
           .generic-print-sheet { display:block!important; width:100%!important; color:#000!important; background:#fff!important; font-family:Arial,Helvetica,sans-serif!important; }
           .generic-print-sheet>header { text-align:center; border:0; padding:0 0 7px; margin:0 0 10px; }
@@ -1983,19 +1999,21 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <div><b>Academic Year:</b><span>{detail.academicYear}</span></div>
         </div>
         <table className="print-grade-table generic-print-grade-table">
-          <thead><tr><th>NAME OF STUDENTS</th>{detail.assessments.map(item => {
+          <thead><tr><th>NAME OF STUDENTS</th>{detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·")).map(item => {
             const category = detail.categories.find(value => value.id === item.categoryId);
             return <th key={item.id}>{category ? categoryPath(category, detail.categories) + " · " : ""}{item.title}<small>Max: {item.maxScore}</small></th>;
-          })}<th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
+          })}<th>ATTENDANCE (%)</th><th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
           <tbody>{detail.enrollments.map((enrollment,index) => {
             const band = detail.gradeBands.slice().sort((a,b) => b.minPercent-a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
             const special = ["INC","NP","DROPPED"].includes(enrollment.remarks || "");
+            const attendancePercent = gradeSheetAttendancePercent(detail, enrollment);
             return <tr key={enrollment.id}>
               <td>{index + 1}. {enrollment.studentName}</td>
-              {detail.assessments.map(item => {
+              {detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·")).map(item => {
                 const score = enrollment.scores.find(value => value.assessmentId === item.id);
                 return <td key={item.id}>{score?.remark || (score?.points == null ? "" : score.points + " / " + item.maxScore)}</td>;
               })}
+              <td>{attendancePercent === null ? "" : attendancePercent.toFixed(2) + "%"}</td>
               <td>{special || enrollment.finalPercent === null ? "" : enrollment.finalPercent.toFixed(2) + "%"}</td>
               <td>{special ? "" : enrollment.finalGradeOverride || band?.finalGrade || ""}</td>
               <td>{enrollment.remarks || band?.remarks || ""}</td>
