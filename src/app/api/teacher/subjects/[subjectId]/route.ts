@@ -101,6 +101,21 @@ export async function PATCH(request: Request, context: Context) {
   }
   const subject = await ownedSubjectForMutation(subjectId, teacher.id, teacher.schoolId);
   if (!subject) return NextResponse.json({ error: "Subject not found" }, { status: 404 });
+  if ("saveGradeSheetComponents" in input) {
+    const parsed = z.object({
+      saveGradeSheetComponents: z.array(z.object({
+        name: z.string().trim().min(1).max(40),
+        percentage: z.number().min(0).max(100)
+      })).min(1).max(8)
+    }).safeParse(input);
+    if (!parsed.success) return NextResponse.json({ error: "Enter between 1 and 8 valid grading components." }, { status: 400 });
+    const components = parsed.data.saveGradeSheetComponents;
+    const total = components.reduce((sum, item) => sum + item.percentage, 0);
+    if (Math.abs(total - 100) > 0.01) return NextResponse.json({ error: "Grading component percentages must total exactly 100%." }, { status: 400 });
+    await prisma.subject.update({ where: { id: subjectId }, data: { gradeSheetComponents: JSON.stringify(components) } });
+    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated grading sheet display components", entity: "subject", entityId: subjectId } });
+    return NextResponse.json({ ok: true, gradeSheetComponents: components });
+  }
   if ("setStudentVisibility" in input) {
     const parsed = z.object({ setStudentVisibility: z.boolean() }).safeParse(input);
     if (!parsed.success) return NextResponse.json({ error: "Choose visible or hidden." }, { status: 400 });
