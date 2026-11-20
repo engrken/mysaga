@@ -767,9 +767,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     const timer = window.setTimeout(() => {
       setStudentLookupBusy(true);
       const params = new URLSearchParams({ q: query });
-      params.set("academicYear", academicYear);
       if (schoolYearFilter !== "All School Years") params.set("academicYear", schoolYearFilter);
       if (termFilter !== "All Terms") params.set("term", termFilter);
+      api(`/api/teacher/student-search?${params}`, { signal: controller.signal })
         .then(data => setStudentLookupMatches((data.matches || []) as StudentSearchMatch[]))
         .catch(error => { if (error?.name !== "AbortError") setErr(error instanceof Error ? error.message : "Could not search student records."); })
         .finally(() => { if (!controller.signal.aborted) setStudentLookupBusy(false); });
