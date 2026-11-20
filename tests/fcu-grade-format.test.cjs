@@ -198,7 +198,8 @@ test("generic grading sheet supports a class with no assessment items without in
     document: { createElement: () => ({ click() {} }) },
     setTimeout() {},
     zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
-    excelColumn: columns, xmlEscape: escape, categoryPath: category => category.name
+    excelColumn: columns, xmlEscape: escape, categoryPath: category => category.name,
+    formatSchedule: raw => { try { return JSON.parse(raw).map(row => `${row.label || "Class"} · ${row.day}, ${row.startTime}–${row.endTime}`).join(" / "); } catch { return raw || ""; } }
   };
   vm.runInNewContext(compiledGeneric + "\nthis.generateGeneric = downloadGradeSheetXlsx;", context);
   const detail = { code:"X",title:"No Assessments",classId:"A",term:"1st",academicYear:"2026",categories:[],assessments:[],enrollments:[],gradeBands:[] };
