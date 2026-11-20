@@ -145,7 +145,7 @@ test("generic grading sheet export uses class records, actual assessment scores,
   assert.match(sheet, /Semester: 1st Semester/);
   assert.match(sheet, /Academic Year: 2026-2027/);
   assert.match(sheet, /NAME OF STUDENTS/);
-  assert.match(sheet, /Quizzes · Quiz 1 \\(Max 10\\)/);
+  assert.match(sheet, /Quizzes · Quiz 1 \(Max 10\)/);
   assert.match(sheet, /8 \/ 10/);
   assert.match(sheet, /EXCUSED/);
   assert.match(sheet, /42 \/ 50/);
