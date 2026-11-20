@@ -1774,3 +1774,6 @@ body[data-saga-theme="dark"]:has(.portal-layout[data-saga-role="student"]) .saga
     position: static;
   }
 }
+
+/* Keep the active dialog in focus by hiding the page header while a modal is open. */
+.portal-layout:has(.modal-backdrop-custom) .topbar{display:none}
