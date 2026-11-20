@@ -111,7 +111,7 @@ export async function PATCH(request: Request, context: Context) {
     if (!parsed.success) return NextResponse.json({ error: "Enter between 1 and 8 valid grading components." }, { status: 400 });
     const components = parsed.data.saveGradeSheetComponents;
     const total = components.reduce((sum, item) => sum + item.percentage, 0);
-    if (Math.abs(total - 100) > 0.01) return NextResponse.json({ error: "Grading component percentages must total exactly 100%." }, { status: 400 });
+    if (Math.abs(total - 100) > 0.01 || new Set(components.map(item => item.name.toLocaleLowerCase())).size !== components.length) return NextResponse.json({ error: "Component names must be unique and percentages must total exactly 100%." }, { status: 400 });
     await prisma.subject.update({ where: { id: subjectId }, data: { gradeSheetComponents: JSON.stringify(components) } });
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated grading sheet display components", entity: "subject", entityId: subjectId } });
     return NextResponse.json({ ok: true, gradeSheetComponents: components });
