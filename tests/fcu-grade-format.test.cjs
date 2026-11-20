@@ -160,7 +160,7 @@ test("generic grading sheet export uses class records, actual assessment scores,
   assert.match(sheet, /Teacher&apos;s Signature over Printed Name/);
   assert.match(sheet, /Dean&apos;s Signature over Printed Name/);
   assert.match(sheet, /orientation="landscape" fitToWidth="1"/);
-  assert.match(sheet, /ATTENDANCE \\(\\%\\)/);
+  assert.match(sheet, /ATTENDANCE \\(%\\)/);
   assert.match(sheet, /50\\.00%/);
   assert.doesNotMatch(sheet, /Attendance · 2026-11-02|Attendance · 2026-11-03|Attendance · 2026-11-04/);
   assert.match(sheet, /paperSize="256" orientation="landscape"/);
