@@ -26,7 +26,7 @@ import { absenceDates, attendanceDays as orderedAttendanceDays, attendanceRiskSu
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 import { buildWorkbookPages, workbookWidths } from "@/lib/scorebook-layout";
 
-type User = { id: string; role: string; fullName: string; email: string; isDemo?: boolean; isTenantManager?: boolean; isSchoolAdmin?: boolean; emailDeliveryEnabled?: boolean; profileImagePath: string | null; facultyId?: string | null; defaultGradeSheetComponents?: string | null; courseProgram?: string | null; yearLevel?: string | null; school: { id: string; slug: string; name: string; shortName: string; portalTitle: string; logoText: string; logoPath: string | null; departmentLogoPath: string | null; primaryColor: string; address: string | null; deanName: string | null } };
+type User = { id: string; role: string; fullName: string; email: string; isDemo?: boolean; isTenantManager?: boolean; isSchoolAdmin?: boolean; emailDeliveryEnabled?: boolean; profileImagePath: string | null; facultyId?: string | null; defaultGradeSheetComponents?: string | null; courseProgram?: string | null; yearLevel?: string | null; school: { id: string; slug: string; name: string; shortName: string; portalTitle: string; logoText: string; logoPath: string | null; departmentLogoPath: string | null; primaryColor: string; address: string | null; departmentName: string | null; deanName: string | null } };
 type WorkbookChange = { subjectId: string; enrollmentId: string; assessmentId: string; points: number | null; remark: "EXCUSED" | "ABSENT" | "DID_NOT_SUBMIT" | null };
 type AttendanceMark = { subjectId: string; enrollmentId: string; assessmentId: string; remark: "PRESENT" | "LATE" | "ABSENT" | "EXCUSED" | null };
 type Subject = { id: string; classId: string | null; code: string; title: string; term: string; academicYear: string; schedule: string | null; courseYear: string | null; gradeSheetComponents?: string | null; isPublished: boolean; gradeStatus: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; _count?: { enrollments: number } };
@@ -678,6 +678,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [gradingSetupType, setGradingSetupType] = useState<"SINGLE" | "COMBINED">("SINGLE"); const [singleGroupType, setSingleGroupType] = useState<"LECTURE" | "LABORATORY">("LECTURE");
   const [theme, setTheme] = useState<"light" | "dark">("light"); const [academicYear, setAcademicYear] = useState("2026-2027"); const [calendarSystem, setCalendarSystem] = useState<"SEMESTER" | "TRIMESTER">("SEMESTER"); const [activeTerm, setActiveTerm] = useState("1st Semester"); const [academicPeriodReady, setAcademicPeriodReady] = useState(false); const academicYears = [...Array.from({length: 10}, (_, index) => 2016 + index), ...Array.from({length: 10}, (_, index) => 2026 + index)].map(start => `${start}-${start + 1}`).sort((a,b) => b.localeCompare(a)); const [schoolYearFilter, setSchoolYearFilter] = useState("All School Years"); const [termFilter, setTermFilter] = useState("All Terms"); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | null>(null); const [deanName, setDeanName] = useState(user.school.deanName || "");
   const [schoolAddress, setSchoolAddress] = useState(user.school.address || "");
+  const [departmentName, setDepartmentName] = useState(user.school.departmentName || "");
   const defaultGradeSheetComponents = useMemo<GradeSheetComponent[]>(() => { try { const value = JSON.parse(user.defaultGradeSheetComponents || ""); return Array.isArray(value) && value.length ? value : [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }]; } catch { return [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }]; } }, [user.defaultGradeSheetComponents]);
   const [gradeSheetComponents, setGradeSheetComponents] = useState<GradeSheetComponent[]>(defaultGradeSheetComponents);
   const [componentDraft, setComponentDraft] = useState<GradeSheetComponent[]>(defaultGradeSheetComponents);
@@ -1347,13 +1348,13 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     const total = componentDraft.reduce((sum, item) => sum + Number(item.percentage || 0), 0);
     if (Math.abs(total - 100) > 0.01 || componentDraft.some(item => !item.name.trim())) { setErr("Component names are required and percentages must total 100%."); return; }
     await run(async () => {
-      await api("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName: profileName, facultyId: profileFacultyId, schoolAddress, deanName, defaultGradeSheetComponents: componentDraft }) });
+      await api("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName: profileName, facultyId: profileFacultyId, schoolAddress, departmentName, deanName, defaultGradeSheetComponents: componentDraft }) });
       setGradeSheetComponents(componentDraft);
       router.refresh();
     }, "Saved as your default grading sheet components.");
   }
   function printClass(mode: "roster" | "grades") { setPrintMode(mode); }
-  async function saveProfile(e: FormEvent<HTMLFormElement>) { e.preventDefault(); await run(async () => { await api("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName: profileName, ...(teacher ? { facultyId: profileFacultyId, schoolAddress, deanName } : {}) }) }); router.refresh(); }, "Profile updated."); }
+  async function saveProfile(e: FormEvent<HTMLFormElement>) { e.preventDefault(); await run(async () => { await api("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName: profileName, ...(teacher ? { facultyId: profileFacultyId, schoolAddress, departmentName, deanName } : {}) }) }); router.refresh(); }, "Profile updated."); }
   async function requestPasswordOtp() { await run(async () => { const result = await api("/api/profile/security-otp", { method: "POST", body: JSON.stringify({ purpose: "PASSWORD_CHANGE", currentPassword: passwordCurrent }) }); setPasswordOtpSent(true); setPasswordOtp(""); setNotice(result.message); }, ""); }
   async function changePassword(e: FormEvent<HTMLFormElement>) { e.preventDefault(); if (passwordNew !== passwordConfirm) { setErr("The new passwords do not match."); return; } await run(async () => { await api("/api/profile/password", { method: "POST", body: JSON.stringify({ currentPassword: passwordCurrent, newPassword: passwordNew, code: passwordOtp }) }); setPasswordCurrent(""); setPasswordNew(""); setPasswordConfirm(""); setPasswordOtp(""); setPasswordOtpSent(false); window.setTimeout(() => { void logout(); }, 1200); }, "Password changed. Signing you out; sign in again with your new password."); }
   async function uploadProfileImage(kind: "profile" | "school-logo" | "department-logo", file?: File) {
@@ -1684,6 +1685,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <p className="muted small">These details are shared by teacher accounts in your school and are used automatically in grading-sheet exports.</p>
           <label className="form-label mt-3" htmlFor="profileSchoolAddress">School address</label>
           <textarea className="form-control" id="profileSchoolAddress" value={schoolAddress} onChange={event => setSchoolAddress(event.target.value)} maxLength={300} rows={2} placeholder="Complete school or campus address"/>
+          <label className="form-label mt-3" htmlFor="profileDepartmentName">College / Department name</label>
+          <input className="form-control" id="profileDepartmentName" value={departmentName} onChange={event => setDepartmentName(event.target.value)} maxLength={160} placeholder="College or department name"/>
           <label className="form-label mt-3" htmlFor="profileDeanName">Dean’s name</label>
           <input className="form-control" id="profileDeanName" value={deanName} onChange={event => setDeanName(event.target.value)} maxLength={120} placeholder="Dean’s full name"/>
         </>}{!teacher && <>{user.courseProgram && <><label className="form-label mt-3">Course / Program</label><input className="form-control" readOnly value={user.courseProgram}/></>}{user.yearLevel && <><label className="form-label mt-3">Year level</label><input className="form-control" readOnly value={user.yearLevel}/></>}</>}<button className="btn btn-primary mt-4" disabled={busy}>Save profile</button></form><ChangeEmailForm schoolId={user.school.id} emailDeliveryEnabled={user.emailDeliveryEnabled}/><div className="account-security-section"><h3>Change password</h3><p className="muted">Use at least 12 characters. A verification code will be sent to your current sign-in email. Changing your password signs out existing sessions.</p><form className="profile-form" onSubmit={changePassword}><label className="form-label">Current password</label><input className="form-control" type="password" autoComplete="current-password" value={passwordCurrent} onChange={e=>setPasswordCurrent(e.target.value)} required maxLength={100}/><label className="form-label mt-3">New password</label><input className="form-control" type="password" autoComplete="new-password" value={passwordNew} onChange={e=>setPasswordNew(e.target.value)} required minLength={12} maxLength={100}/><label className="form-label mt-3">Confirm new password</label><input className="form-control" type="password" autoComplete="new-password" value={passwordConfirm} onChange={e=>setPasswordConfirm(e.target.value)} required minLength={12} maxLength={100}/>{passwordOtpSent && <><label className="form-label mt-3">Six-digit code</label><input className="form-control" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" value={passwordOtp} onChange={e=>setPasswordOtp(e.target.value.replace(/\D/g, "").slice(0,6))} required/></>}<button type={passwordOtpSent ? "submit" : "button"} className="btn btn-primary mt-3" disabled={busy} onClick={!passwordOtpSent ? ()=>void requestPasswordOtp() : undefined}>{passwordOtpSent ? "Verify code and update password" : "Send verification code"}</button></form></div></section> : teacher ? <>{tab === "overview" && <><section className="welcome-strip"><div className="welcome-copy"><span className="eyebrow">YOUR TEACHING DESK</span><h2>Good day, {user.fullName.split(" ")[0]}.</h2><p>Manage class lists, grading rules, and published student results.</p></div><button className="btn btn-light" onClick={() => setCreateOpen(true)}><b>＋</b> Add subject</button><div className="welcome-decoration">✳</div></section><section className="surface rounded-3 p-3 mb-4 academic-period-panel" aria-label="Academic period selection">
@@ -2045,10 +2048,12 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         @media print {
           .generic-print-sheet { display:block!important; width:100%!important; color:#000!important; background:#fff!important; font-family:Arial,Helvetica,sans-serif!important; }
           .generic-print-sheet { font-size:9pt; }
-          .generic-print-sheet>header { position:relative; display:grid; grid-template-columns:68px 1fr 68px; align-items:center; gap:10px; text-align:center; border:0; padding:0 0 8px; margin:0 0 6px; }
-          .generic-print-logo { width:62px; height:62px; object-fit:contain; }
+          .generic-print-sheet>header { position:relative; display:grid; grid-template-columns:64px minmax(0,1fr) 64px; align-items:center; gap:16px; padding-left:6px; padding-right:6px; text-align:center; border:0; padding:0 0 8px; margin:0 0 6px; }
+          .generic-print-logo { display:block; width:60px; height:60px; object-fit:contain; justify-self:center; }
           .generic-print-sheet>header h1 { margin:0; font-size:14pt; font-weight:700; }
-          .generic-print-sheet>header p { margin:2px 0 5px; font-size:8.5pt; min-height:10px; }
+          .generic-print-sheet>header p { margin:2px 0 4px; font-size:8.5pt; min-height:10px; line-height:1.2; }
+          .generic-print-sheet>header .generic-print-department { margin:0 0 5px; font-size:9pt; font-weight:600; min-height:0; }
+          .generic-print-sheet>header .generic-print-department:empty { display:none; }
           .generic-print-sheet>header strong { display:block; font-size:12pt; letter-spacing:.04em; }
           .generic-print-doc-control { border:1px solid #333; margin:5px 0 8px; font-size:7pt; }
           .generic-print-doc-control .doc-control-row { display:grid; grid-template-columns:1fr 1fr 1fr; }
@@ -2077,7 +2082,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       {printMode === "grades" && detail && <article className="print-grade-sheet generic-print-sheet">
         <header>
           {schoolLogoPath ? <img className="generic-print-logo" src={`/api/media?pathname=${encodeURIComponent(schoolLogoPath)}`} alt="School / institution logo"/> : <span/>}
-          <div><h1>{user.school.name}</h1><p>{user.school.address || "School address not set"}</p><strong>GRADING SHEETS</strong></div>
+          <div><h1>{user.school.name}</h1><p>{user.school.address || "School address not set"}</p><p className="generic-print-department">{user.school.departmentName || ""}</p><strong>GRADING SHEETS</strong></div>
           {departmentLogoPath ? <img className="generic-print-logo" src={`/api/media?pathname=${encodeURIComponent(departmentLogoPath)}`} alt="College / department logo"/> : <span/>}
         </header>
         <div className="generic-print-doc-control">
@@ -2094,7 +2099,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <div><b>Course &amp; Year:</b><span>{detail.courseYear || "—"}</span></div>
         </div>
         <table className="print-grade-table generic-print-grade-table">
-          <thead><tr><th>NO.</th><th>NAME OF STUDENTS</th>{gradeSheetComponents.map((component,index)=><th key={index}>{component.name.toLocaleUpperCase()}<small>{component.percentage.toFixed(2)}%</small></th>)}<th>TG</th><th>FG</th><th>REMARKS</th></tr></thead>
+          <thead><tr><th>NO.</th><th>NAME OF STUDENTS</th>{gradeSheetComponents.map((component,index)=><th key={index}>{component.name.toLocaleUpperCase()}<small>{component.percentage.toFixed(2)}%</small></th>)}<th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
           <tbody>{detail.enrollments.map((enrollment,index)=>{
             const band = detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>enrollment.finalPercent!==null&&enrollment.finalPercent>=item.minPercent);
             const special = ["INC","NP","DROPPED"].includes(enrollment.remarks || "");
