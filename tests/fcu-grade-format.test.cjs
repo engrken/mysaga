@@ -489,7 +489,7 @@ test("Record Scores Excel export mirrors the full grouped scorebook and saved si
   assert.match(sheet, /QUIZZES/);
   assert.match(sheet, /MAJOR EXAM/);
   assert.match(sheet, /Quiz 1 \(10\)/);
-  assert.match(sheet, /Equivalent \(%\)/);
+  assert.match(sheet, /EQUIVALENT \(%\)/);
   assert.doesNotMatch(sheet, /Lecture \/ Quizzes|Quizzes · Quiz 1|Item wt|Course wt|Student Number|2023-0001/);
   assert.match(sheet, /<mergeCell ref="D14:E14"\/>/);
   assert.match(sheet, /<mergeCell ref="F14:G14"\/>/);
