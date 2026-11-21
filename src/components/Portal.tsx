@@ -2048,7 +2048,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         @media print {
           .generic-print-sheet { display:block!important; width:100%!important; color:#000!important; background:#fff!important; font-family:Arial,Helvetica,sans-serif!important; }
           .generic-print-sheet { font-size:9pt; }
-          .generic-print-sheet>header { position:relative; display:grid; grid-template-columns:64px minmax(0,1fr) 64px; align-items:center; gap:16px; padding-left:6px; padding-right:6px; text-align:center; border:0; padding:0 0 8px; margin:0 0 6px; }
+          .generic-print-sheet>header { position:relative; display:grid; grid-template-columns:64px minmax(0,1fr) 64px; align-items:center; gap:16px; text-align:center; border:0; padding:0 6px 8px; margin:0 0 6px; }
           .generic-print-logo { display:block; width:60px; height:60px; object-fit:contain; justify-self:center; }
           .generic-print-sheet>header h1 { margin:0; font-size:14pt; font-weight:700; }
           .generic-print-sheet>header p { margin:2px 0 4px; font-size:8.5pt; min-height:10px; line-height:1.2; }
