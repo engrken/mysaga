@@ -642,15 +642,15 @@ test("Record Scores export dynamically merges institutional, metadata, category,
   for (const rowNumber of [20, 21, 22]) {
     const rowXml = sheet.match(new RegExp('<row r="' + rowNumber + '".*?<\\/row>'))?.[0] ?? "";
     assert.ok(rowXml, 'signature spacer row ' + rowNumber + ' exists');
-    assert.doesNotMatch(rowXml, /<t[^>]*>[^<]+<\\/t>/, 'signature spacer row ' + rowNumber + ' is blank');
+    assert.doesNotMatch(rowXml, /<t[^>]*>[^<]+<\/t>/, 'signature spacer row ' + rowNumber + ' is blank');
   }
   for (const cell of ["A23", "L23", "A24", "L24"]) {
     assert.match(sheet, new RegExp('<c r="' + cell + '" s="17"'));
   }
   assert.match(sheet, /<c r="A23"[^>]*>.*?TEACHER EXAMPLE/s);
   assert.match(sheet, /<c r="L23"[^>]*>.*?DEAN EXAMPLE/s);
-  assert.match(sheet, /<c r="A24"[^>]*>.*?SIGNATURE OVER PRINTED NAME \\/ DATE/s);
-  assert.match(sheet, /<c r="L24"[^>]*>.*?SIGNATURE OVER PRINTED NAME \\/ DATE/s);
+  assert.match(sheet, /<c r="A24"[^>]*>.*?SIGNATURE OVER PRINTED NAME \/ DATE/s);
+  assert.match(sheet, /<c r="L24"[^>]*>.*?SIGNATURE OVER PRINTED NAME \/ DATE/s);
   assert.match(sheet, /<cellXfs count="18">/);
   assert.match(sheet, /Submitted by:/);
   assert.match(sheet, /Noted:/);
