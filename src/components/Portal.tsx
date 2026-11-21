@@ -554,12 +554,12 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
   const merges = ["A1:" + last + "9", "A11:" + last + "11", "A12:" + last + "12", "A13:" + last + "13", "A14:" + last + "14", ...signatureRanges];
   const mergeXml = merges.map(range => '<mergeCell ref="' + range + '"/>').join("");
   const widths = '<cols>' +
-    '<col min="1" max="1" width="12" customWidth="1"/>' +
-    '<col min="2" max="2" width="28" customWidth="1"/>' +
-    (componentColumns.length ? '<col min="3" max="' + (totalCol) + '" width="12" customWidth="1"/>' : '') +
-    '<col min="' + (totalCol + 1) + '" max="' + (totalCol + 1) + '" width="12" customWidth="1"/>' +
-    '<col min="' + (totalCol + 2) + '" max="' + (totalCol + 2) + '" width="10" customWidth="1"/>' +
-    '<col min="' + (totalCol + 3) + '" max="' + (totalCol + 3) + '" width="14" customWidth="1"/>' +
+    '<col min="1" max="1" width="6" customWidth="1"/>' +
+    '<col min="2" max="2" width="32" customWidth="1"/>' +
+    (componentColumns.length ? '<col min="3" max="' + totalCol + '" width="13" customWidth="1"/>' : '') +
+    '<col min="' + (totalCol + 1) + '" max="' + (totalCol + 1) + '" width="14" customWidth="1"/>' +
+    '<col min="' + (totalCol + 2) + '" max="' + (totalCol + 2) + '" width="11" customWidth="1"/>' +
+    '<col min="' + (totalCol + 3) + '" max="' + (totalCol + 3) + '" width="18" customWidth="1"/>' +
     '</cols>';
   const worksheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
@@ -2162,9 +2162,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         @media print {
           .generic-print-sheet { display:block!important; width:100%!important; color:#000!important; background:#fff!important; font-family:Arial,Helvetica,sans-serif!important; }
           .generic-print-sheet { font-size:9pt; }
-          .generic-print-sheet>header { position:relative; display:grid; grid-template-columns:104px minmax(0,1fr); align-items:center; gap:12px; text-align:center; border:0; padding:0 6px 8px; margin:0 0 6px; }
-          .generic-print-logos { display:flex; align-items:center; justify-content:center; gap:4px; min-width:0; }
-          .generic-print-logo { display:block; width:48px; height:48px; object-fit:contain; flex:0 1 48px; }
+          .generic-print-sheet>header { position:relative; display:grid; grid-template-columns:76px minmax(0,1fr) 76px; align-items:center; gap:10px; width:100%; max-width:900px; box-sizing:border-box; text-align:center; border:0; padding:0 6px 8px; margin:0 auto 6px; }
+          .generic-print-logo-slot { display:flex; align-items:center; justify-content:center; min-width:0; min-height:64px; }
+          .generic-print-logo { display:block; width:60px; height:60px; object-fit:contain; }
           .generic-print-sheet>header h1 { margin:0; font-size:14pt; font-weight:700; }
           .generic-print-sheet>header p { margin:2px 0 4px; font-size:8.5pt; min-height:10px; line-height:1.2; }
           .generic-print-sheet>header .generic-print-department { margin:0 0 5px; font-size:9pt; font-weight:600; min-height:0; }
@@ -2182,8 +2182,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           .generic-print-grade-table thead { display:table-header-group; }
           .generic-print-grade-table th,.generic-print-grade-table td { border:1px solid #333!important; padding:5px 4px!important; vertical-align:middle; }
           .generic-print-grade-table th { background:#fff!important; font-size:7.5pt; text-align:center; overflow-wrap:anywhere; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-          .generic-print-grade-table th:nth-child(1),.generic-print-grade-table td:nth-child(1) { width:13%; text-align:center; }
-          .generic-print-grade-table th:nth-child(2),.generic-print-grade-table td:nth-child(2) { width:31%; text-align:left; }
+          .generic-print-grade-table th:nth-child(1),.generic-print-grade-table td:nth-child(1) { width:6%; text-align:center; }
+          .generic-print-grade-table th:nth-child(2),.generic-print-grade-table td:nth-child(2) { width:32%; text-align:left; }
           .generic-print-grade-table td:not(:nth-child(2)) { text-align:center; }
           .generic-print-grade-table tbody tr { break-inside:avoid; page-break-inside:avoid; }
           .generic-print-grade-table small { display:block; font-weight:400; font-size:6.5pt; }
@@ -2196,11 +2196,13 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         }`}</style>}
       {printMode === "grades" && detail && <article className="print-grade-sheet generic-print-sheet">
         <header>
-          <div className="generic-print-logos">
-            {schoolLogoPath && <img className="generic-print-logo" src={"/api/media?pathname=" + encodeURIComponent(schoolLogoPath)} alt="School / institution logo"/>}
-            {departmentLogoPath && <img className="generic-print-logo" src={"/api/media?pathname=" + encodeURIComponent(departmentLogoPath)} alt="College / department logo"/>}
+          <div className="generic-print-logo-slot">
+            {schoolLogoPath ? <img className="generic-print-logo" src={"/api/media?pathname=" + encodeURIComponent(schoolLogoPath)} alt="School / institution logo"/> : <span aria-hidden="true"/>}
           </div>
-          <div><h1>{user.school.name}</h1><p>{user.school.address || "School address not set"}</p><p className="generic-print-department">{user.school.departmentName || ""}</p><strong>GRADING SHEETS</strong></div>
+          <div className="generic-print-school-heading"><h1>{user.school.name}</h1><p>{user.school.address || "School address not set"}</p><p className="generic-print-department">{user.school.departmentName || ""}</p><strong>GRADING SHEETS</strong></div>
+          <div className="generic-print-logo-slot">
+            {departmentLogoPath ? <img className="generic-print-logo" src={"/api/media?pathname=" + encodeURIComponent(departmentLogoPath)} alt="College / department logo"/> : <span aria-hidden="true"/>}
+          </div>
         </header>
         <div className="generic-print-doc-control">
           <div className="doc-control-row"><span><b>Form Name:</b> GRADING SHEETS</span><span><b>Effectivity:</b> —</span><span><b>Form No.:</b> —</span></div>
@@ -2216,11 +2218,11 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <div><b>Course &amp; Year:</b><span>{detail.courseYear || "—"}</span></div>
         </div>
         <table className="print-grade-table generic-print-grade-table">
-          <thead><tr><th>NO.</th><th>NAME OF STUDENTS</th>{gradeSheetComponents.map((component,index)=><th key={index}>{component.name.toLocaleUpperCase()}<small>{component.percentage.toFixed(2)}%</small></th>)}<th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
+          <thead><tr><th aria-label="Sequence number"></th><th>NAME OF STUDENTS</th>{gradeSheetComponents.map((component,index)=><th key={index}>{component.name.toLocaleUpperCase()}<small>{component.percentage.toFixed(2)}%</small></th>)}<th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
           <tbody>{detail.enrollments.map((enrollment,index)=>{
             const band = detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>enrollment.finalPercent!==null&&enrollment.finalPercent>=item.minPercent);
             const special = ["INC","NP","DROPPED"].includes(enrollment.remarks || "");
-            return <tr key={enrollment.id}><td>{enrollment.studentNumber || index+1}</td><td>{enrollment.studentName.toLocaleUpperCase()}</td>{gradeSheetComponents.map((component,componentIndex)=>{const contribution=gradeSheetComponentContribution(detail,enrollment,component);return <td key={componentIndex}>{contribution===null?"":contribution.toFixed(2)}</td>;})}<td>{special||enrollment.finalPercent===null?"":enrollment.finalPercent.toFixed(2)+"%"}</td><td>{special?"":enrollment.finalGradeOverride||band?.finalGrade||""}</td><td>{enrollment.remarks||band?.remarks||""}</td></tr>;
+            return <tr key={enrollment.id}><td>{index+1}.</td><td>{enrollment.studentName.toLocaleUpperCase()}</td>{gradeSheetComponents.map((component,componentIndex)=>{const contribution=gradeSheetComponentContribution(detail,enrollment,component);return <td key={componentIndex}>{contribution===null?"":contribution.toFixed(2)}</td>;})}<td>{special||enrollment.finalPercent===null?"":enrollment.finalPercent.toFixed(2)+"%"}</td><td>{special?"":enrollment.finalGradeOverride||band?.finalGrade||""}</td><td>{enrollment.remarks||band?.remarks||""}</td></tr>;
           })}</tbody>
         </table>
         <p className="grade-sheet-calculation-note">Component labels and percentages are presentation settings only. Official grades continue to use the class grading categories and configured calculation rules. Component scores are shown when a matching class category exists.</p>
