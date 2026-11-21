@@ -101,30 +101,86 @@ test("Generic PDF export is offered only once inside the export dropdown", () =>
   assert.doesNotMatch(source, /<button className="btn btn-outline-primary" onClick=\{\(\) => printFinalGradesPdf\("generic"\)\}>Save \/ Print Generic PDF<\/button>/, "the duplicate standalone PDF button is removed");
 });
 
-test("ISO Excel export embeds the same document header as the ISO PDF", () => {
-  const start = source.indexOf("function downloadXlsx(");
-  const end = source.indexOf("\nfunction categoryPercent(", start);
-  assert.ok(start > 0 && end > start, "header-capable XLSX writer is present");
+test("ISO Excel export follows the FCU editable A1:G4 header grid and Folio page setup", () => {
+  const start = source.indexOf("function downloadIsoXlsx(");
+  const end = source.indexOf("\\nfunction categoryDescendantIds(", start);
+  assert.ok(start > 0 && end > start, "dedicated ISO XLSX writer is present");
   const compiledWriter = ts.transpileModule(source.slice(start, end), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText;
   let saved;
   const context = {
-    Uint8Array, Number, String, Math, Blob, TextEncoder,
-    URL: { createObjectURL: () => "blob:test", revokeObjectURL() {} },
+    Uint8Array, Number, String, Math, Blob,
+    URL: { createObjectURL: () => "blob:iso", revokeObjectURL() {} },
     document: { createElement: () => ({ click() {} }) },
     zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
     excelColumn: columns,
     xmlEscape: escape
   };
-  vm.runInNewContext(compiledWriter + "\nthis.writeWorkbook = downloadXlsx;", context);
-  context.writeWorkbook("iso.xlsx", "ISO Grading Sheet", ["No.", "Student Name"], [[1, "Example Student"]], Uint8Array.from([137, 80, 78, 71]), 0.25);
+  vm.runInNewContext(compiledWriter + "\\nthis.writeIsoWorkbook = downloadIsoXlsx;", context);
+  context.writeIsoWorkbook(
+    "iso.xlsx",
+    "ISO Grading Sheet",
+    ["No.", "Student Name", "Student Number", "Quiz 1", "TOTAL GRADE (%)", "FINAL GRADE", "REMARKS"],
+    [[1, "A Very Long Example Student Name", "2025-0001", 80, 73.99, "2.00", "PASSED"]],
+    Uint8Array.from([137, 80, 78, 71]),
+    {
+      organizationName: "FILAMER CHRISTIAN UNIVERSITY, INC.",
+      organizationAddress: "Roxas City, Capiz",
+      formName: "COLLEGIATE GRADING SHEET",
+      formNo: "FCU-EOMS-RO-006-F",
+      effectivity: "October 1, 2025",
+      issuingOffice: "REGISTRAR'S OFFICE",
+      revisionNo: "1",
+      eomsTitle: "EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM (ISO 21001:2025)",
+      affiliationLine1: "Member Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)",
+      affiliationLine2: "Member: Association of Christian Schools, Colleges in Asia (ACUCA)",
+      submittedBy: "Teacher Example",
+      deanName: "Dean Example"
+    }
+  );
   const files = Object.fromEntries(saved.map(file => [file.name, file.content]));
-  assert.ok(files["xl/media/header.png"]);
-  assert.match(files["xl/worksheets/sheet1.xml"], /<mergeCell ref="A1:B9"\/>/);
-  assert.match(files["xl/worksheets/sheet1.xml"], /<drawing r:id="rId1"\/>/);
+  const sheet = files["xl/worksheets/sheet1.xml"];
+  const styles = files["xl/styles.xml"];
+  assert.ok(files["xl/media/iso-school-block.png"], "the university seal/name image is embedded in the A-column block");
+  assert.match(sheet, /mergeCell ref="A1:A4"/);
+  assert.match(sheet, /mergeCell ref="C1:E1"/);
+  assert.match(sheet, /mergeCell ref="C2:E2"/);
+  assert.match(sheet, /mergeCell ref="C3:E3"/);
+  assert.match(sheet, /mergeCell ref="B4:E4"/);
+  assert.match(sheet, /mergeCell ref="A5:G5"/);
+  assert.match(sheet, /mergeCell ref="A6:G6"/);
+  assert.match(sheet, /Form Name:/);
+  assert.match(sheet, /FILAMER CHRISTIAN UNIVERSITY, INC\./);
+  assert.match(sheet, /COLLEGIATE GRADING SHEET/);
+  assert.match(sheet, /Form No: FCU-EOMS-RO-006-F/);
+  assert.match(sheet, /EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM \(ISO 21001:2025\)/);
+  assert.match(sheet, /Revision No\. 1/);
+  assert.match(sheet, /October 1, 2025/);
+  assert.match(sheet, /REGISTRAR&apos;S OFFICE|REGISTRAR'S OFFICE/);
+  assert.match(sheet, /ACSCU-ACI/);
+  assert.match(sheet, /ACUCA/);
+  assert.match(sheet, /showGridLines="1"/);
+  assert.match(sheet, /pageSetup paperSize="14" orientation="portrait" fitToWidth="1" fitToHeight="0"/);
+  assert.match(sheet, /<row r="8".*?TOTAL GRADE/s);
+  assert.match(sheet, /<row r="9".*?<v>73\.99<\/v>/s);
+  assert.match(sheet, /<mergeCell ref="A12:D12"/);
+  assert.match(sheet, /<mergeCell ref="E12:G12"/);
+  assert.match(sheet, /<c r="A12" s="8"/, "signature names have a bottom border underline style");
+  assert.match(sheet, /<drawing r:id="rId1"\/>/);
+  assert.match(files["xl/drawings/drawing1.xml"], /University Seal and Name Block/);
   assert.match(files["xl/drawings/drawing1.xml"], /<a:blip r:embed="rId1"\/>/);
-  assert.match(files["xl/worksheets/sheet1.xml"], /<row r="11">.*?No\./s);
+  assert.match(styles, /<left style="thin"><color rgb="FF000000"\/><\/left>/);
+  assert.match(styles, /<sz val="11"\/>/);
+  assert.match(styles, /<sz val="8"\/>/);
+  assert.match(sheet, /<col min="2" max="2" width="3[0-8]\.00" customWidth="1"\/>/);
+  const exporterStart = source.indexOf("async function exportIsoGradesExcel()");
+  const exporterEnd = source.indexOf("async function exportGrades()", exporterStart);
+  const exporter = source.slice(exporterStart, exporterEnd);
+  assert.ok(exporter.includes("gradeSheetComponentContribution(detail, enrollment, component)"), "component outputs use the weighted grading-sheet contribution");
+  assert.ok(exporter.includes('"TOTAL GRADE (%)"'), "the official total percentage is included as its own column");
+  assert.ok(exporter.includes("Number(enrollment.finalPercent.toFixed(2))"), "the total column uses the official calculated final percent");
+  assert.ok(exporter.includes("downloadIsoXlsx("), "ISO export calls the dedicated editable-grid writer");
 });
 
 test("Attendance component calculates its own session percentage and weighted contribution", () => {
