@@ -124,13 +124,20 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertIsNone(sheet["A6"].border.bottom.style)
         self.assertIsNone(sheet["A1"].value, "the seal is the only A1:A4 content")
 
+        # Validate the merged-cell perimeter: merged interiors carry only
+        # the edges required by Excel, not four redundant borders per cell.
+        for column in range(1, 9):
+            self.assertEqual(sheet.cell(1, column).border.top.style, "thin")
+            self.assertEqual(sheet.cell(4, column).border.bottom.style, "thin")
         for row in range(1, 5):
-            for column in range(1, 9):
+            for column in (1, 2, 3, 6, 7, 8):
+                cell = sheet.cell(row, column)
+                self.assertEqual(cell.border.left.style, "thin")
+                self.assertEqual(cell.border.right.style, "thin")
+            for column in (7, 8):
                 cell = sheet.cell(row, column)
                 self.assertEqual(cell.border.top.style, "thin")
                 self.assertEqual(cell.border.bottom.style, "thin")
-                self.assertEqual(cell.border.left.style, "thin")
-                self.assertEqual(cell.border.right.style, "thin")
 
         self.assertTrue(sheet.sheet_view.showGridLines)
         self.assertEqual(sheet.page_setup.orientation, "portrait")
