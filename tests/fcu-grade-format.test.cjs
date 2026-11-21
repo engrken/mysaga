@@ -382,3 +382,30 @@ test("assessment item order is saved and applied consistently in Assessment Item
   assert.match(migration, /PARTITION BY "subjectId", "categoryId"/);
   assert.match(migration, /ORDER BY "createdAt" ASC, "id" ASC/);
 });
+
+
+test("ISO header configuration is isolated per school and FCU receives its supplied preset", () => {
+  const start = source.indexOf("type IsoHeaderConfig =");
+  const end = source.indexOf("\\ntype WorkbookChange", start);
+  assert.ok(start >= 0 && end > start, "ISO header defaults and parser are present");
+  const compiled = ts.transpileModule(source.slice(start, end), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  const context = {};
+  vm.runInNewContext(compiled + "\\nthis.readIsoHeaderConfig = readIsoHeaderConfig;", context);
+  const fcu = context.readIsoHeaderConfig("Filamer Christian University, Inc.", "filamer", null);
+  assert.equal(fcu.formNo, "FCU-EOMS-RO-006-F");
+  assert.equal(fcu.organizationAddress, "Roxas Avenue, Roxas City, Capiz, Philippines");
+  assert.equal(fcu.issuingOffice, "REGISTRAR’S OFFICE");
+  assert.equal(fcu.isoStandard, "ISO 21001:2025");
+  const otherSchool = context.readIsoHeaderConfig("Another College", "another-college", null);
+  assert.equal(otherSchool.formName, "");
+  assert.equal(otherSchool.formNo, "");
+  const savedOtherSchool = context.readIsoHeaderConfig("Another College", "another-college", JSON.stringify({
+    ...otherSchool,
+    formName: "INSTITUTIONAL RECORD SHEET",
+    formNo: "AC-REG-001"
+  }));
+  assert.equal(savedOtherSchool.formName, "INSTITUTIONAL RECORD SHEET");
+  assert.equal(savedOtherSchool.formNo, "AC-REG-001");
+});
