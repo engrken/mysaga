@@ -368,22 +368,26 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     const height = rowIndex === 0 ? ' ht="26" customHeight="1"' : rowIndex === 2 ? ' ht="24" customHeight="1"' : rowIndex === 15 ? ' ht="42" customHeight="1"' : rowIndex >= 16 && rowIndex < 16 + detail.enrollments.length ? ' ht="22" customHeight="1"' : ' ht="20" customHeight="1"';
     return '<row r="' + rowNumber + '"' + height + '>' + xmlCells + '</row>';
   }).join("");
-  const assessmentCount = academicAssessments.length;
-  const attendanceColumn = assessmentCount + 2;
-  const widths = '<cols><col min="1" max="1" width="30" customWidth="1"/>' +
-    (assessmentCount > 0 ? '<col min="2" max="' + (assessmentCount + 1) + '" width="14" customWidth="1"/>' : '') +
-    '<col min="' + attendanceColumn + '" max="' + attendanceColumn + '" width="13" customWidth="1"/>' +
-    '<col min="' + (attendanceColumn + 1) + '" max="' + columnCount + '" width="13" customWidth="1"/></cols>';
+  const componentStart = 2 + academicAssessments.length;
+  const attendanceColumn = componentStart + components.length;
+  const totalColumn = attendanceColumn + 1;
+  const widths = "<cols>" + headers.map((header,index) => {
+    const width = index === 0 ? 32 : index >= totalColumn
+      ? (header === "FINAL GRADE" ? 12 : header === "REMARKS" ? 16 : 14)
+      : index === attendanceColumn - 1 ? 14
+      : Math.max(16, Math.min(26, Math.ceil(header.length * 0.72)));
+    return '<col min="' + (index + 1) + '" max="' + (index + 1) + '" width="' + width + '" customWidth="1"/>';
+  }).join("") + "</cols>";
   const worksheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" zoomScale="85" workbookViewId="0"><pane ySplit="16" topLeftCell="A17" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A17" sqref="A17"/></sheetView></sheetViews>' +
+    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" zoomScale="90" workbookViewId="0"><pane ySplit="16" topLeftCell="A17" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A17" sqref="A17"/></sheetView></sheetViews>' +
     '<sheetFormatPr defaultRowHeight="18"/>' + widths + '<sheetData>' + xmlRows + '</sheetData>' +
     '<mergeCells count="' + mergeRanges.length + '">' + mergeRanges.map(range => '<mergeCell ref="' + range + '"/>').join("") + '</mergeCells>' +
     '<printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.35" bottom="0.35" header="0.15" footer="0.15"/>' +
     '<pageSetup paperSize="256" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
   const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<fonts count="4"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="15"/><name val="Arial"/></font><font><sz val="9"/><name val="Arial"/><color rgb="FF5B6573"/></font><font><b/><sz val="12"/><name val="Arial"/></font></fonts>' +
+    '<fonts count="5"><font><sz val="9"/><name val="Arial"/></font><font><b/><sz val="14"/><name val="Arial"/></font><font><sz val="8.5"/><name val="Arial"/><color rgb="FF5B6573"/></font><font><b/><sz val="11"/><name val="Arial"/></font><font><b/><sz val="9"/><name val="Arial"/></font></fonts>' +
     '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF0F8"/><bgColor indexed="64"/></patternFill></fill></fills>' +
     '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD4DCE7"/></left><right style="thin"><color rgb="FFD4DCE7"/></right><top style="thin"><color rgb="FFD4DCE7"/></top><bottom style="thin"><color rgb="FFD4DCE7"/></bottom><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
@@ -393,7 +397,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>' +
-    '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="4" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
     '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
