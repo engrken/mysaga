@@ -137,6 +137,10 @@ test("Attendance component calculates its own session percentage and weighted co
   const context = {
     Set, Number, Math,
     categoryPath: category => category.name,
+    calculateGradeBreakdown: () => ({ items: [
+      { categoryId: "sessions", earnedCourse: 10 },
+      { categoryId: "other-attendance", earnedCourse: 10 }
+    ] }),
     calculateCategoryPercent: ({ assessments }) => {
       const counted = assessments.filter(item => item.scores[0]?.remark !== "EXCUSED" && (item.scores[0]?.remark || item.scores[0]?.points != null));
       if (!counted.length) return null;
