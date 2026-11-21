@@ -358,7 +358,41 @@ function gradeSheetComponentPercent(detail: Detail, enrollment: Enrollment, comp
   }
   return totalWeight > 0 ? Number((weighted / totalWeight).toFixed(2)) : null;
 }
+function gradeSheetRootWeightedContribution(detail: Detail, enrollment: Enrollment, root: Category) {
+  const grouped = new Map<string, Assessment[]>();
+  for (const assessment of detail.assessments) {
+    const items = grouped.get(assessment.categoryId) ?? [];
+    items.push(assessment);
+    grouped.set(assessment.categoryId, items);
+  }
+  const breakdown = calculateGradeBreakdown(detail.categories.map(category => ({
+    id: category.id,
+    parentId: category.parentId,
+    weight: category.weight,
+    conversionBase: category.conversionBase,
+    assessments: (grouped.get(category.id) ?? []).map(assessment => {
+      const score = enrollment.scores.find(item => item.assessmentId === assessment.id);
+      return {
+        title: assessment.title,
+        dueDate: assessment.dueDate,
+        maxScore: assessment.maxScore,
+        weight: assessment.weight,
+        scores: score ? [score] : []
+      };
+    })
+  })));
+  const branchIds = categoryDescendantIds(root.id, detail.categories);
+  const contributions = breakdown.items.filter(item => branchIds.has(item.categoryId));
+  if (!contributions.some(item => item.earnedCourse !== null)) return null;
+  return Number(contributions.reduce((sum, item) => sum + (item.earnedCourse ?? 0), 0).toFixed(2));
+}
 function gradeSheetComponentContribution(detail: Detail, enrollment: Enrollment, component: GradeSheetComponent) {
+  const root = detail.categories.find(category =>
+    categoryPath(category, detail.categories).trim().toLocaleLowerCase() === component.name.trim().toLocaleLowerCase()
+  );
+  // Root Lecture/Laboratory columns must show the actual contribution to the course
+  // total, exactly as calculated for TOTAL GRADE, rather than a raw group percentage.
+  if (root && !root.parentId) return gradeSheetRootWeightedContribution(detail, enrollment, root);
   const componentPercent = gradeSheetComponentPercent(detail, enrollment, component);
   return componentPercent === null ? null : Number((componentPercent * component.percentage / 100).toFixed(2));
 }
