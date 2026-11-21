@@ -276,6 +276,7 @@ test("PDF component values are weighted by the configured course allocation", ()
 
 test("assessment item order is saved and applied consistently in Assessment Items and Record Scores", () => {
   assert.match(source, /async function moveAssessmentItem/);
+  assert.match(source, /scorebookItems = useMemo\(\(\) => detail\?\.assessments\.filter\([\s\S]*?sort\(\(a,b\) => \(a\.sortOrder \?\? 0\) - \(b\.sortOrder \?\? 0\)\)/);
   assert.match(source, /sortOrder: item\.sortOrder \?\? 0/);
   assert.match(source, /items\.map\(\(item,itemIndex\)/);
   assert.match(source, /moveAssessmentItem\(category\.id,item\.id,-1\)/);
