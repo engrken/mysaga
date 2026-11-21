@@ -29,7 +29,8 @@ async function generate(categories, enrollments, components) {
     zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
     excelColumn: columns,
     xmlEscape: escape,
-    weightedCategoryPercent: (enrollment, category) => enrollment.equivalents[category.id] ?? null
+    weightedCategoryPercent: (enrollment, category) => enrollment.equivalents[category.id] ?? null,
+    gradeSheetAttendancePercent: (detail, enrollment, categoryId) => enrollment.attendancePercent?.[categoryId] ?? null
   };
   vm.runInNewContext(compiled + "\nthis.generateGradeFile = downloadFcuGradeXlsx;", context);
   const detail = {
@@ -94,6 +95,12 @@ test("FCU final-grade export uses the exact configured components and their weig
   assert.match(sheet, /<col min="8" max="8" width="18"/);
 });
 
+test("Generic PDF export is offered only once inside the export dropdown", () => {
+  assert.match(source, /<strong>Save \/ Print Generic PDF<\/strong>/, "the Generic dropdown retains its PDF option");
+  assert.match(source, /<strong>Download Generic Excel Sheet<\/strong>/, "the Generic dropdown retains its Excel option");
+  assert.doesNotMatch(source, /<button className="btn btn-outline-primary" onClick=\{\(\) => printFinalGradesPdf\("generic"\)\}>Save \/ Print Generic PDF<\/button>/, "the duplicate standalone PDF button is removed");
+});
+
 test("ISO Excel export embeds the same document header as the ISO PDF", () => {
   const start = source.indexOf("function downloadXlsx(");
   const end = source.indexOf("\nfunction categoryPercent(", start);
@@ -118,6 +125,60 @@ test("ISO Excel export embeds the same document header as the ISO PDF", () => {
   assert.match(files["xl/worksheets/sheet1.xml"], /<drawing r:id="rId1"\/>/);
   assert.match(files["xl/drawings/drawing1.xml"], /<a:blip r:embed="rId1"\/>/);
   assert.match(files["xl/worksheets/sheet1.xml"], /<row r="11">.*?No\./s);
+});
+
+test("Attendance component calculates its own session percentage and weighted contribution", () => {
+  const start = source.indexOf("function categoryDescendantIds(");
+  const end = source.indexOf("\nfunction downloadGradeSheetXlsx(", start);
+  assert.ok(start > 0 && end > start, "attendance component calculation helpers are present");
+  const compiled = ts.transpileModule(source.slice(start, end), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  const context = {
+    Set, Number, Math,
+    categoryPath: category => category.name,
+    calculateCategoryPercent: ({ assessments }) => {
+      const counted = assessments.filter(item => item.scores[0]?.remark !== "EXCUSED" && (item.scores[0]?.remark || item.scores[0]?.points != null));
+      if (!counted.length) return null;
+      const earned = counted.filter(item => ["PRESENT", "LATE"].includes(item.scores[0].remark) || (item.scores[0].points ?? 0) > 0);
+      return Number((earned.length / counted.length * 100).toFixed(2));
+    }
+  };
+  vm.runInNewContext(compiled + "\nthis.componentPercent = gradeSheetComponentPercent; this.componentContribution = gradeSheetComponentContribution;", context);
+  const detail = {
+    categories: [
+      { id: "attendance", parentId: null, name: "Attendance", weight: 20, conversionBase: 100 },
+      { id: "sessions", parentId: "attendance", name: "Sessions", weight: 100, conversionBase: 100 },
+      { id: "other-attendance", parentId: null, name: "Attendance Lab", weight: 10, conversionBase: 100 }
+    ],
+    assessments: [
+      { id: "present", categoryId: "sessions", title: "Attendance · Present day", maxScore: 1, weight: null },
+      { id: "absent", categoryId: "sessions", title: "Attendance · Absent day", maxScore: 1, weight: null },
+      { id: "excused", categoryId: "sessions", title: "Attendance · Excused day", maxScore: 1, weight: null },
+      { id: "other", categoryId: "other-attendance", title: "Attendance · Other class", maxScore: 1, weight: null }
+    ]
+  };
+  const enrollment = { scores: [
+    { assessmentId: "present", points: null, remark: "PRESENT" },
+    { assessmentId: "absent", points: null, remark: "ABSENT" },
+    { assessmentId: "excused", points: null, remark: "EXCUSED" },
+    { assessmentId: "other", points: null, remark: "PRESENT" }
+  ] };
+  const component = { name: "Attendance", percentage: 20 };
+  assert.equal(context.componentPercent(detail, enrollment, component), 50, "only sessions within the selected Attendance category are included");
+  assert.equal(context.componentContribution(detail, enrollment, component), 10, "the attendance percentage is multiplied by the configured component weight");
+});
+
+test("FCU final-grade export calculates Attendance as a weighted component", async () => {
+  const components = [{ name: "Attendance", percentage: 20 }];
+  const categories = [{ id: "ATT", parentId: null, name: "Attendance", weight: 20 }];
+  const files = await generate(categories, [{
+    ...student("Attendance Student", {}, 80),
+    attendancePercent: { ATT: 75 }
+  }], components);
+  const sheet = files["xl/worksheets/sheet1.xml"];
+  assert.match(sheet, /<c r="C15"[^>]*>.*?ATTENDANCE\. 20%/s);
+  assert.match(sheet, /<c r="C17"[^>]*><v>15<\/v>/);
 });
 
 test("FCU final-grade export supports a variable number of components", async () => {
@@ -512,7 +573,9 @@ test("Edit Components category picker includes parents and every eligible nested
     const category = categories.find(item => item.id === id);
     assert.equal(context.hasGradingAssessments(category, categories, assessments), true, `${id} should appear in the picker`);
   }
-  assert.equal(context.hasGradingAssessments(categories.find(item => item.id === "unused"), categories, assessments), false, "a category with only attendance descendants should stay out of the picker");
+  assert.equal(context.hasGradingAssessments(categories.find(item => item.id === "attendance"), categories, assessments), true, "Attendance should be directly selectable");
+  assert.equal(context.hasGradingAssessments(categories.find(item => item.id === "attendance"), categories, []), true, "Attendance should remain selectable before the first session is created");
+  assert.equal(context.hasGradingAssessments(categories.find(item => item.id === "unused"), categories, assessments), false, "a non-attendance parent with only attendance descendants should stay out of the picker");
   assert.ok(source.includes("orderedCategoryTree(detail.categories).filter(category=>categoryHasGradingAssessments(category,detail.categories,detail.assessments)"), "the picker renders the full category tree");
   assert.ok(source.includes("orderedCategoryTree(categories).filter(category => categoryHasGradingAssessments(category, categories, assessments))"), "saved defaults can resolve parent and nested categories");
 });
