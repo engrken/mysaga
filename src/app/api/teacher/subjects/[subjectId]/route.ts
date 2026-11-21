@@ -474,7 +474,7 @@ export async function PATCH(request: Request, context: Context) {
             data: { parentId: category.parentId ?? null, name: category.name, weight: category.weight, conversionBase: category.conversionBase, sortOrder: category.sortOrder ?? existing.sortOrder }
           });
         }),
-        prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated grading weights", entity: "subject", entityId: subjectId } })
+        prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated grading category structure, weights, or order", entity: "subject", entityId: subjectId } })
       ]);
     }
     return NextResponse.json({ ok: true });
