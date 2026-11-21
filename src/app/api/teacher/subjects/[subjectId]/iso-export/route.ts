@@ -175,6 +175,16 @@ function componentContribution(
   return percent === null ? null : Number((percent * component.percentage / 100).toFixed(2));
 }
 
+function normalizeSignatureName(value: unknown, defaultPrefix = "") {
+  let name = String(value ?? "").trim().replace(/\s+/g, " ");
+  if (!name) return "";
+  name = name.replace(/^ENRG\.?\s*/i, "ENGR. ");
+  name = name.replace(/^ENGR\.?\s*/i, "ENGR. ");
+  const hasProfessionalPrefix = /^(?:ENGR|DR|PROF|MR|MS|MRS|ATTY|REV|FR)\.?\s/i.test(name);
+  if (defaultPrefix && !hasProfessionalPrefix) name = defaultPrefix + " " + name;
+  return name.toLocaleUpperCase();
+}
+
 function readHeaderConfig(teacher: any) {
   const isFcu = /filamer christian university/i.test(teacher.school.name) ||
     teacher.school.slug.toLocaleLowerCase() === "fcu";
@@ -211,8 +221,8 @@ function readHeaderConfig(teacher: any) {
       eomsTitle: config.eomsTitle + " (" + config.isoStandard + ")",
       affiliationLine1: config.affiliationLine1,
       affiliationLine2: config.affiliationLine2,
-      submittedBy: teacher.fullName,
-      deanName: teacher.school.deanName || ""
+      submittedBy: normalizeSignatureName(teacher.fullName, "ENGR."),
+      deanName: normalizeSignatureName(teacher.school.deanName || "")
     }
   } as const;
 }
@@ -311,7 +321,7 @@ export async function POST(request: Request, context: Context) {
     logoBytes.length > 350_000 ||
     !logoBytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
   ) {
-    return NextResponse.json({ error: "The university seal/name image is invalid." }, { status: 400 });
+    return NextResponse.json({ error: "The circular university seal image is invalid." }, { status: 400 });
   }
 
   const filename = subject.code.replace(/[^a-z0-9-_]+/gi, "-") + "-iso-grading-sheet.xlsx";
@@ -324,7 +334,9 @@ export async function POST(request: Request, context: Context) {
       courseTitle: subject.title,
       id: subject.id,
       semester: subject.term,
-      academicYear: subject.academicYear
+      academicYear: subject.academicYear,
+      teacherName: configuredHeader.header.submittedBy,
+      deanName: configuredHeader.header.deanName
     },
     headers,
     rows,

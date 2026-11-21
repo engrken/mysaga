@@ -1819,30 +1819,40 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     ctx.fillText(isoHeaderConfig.affiliationLine2, 800, 371, 1560);
     return gradeHeaderCanvasBytes(canvas);
   }
-  async function renderIsoExcelLogoBlockPng(): Promise<Uint8Array> {
+  async function renderIsoExcelSealPng(): Promise<Uint8Array> {
     const schoolLogo = await loadGradeHeaderLogo(schoolLogoPath);
     const canvas = document.createElement("canvas");
-    canvas.width = 400;
-    canvas.height = 540;
+    canvas.width = 160;
+    canvas.height = 160;
     const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Could not prepare the ISO Excel school identity block.");
+    if (!ctx) throw new Error("Could not prepare the circular ISO seal.");
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    drawGradeHeaderLogo(ctx, schoolLogo, 112, 16, 176, 230, true);
-    ctx.fillStyle = "#000";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = "bold 23px Arial";
-    ctx.fillText(user.school.name.toLocaleUpperCase(), 200, 365, 370);
-    ctx.font = "16px Arial";
-    ctx.fillText(isoHeaderConfig.organizationAddress, 200, 430, 370);
+    if (schoolLogo) {
+      const sourceWidth = schoolLogo.naturalWidth;
+      const sourceHeight = schoolLogo.naturalHeight;
+      const portrait = sourceHeight > sourceWidth * 1.12;
+      // Vertical logo uploads commonly place the seal above school-name/address
+      // text. Use a top-aligned square crop to exclude that footer text.
+      const cropSize = portrait
+        ? Math.min(sourceWidth * 0.72, sourceHeight)
+        : Math.min(sourceWidth, sourceHeight);
+      const sourceX = (sourceWidth - cropSize) / 2;
+      const sourceY = portrait ? 0 : (sourceHeight - cropSize) / 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(80, 80, 76, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(schoolLogo, sourceX, sourceY, cropSize, cropSize, 4, 4, 152, 152);
+      ctx.restore();
+    }
     return gradeHeaderCanvasBytes(canvas);
   }
   async function exportIsoGradesExcel() {
     if (!detail || !ensureIsoHeaderConfigured()) return;
     try {
-      const logoBlockPng = await renderIsoExcelLogoBlockPng();
-      const binary = Array.from(logoBlockPng, byte => String.fromCharCode(byte)).join("");
+      const sealPng = await renderIsoExcelSealPng();
+      const binary = Array.from(sealPng, byte => String.fromCharCode(byte)).join("");
       const logoPngBase64 = window.btoa(binary);
       const response = await fetch("/api/teacher/subjects/" + encodeURIComponent(detail.id) + "/iso-export", {
         method: "POST",

@@ -228,16 +228,27 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   const pythonSource = fs.readFileSync("api/iso_export.py", "utf8");
   const endpoint = fs.readFileSync("src/app/api/teacher/subjects/[subjectId]/iso-export/route.ts", "utf8");
   assert.doesNotMatch(source, /function downloadIsoXlsx\(/, "the handwritten ISO OOXML writer is removed");
-  assert.match(source, /renderIsoExcelLogoBlockPng\(\)/);
+  assert.match(source, /renderIsoExcelSealPng\(\)/);
+  assert.doesNotMatch(source, /renderIsoExcelLogoBlockPng/);
+  assert.match(source, /ctx\.arc\(80, 80, 76/);
+  assert.match(source, /ctx\.drawImage\(schoolLogo, sourceX, sourceY, cropSize, cropSize, 4, 4, 152, 152\)/);
+  assert.doesNotMatch(source.slice(source.indexOf("async function renderIsoExcelSealPng"), source.indexOf("async function exportIsoGradesExcel")), /fillText\(/);
   assert.match(source, /componentNames: gradeSheetComponents\.map/);
   assert.match(source, /\/iso-export/);
   assert.match(source, /window\.btoa\(binary\)/);
   assert.match(source, /response\.blob\(\)/);
   assert.match(pythonSource, /from openpyxl import Workbook/);
   assert.match(pythonSource, /_merge_with_border\(worksheet, "A1:A4", THIN_BORDER\)/);
-  assert.match(pythonSource, /_merge_with_border\(worksheet, "C1:E1", THIN_BORDER\)/);
-  assert.match(pythonSource, /_merge_with_border\(worksheet, "C2:E2", THIN_BORDER\)/);
+  assert.match(pythonSource, /_merge_with_border\(worksheet, "B1:B2", THIN_BORDER\)/);
+  assert.match(pythonSource, /_merge_with_border\(worksheet, "C1:E2", THIN_BORDER\)/);
   assert.match(pythonSource, /_merge_with_border\(worksheet, "C3:E3", THIN_BORDER\)/);
+  assert.match(pythonSource, /_set_literal\(worksheet\["F3"\], "Form No:"\)/);
+  assert.match(pythonSource, /_set_literal\(worksheet\["F4"\], "Revision No\. "/);
+  assert.match(pythonSource, /_set_literal\(worksheet\["G4"\], "Page No\. 1"\)/);
+  assert.match(pythonSource, /image\.width = 80/);
+  assert.match(pythonSource, /image\.height = 80/);
+  assert.match(pythonSource, /OneCellAnchor/);
+  assert.match(pythonSource, /cell\.number_format = "0\.00%"/);
   assert.match(pythonSource, /_merge_with_border\(worksheet, "B4:E4", THIN_BORDER\)/);
   assert.match(pythonSource, /merge_cells\("A5:G5"\)/);
   assert.match(pythonSource, /merge_cells\("A6:G6"\)/);
@@ -251,11 +262,32 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(endpoint, /calculateGradeBreakdown/);
   assert.match(endpoint, /createHmac\("sha256", secret\)/);
   assert.match(endpoint, /componentContribution/);
+  assert.match(endpoint, /function normalizeSignatureName\(/);
+  assert.match(endpoint, /normalizeSignatureName\(teacher\.fullName, "ENGR\."\)/);
+  assert.match(endpoint, /normalizeSignatureName\(teacher\.school\.deanName \|\| ""\)/);
+  assert.match(endpoint, /teacherName: configuredHeader\.header\.submittedBy/);
+  assert.match(endpoint, /deanName: configuredHeader\.header\.deanName/);
   assert.match(endpoint, /process\.env\.VERCEL_PROJECT_PRODUCTION_URL/, "production calls use the stable project domain");
   assert.match(endpoint, /process\.env\.VERCEL_ENV === "production"/, "the routing choice distinguishes production from previews");
   assert.match(endpoint, /productionHost \|\| deploymentHost/, "production prefers the stable production host");
   assert.match(endpoint, /deploymentHost \|\| productionHost/, "previews prefer their own deployment host");
   assert.match(endpoint, /ISO_EXPORT_FUNCTION_URL/, "an explicit internal function URL can override automatic routing");
+});
+
+test("teacher and dean signature names are normalized from their active profile records", () => {
+  const route = fs.readFileSync("src/app/api/teacher/subjects/[subjectId]/iso-export/route.ts", "utf8");
+  const start = route.indexOf("function normalizeSignatureName(");
+  const end = route.indexOf("\nfunction readHeaderConfig(", start);
+  assert.ok(start >= 0 && end > start, "signature formatter is present");
+  const compiled = ts.transpileModule(route.slice(start, end), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  const context = {};
+  vm.runInNewContext(compiled + "\nthis.normalizeSignatureName = normalizeSignatureName;", context);
+  assert.equal(context.normalizeSignatureName("enrg. Firstname M. Lastname", "ENGR."), "ENGR. FIRSTNAME M. LASTNAME");
+  assert.equal(context.normalizeSignatureName("Firstname M. Lastname", "ENGR."), "ENGR. FIRSTNAME M. LASTNAME");
+  assert.equal(context.normalizeSignatureName("engr.Firstname M. Lastname", "ENGR."), "ENGR. FIRSTNAME M. LASTNAME");
+  assert.equal(context.normalizeSignatureName("enrg. Dean Example", ""), "ENGR. DEAN EXAMPLE");
 });
 
 test("Attendance component calculates its own session percentage and weighted contribution", () => {

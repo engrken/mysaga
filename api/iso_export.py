@@ -19,6 +19,8 @@ from urllib.parse import urlsplit
 
 from openpyxl import Workbook
 from openpyxl.drawing.image import Image as ExcelImage
+from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor
+from openpyxl.drawing.xdr import XDRPositiveSize2D
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.worksheet import Worksheet
 
@@ -49,6 +51,8 @@ def _short_assessment_header(value: object) -> str:
         return ""
     if "·" in heading:
         heading = heading.split("·", 1)[1].strip()
+    if "/" in heading:
+        heading = heading.rsplit("/", 1)[-1].strip()
     maximum = re.search(r"\s*\(Max\s+([^)]+)\)\s*$", heading, re.IGNORECASE)
     if not maximum:
         return heading
@@ -89,14 +93,17 @@ def _add_logo(ws: Worksheet, logo_png_base64: str) -> None:
         if not raw.startswith(b"\x89PNG\r\n\x1a\n"):
             raise ValueError("The logo must be a PNG image.")
         image = ExcelImage(BytesIO(raw))
-        max_width, max_height = 110, 148
-        scale = min(max_width / image.width, max_height / image.height, 1.0)
-        image.width = max(1, int(image.width * scale))
-        image.height = max(1, int(image.height * scale))
-        image.anchor = "A1"
+        # Embed only the circular seal at a fixed 80×80 px size. Offsets
+        # center it horizontally and vertically in the merged A1:A4 range.
+        image.width = 80
+        image.height = 80
+        image.anchor = OneCellAnchor(
+            _from=AnchorMarker(col=0, colOff=4 * 9525, row=0, rowOff=35 * 9525),
+            ext=XDRPositiveSize2D(cx=80 * 9525, cy=80 * 9525),
+        )
         ws.add_image(image)
     except Exception as exc:
-        raise ValueError("The university seal/name image could not be read.") from exc
+        raise ValueError("The circular university seal could not be read.") from exc
 
 
 def build_iso_workbook(payload: dict) -> bytes:
@@ -146,46 +153,44 @@ def build_iso_workbook(payload: dict) -> bytes:
 
     worksheet.sheet_format.defaultRowHeight = 20
     for row_number in range(1, 5):
-        worksheet.row_dimensions[row_number].height = 36
+        worksheet.row_dimensions[row_number].height = 28
         for column_number in range(1, 8):
             cell = worksheet.cell(row_number, column_number)
             cell.border = THIN_BORDER
             cell.font = Font(name="Arial", size=9, color="FF000000")
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-    # Exact A1:G4 document-control grid.
+    # FCU-EOMS-RO-006-F institutional document-control grid.
     _merge_with_border(worksheet, "A1:A4", THIN_BORDER)
-    _merge_with_border(worksheet, "C1:E1", THIN_BORDER)
-    _merge_with_border(worksheet, "C2:E2", THIN_BORDER)
+    _merge_with_border(worksheet, "B1:B2", THIN_BORDER)
+    _merge_with_border(worksheet, "C1:E2", THIN_BORDER)
     _merge_with_border(worksheet, "C3:E3", THIN_BORDER)
     _merge_with_border(worksheet, "B4:E4", THIN_BORDER)
 
     _set_literal(worksheet["B1"], "Form Name:")
-    _set_literal(worksheet["C1"], clean_header["organizationName"])
-    _set_literal(worksheet["B2"], "Form Name:")
-    _set_literal(worksheet["C2"], clean_header["formName"])
-    _set_literal(worksheet["B3"], "Form No: " + clean_header["formNo"])
+    _set_literal(worksheet["C1"], clean_header["formName"])
     _set_literal(worksheet["C3"], clean_header["eomsTitle"])
-    _set_literal(worksheet["B4"], "Revision No. " + clean_header["revisionNo"])
 
     _set_literal(worksheet["F1"], "Effectivity:")
     _set_literal(worksheet["G1"], clean_header["effectivity"])
     _set_literal(worksheet["F2"], "Issuing Office:")
     _set_literal(worksheet["G2"], clean_header["issuingOffice"])
-    _set_literal(worksheet["F3"], "Page No.")
-    _set_literal(worksheet["G3"], 1)
+    _set_literal(worksheet["F3"], "Form No:")
+    _set_literal(worksheet["G3"], clean_header["formNo"])
+    _set_literal(worksheet["F4"], "Revision No. " + clean_header["revisionNo"])
+    _set_literal(worksheet["G4"], "Page No. 1")
 
-    for coordinate in ("B1", "B2", "B3", "B4", "F1", "F2", "F3"):
-        worksheet[coordinate].font = Font(name="Arial", size=8, bold=True, color="FF000000")
-        worksheet[coordinate].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    worksheet["C1"].font = Font(name="Arial", size=10, bold=True, color="FF000000")
+    worksheet["B1"].font = Font(name="Arial", size=8, bold=True, color="FF000000")
+    worksheet["B1"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    worksheet["C1"].font = Font(name="Arial", size=11, bold=True, color="FF000000")
     worksheet["C1"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    worksheet["C2"].font = Font(name="Arial", size=11, bold=True, color="FF000000")
-    worksheet["C2"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     worksheet["C3"].font = Font(name="Arial", size=8, bold=True, color="FF000000")
     worksheet["C3"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    for coordinate in ("G1", "G2", "G3"):
-        worksheet[coordinate].font = Font(name="Arial", size=8, bold=True, color="FF000000")
+    for coordinate in ("F1", "F2", "F3", "F4"):
+        worksheet[coordinate].font = Font(name="Arial", size=7, bold=True, color="FF000000")
+        worksheet[coordinate].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    for coordinate in ("G1", "G2", "G3", "G4"):
+        worksheet[coordinate].font = Font(name="Arial", size=7, bold=True, color="FF000000")
         worksheet[coordinate].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     worksheet["A1"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
@@ -203,9 +208,6 @@ def build_iso_workbook(payload: dict) -> bytes:
     worksheet.row_dimensions[7].height = 22
 
     _add_logo(worksheet, _safe_text(payload.get("logoPngBase64", "")))
-    if not payload.get("logoPngBase64"):
-        worksheet["A1"] = clean_header["organizationName"] + "\n" + clean_header["organizationAddress"]
-        worksheet["A1"].font = Font(name="Arial", size=8, bold=True, color="FF000000")
 
     column_count = max(7, len(headers), max((len(row) for row in rows), default=0))
     last_column_letter = __import__("openpyxl").utils.get_column_letter(column_count)
@@ -265,20 +267,24 @@ def build_iso_workbook(payload: dict) -> bytes:
             _set_literal(cell, value)
             cell.border = THIN_BORDER
             cell.font = body_font
-            horizontal = "left" if column_number == 2 or column_number == column_count else "center"
-            cell.alignment = Alignment(horizontal=horizontal, vertical="center", wrap_text=True)
+            heading = _safe_text(normalized_headers[column_number - 1]).upper()
+            horizontal = "left" if column_number == 2 else "center"
             if isinstance(value, (int, float)) and not isinstance(value, bool):
-                if column_number > 3 and (
-                    "(%)" in _safe_text(normalized_headers[column_number - 1]).upper()
-                    or "TOTAL GRADE" in _safe_text(normalized_headers[column_number - 1]).upper()
-                ):
-                    cell.number_format = "0.00"
+                horizontal = "right"
+                if "(%)" in heading or "TOTAL GRADE" in heading:
+                    # Grade values arrive as percentage points (e.g. 90.25);
+                    # Excel percent formatting expects a 0.9025 fraction.
+                    cell.value = float(value) / 100
+                    cell.number_format = "0.00%"
+            if "FINAL GRADE" in heading:
+                horizontal = "center"
+            cell.alignment = Alignment(horizontal=horizontal, vertical="center", wrap_text=True)
 
     # Compact, role-based widths remain predictable for every subject's dynamic columns.
     for index in range(column_count):
         heading = _safe_text(normalized_headers[index]).upper()
         if index == 0:
-            width = 6
+            width = 12
         elif index == 1:
             width = 32
         elif "TOTAL GRADE" in heading:
@@ -320,8 +326,12 @@ def build_iso_workbook(payload: dict) -> bytes:
 
     _set_literal(worksheet.cell(signature_label_row, 1), "Submitted by:")
     _set_literal(worksheet.cell(signature_label_row, right_start), "Noted:")
-    _set_literal(worksheet.cell(signature_name_row, 1), clean_header["submittedBy"])
-    _set_literal(worksheet.cell(signature_name_row, right_start), clean_header["deanName"])
+    teacher_name = _safe_text(class_metadata.get("teacherName") or clean_header["submittedBy"]).strip()
+    dean_name = _safe_text(class_metadata.get("deanName") or clean_header["deanName"]).strip()
+    teacher_name = re.sub(r"^ENRG\.?\s*", "ENGR. ", teacher_name, flags=re.IGNORECASE)
+    dean_name = re.sub(r"^ENRG\.?\s*", "ENGR. ", dean_name, flags=re.IGNORECASE)
+    _set_literal(worksheet.cell(signature_name_row, 1), teacher_name.upper())
+    _set_literal(worksheet.cell(signature_name_row, right_start), dean_name.upper())
     _set_literal(worksheet.cell(signature_role_row, 1), "TEACHER'S SIGNATURE OVER PRINTED NAME")
     _set_literal(worksheet.cell(signature_role_row, right_start), "DEAN'S SIGNATURE OVER PRINTED NAME")
 
