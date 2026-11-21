@@ -793,7 +793,22 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   useEffect(() => { setSchoolAddress(user.school.address || ""); }, [user.school.address]);
   useEffect(() => { setDepartmentName(user.school.departmentName || ""); }, [user.school.departmentName]);
   useEffect(() => { setIsoHeaderConfig(readIsoHeaderConfig(user.school.name, user.school.slug, user.school.isoHeaderConfig)); }, [user.school.name, user.school.slug, user.school.isoHeaderConfig]);
-  const defaultGradeSheetComponents = useMemo<GradeSheetComponent[]>(() => { const usedCategories = orderedCategoryTree(detail?.categories || []).filter(category => categoryHasGradingAssessments(category, detail?.categories || [], detail?.assessments || [])); const configured = usedCategories.map(category => ({ name: categoryPath(category, detail?.categories || []), percentage: Number(localCategoryWeight(category).toFixed(2)) })); try { const saved = JSON.parse(user.defaultGradeSheetComponents || ""); if (Array.isArray(saved) && saved.length) { const matched = saved.map((item: GradeSheetComponent) => configured.find(option => option.name.toLocaleLowerCase() === String(item.name).toLocaleLowerCase())).filter((item): item is GradeSheetComponent => Boolean(item)); if (matched.length) return matched; } } catch {} return configured.length ? configured : [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }]; }, [user.defaultGradeSheetComponents, detail?.categories, detail?.assessments]);
+  const defaultGradeSheetComponents = useMemo<GradeSheetComponent[]>(() => {
+    const categories = detail?.categories || [];
+    const assessments = detail?.assessments || [];
+    const selectableCategories = orderedCategoryTree(categories).filter(category => categoryHasGradingAssessments(category, categories, assessments));
+    const configured = selectableCategories.map(category => ({ name: categoryPath(category, categories), percentage: Number(localCategoryWeight(category).toFixed(2)) }));
+    const defaultCategories = categories.filter(category => assessments.some(item => item.categoryId === category.id && !item.title.toLocaleLowerCase().startsWith("attendance ·"))).sort((a, b) => a.sortOrder - b.sortOrder);
+    const defaultConfigured = defaultCategories.map(category => ({ name: categoryPath(category, categories), percentage: Number(localCategoryWeight(category).toFixed(2)) }));
+    try {
+      const saved = JSON.parse(user.defaultGradeSheetComponents || "");
+      if (Array.isArray(saved) && saved.length) {
+        const matched = saved.map((item: GradeSheetComponent) => configured.find(option => option.name.toLocaleLowerCase() === String(item.name).toLocaleLowerCase())).filter((item): item is GradeSheetComponent => Boolean(item));
+        if (matched.length) return matched;
+      }
+    } catch {}
+    return defaultConfigured.length ? defaultConfigured : configured.length ? configured : [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }];
+  }, [user.defaultGradeSheetComponents, detail?.categories, detail?.assessments]);
   const [gradeSheetComponents, setGradeSheetComponents] = useState<GradeSheetComponent[]>(defaultGradeSheetComponents);
   const [componentDraft, setComponentDraft] = useState<GradeSheetComponent[]>(defaultGradeSheetComponents);
   const [componentEditorOpen, setComponentEditorOpen] = useState(false);
@@ -866,7 +881,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     return () => window.removeEventListener("resize", recalc);
   }, [classSection, activeId, detail?.id, sidebarCollapsed]);
   useEffect(() => { setScorebookPage(0); setScorebookView("auto"); }, [activeId]);
-  useEffect(() => { if (!detail) return; try { const usedCategories = orderedCategoryTree(detail.categories).filter(category => categoryHasGradingAssessments(category, detail.categories, detail.assessments)); const configured = usedCategories.map(category => ({ name: categoryPath(category, detail.categories), percentage: Number(localCategoryWeight(category).toFixed(2)) })); const saved = detail.gradeSheetComponents ? JSON.parse(detail.gradeSheetComponents) : null; const source = Array.isArray(saved) && saved.length ? saved : defaultGradeSheetComponents; const next = source.map((item: GradeSheetComponent) => configured.find(option => option.name.toLocaleLowerCase() === String(item.name).toLocaleLowerCase())).filter((item): item is GradeSheetComponent => Boolean(item)); const selected = next.length ? next : configured.length ? configured : defaultGradeSheetComponents; setGradeSheetComponents(selected); setComponentDraft(selected); } catch { setGradeSheetComponents(defaultGradeSheetComponents); setComponentDraft(defaultGradeSheetComponents); } }, [detail?.id, detail?.gradeSheetComponents, detail?.categories, detail?.assessments, defaultGradeSheetComponents]);
+  useEffect(() => { if (!detail) return; try { const usedCategories = orderedCategoryTree(detail.categories).filter(category => categoryHasGradingAssessments(category, detail.categories, detail.assessments)); const configured = usedCategories.map(category => ({ name: categoryPath(category, detail.categories), percentage: Number(localCategoryWeight(category).toFixed(2)) })); const saved = detail.gradeSheetComponents ? JSON.parse(detail.gradeSheetComponents) : null; const source = Array.isArray(saved) && saved.length ? saved : defaultGradeSheetComponents; const next = source.map((item: GradeSheetComponent) => configured.find(option => option.name.toLocaleLowerCase() === String(item.name).toLocaleLowerCase())).filter((item): item is GradeSheetComponent => Boolean(item)); const selected = next.length ? next : defaultGradeSheetComponents.length ? defaultGradeSheetComponents : configured; setGradeSheetComponents(selected); setComponentDraft(selected); } catch { setGradeSheetComponents(defaultGradeSheetComponents); setComponentDraft(defaultGradeSheetComponents); } }, [detail?.id, detail?.gradeSheetComponents, detail?.categories, detail?.assessments, defaultGradeSheetComponents]);
   const [visibilityManagerQuery, setVisibilityManagerQuery] = useState<string | null>(null);
   const [simulatingGradeId, setSimulatingGradeId] = useState<string | null>(null);
   useEffect(() => { if (!notice && !err) return; const timer = window.setTimeout(() => { setNotice(""); setErr(""); }, err ? 20000 : 5500); return () => window.clearTimeout(timer); }, [notice, err]);
