@@ -162,8 +162,8 @@ export async function POST(request: Request, context: Context) {
       ...scores,
       ...parsed.data.componentNames.map(() => ""),
       "",
-      enrollment.finalGradeOverride || "",
-      enrollment.remarks || ""
+      enrollment.finalGradeOverride ?? "",
+      enrollment.remarks ?? ""
     ];
   });
 

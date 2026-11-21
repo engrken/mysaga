@@ -224,9 +224,11 @@ test("ISO Excel export uses dynamic class metadata and omits student-number colu
   assert.match(route, /academicYear: subject\.academicYear/);
   assert.match(route, /classId: resolveClassId\(subject\)/);
   assert.doesNotMatch(route, /sectionName: resolveSectionName/);
-  assert.doesNotMatch(route, /calculateGradeBreakdown|calculateCategoryPercent|componentContribution/);
-  assert.match(route, /enrollment\.finalGradeOverride \|\| ""/);
-  assert.match(route, /enrollment\.remarks \|\| ""/);
+  assert.doesNotMatch(route, /calculateGradeBreakdown|calculateCategoryPercent|componentContribution/, "ISO export must not calculate grades");
+  assert.match(route, /return score\?\.points \?\? score\?\.remark \?\? ""/);
+  assert.match(route, /\.\.\.parsed\.data\.componentNames\.map\(\(\) => ""\)/);
+  assert.match(route, /enrollment\.finalGradeOverride \?\? ""/);
+  assert.match(route, /enrollment\.remarks \?\? ""/);
 });
 
 test("ISO Excel export uses the authenticated Python openpyxl generator", () => {
@@ -276,17 +278,16 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(pythonSource, /SAGA-ISO-EXPORT-v1/);
   assert.match(endpoint, /requireRole\("TEACHER"\)/);
   assert.match(endpoint, /teacherId: teacher\.id, schoolId: teacher\.schoolId/);
-  assert.match(endpoint, /calculateGradeBreakdown/);
+  assert.doesNotMatch(endpoint, /calculateGradeBreakdown|calculateCategoryPercent|componentContribution/, "ISO export must not calculate grades");
   assert.match(endpoint, /createHmac\("sha256", secret\)/);
-  assert.match(endpoint, /componentContribution/);
   assert.match(endpoint, /function normalizeSignatureName\(/);
-  assert.match(endpoint, /normalizeSignatureName\(teacher\.fullName, "ENGR\."\)/);
-  assert.match(endpoint, /normalizeSignatureName\(teacher\.school\.deanName \|\| "", "ENGR\."\)/);
-  assert.match(endpoint, /function resolveSectionName\(/);
-  assert.match(endpoint, /function hasUnenteredMajorCategories\(/);
-  assert.match(endpoint, /sectionName: resolveSectionName\(subject\)/);
-  assert.match(endpoint, /Number\(\(contribution \/ 100\)\.toFixed\(6\)\)/);
-  assert.match(endpoint, /Number\(\(effectiveTotalPercent \/ 100\)\.toFixed\(6\)\)/);
+  assert.match(endpoint, /submittedBy: normalizeSignatureName\(teacher\.fullName\)/);
+  assert.match(endpoint, /deanName: normalizeSignatureName\(teacher\.school\.deanName \|\| ""\)/);
+  assert.doesNotMatch(endpoint, /normalizeSignatureName\([^)]*,\s*"ENGR\."\)/, "profile titles must not be forced");
+  assert.match(endpoint, /function resolveClassId\(/);
+  assert.match(endpoint, /classId: resolveClassId\(subject\)/);
+  assert.doesNotMatch(endpoint, /resolveSectionName|hasUnenteredMajorCategories|sectionName:/);
+  assert.doesNotMatch(endpoint, /Number\(\(contribution \/ 100\)\.toFixed\(6\)\)|effectiveTotalPercent/);
   assert.match(endpoint, /teacherName: configuredHeader\.header\.submittedBy/);
   assert.match(endpoint, /deanName: configuredHeader\.header\.deanName/);
   assert.match(endpoint, /process\.env\.VERCEL_PROJECT_PRODUCTION_URL/, "production calls use the stable project domain");
@@ -296,51 +297,29 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(endpoint, /ISO_EXPORT_FUNCTION_URL/, "an explicit internal function URL can override automatic routing");
 });
 
-test("teacher and dean signature names are normalized from their active profile records", () => {
+test("ISO signature names preserve saved profile titles without adding a forced prefix", () => {
   const route = fs.readFileSync("src/app/api/teacher/subjects/[subjectId]/iso-export/route.ts", "utf8");
   const start = route.indexOf("function normalizeSignatureName(");
   const end = route.indexOf("\nfunction readHeaderConfig(", start);
-  assert.ok(start >= 0 && end > start, "signature formatter is present");
+  assert.ok(start >= 0 && end > start, "profile formatters are present");
   const compiled = ts.transpileModule(route.slice(start, end), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText;
   const context = {};
-  vm.runInNewContext(compiled + "\nthis.normalizeSignatureName = normalizeSignatureName; this.resolveSectionName = resolveSectionName; this.hasUnenteredMajorCategories = hasUnenteredMajorCategories;", context);
-  assert.equal(context.normalizeSignatureName("enrg. Firstname M. Lastname", "ENGR."), "ENGR. FIRSTNAME M. LASTNAME");
-  assert.equal(context.normalizeSignatureName("Firstname M. Lastname", "ENGR."), "ENGR. FIRSTNAME M. LASTNAME");
-  assert.equal(context.normalizeSignatureName("engr.Firstname M. Lastname", "ENGR."), "ENGR. FIRSTNAME M. LASTNAME");
-  assert.equal(context.normalizeSignatureName("enrg. Dean Example", "ENGR."), "ENGR. DEAN EXAMPLE");
-  assert.equal(context.resolveSectionName({ courseYear: "BSECE 4", classId: "migration_2026_ece-16" }), "BSECE 4");
-  assert.equal(context.resolveSectionName({ courseYear: "", classId: "migration_2026_ece-16" }), "");
+  vm.runInNewContext(compiled + "\nthis.normalizeSignatureName = normalizeSignatureName; this.resolveClassId = resolveClassId;", context);
 
-  const subject = {
-    categories: [
-      { id: "lecture", parentId: null },
-      { id: "midterm", parentId: "lecture" },
-      { id: "laboratory", parentId: null }
-    ],
-    assessments: [
-      { id: "exam", categoryId: "midterm", title: "Midterm Exam" },
-      { id: "lab", categoryId: "laboratory", title: "Laboratory Design" }
-    ]
-  };
-  assert.equal(context.hasUnenteredMajorCategories(subject, {
-    scores: [{ assessmentId: "exam", points: 80, remark: null }]
-  }), true, "an unentered major category prevents a provisional failed mark");
-  assert.equal(context.hasUnenteredMajorCategories(subject, {
-    scores: [
-      { assessmentId: "exam", points: 80, remark: null },
-      { assessmentId: "lab", points: 0, remark: null }
-    ]
-  }), false, "a recorded zero is distinct from a blank evaluation");
-  assert.equal(context.hasUnenteredMajorCategories(subject, {
-    scores: [
-      { assessmentId: "exam", points: 80, remark: null },
-      { assessmentId: "lab", points: null, remark: "EXCUSED" }
-    ]
-  }), false, "a fully excused category does not remain pending");
+  assert.equal(context.normalizeSignatureName("  dr. Firstname  M. Lastname  "), "DR. FIRSTNAME M. LASTNAME");
+  assert.equal(context.normalizeSignatureName("Prof. Dean Example"), "PROF. DEAN EXAMPLE");
+  assert.equal(context.normalizeSignatureName("ARCH. Sample Name"), "ARCH. SAMPLE NAME");
+  assert.equal(context.normalizeSignatureName("Firstname M. Lastname"), "FIRSTNAME M. LASTNAME");
+  assert.equal(context.normalizeSignatureName(""), "");
+
+  assert.equal(context.resolveClassId({ classId: "BSECE 4", courseYear: "BSECE 3" }), "BSECE 4");
+  assert.equal(context.resolveClassId({ classId: null, courseYear: "BSECE 4", sectionName: "Section A" }), "");
+  assert.equal(context.resolveClassId({ classId: undefined, courseYear: "BSECE 4" }), "");
+  assert.equal(context.resolveClassId({ classId: "   ", courseYear: "BSECE 4" }), "");
+  assert.equal(context.resolveClassId({ classId: "migration_2026_ece-16", courseYear: "BSECE 4" }), "");
 });
-
 test("Attendance component calculates its own session percentage and weighted contribution", () => {
   const start = source.indexOf("function categoryDescendantIds(");
   const end = source.indexOf("\nfunction downloadGradeSheetXlsx(", start);
