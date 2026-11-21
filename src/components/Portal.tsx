@@ -1820,8 +1820,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     return gradeHeaderCanvasBytes(canvas);
   }
   async function renderIsoExcelSealPng(): Promise<Uint8Array> {
-    const activeInstitutionLogoPath = departmentLogoPath || schoolLogoPath;
-    const schoolLogo = await loadGradeHeaderLogo(activeInstitutionLogoPath);
+    const schoolLogo = await loadGradeHeaderLogo(schoolLogoPath);
+    if (!schoolLogo) throw new Error("Upload the main school / university logo in Profile information before exporting.");
     const canvas = document.createElement("canvas");
     canvas.width = 160;
     canvas.height = 160;

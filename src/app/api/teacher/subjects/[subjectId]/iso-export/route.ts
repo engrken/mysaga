@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { calculateCategoryPercent, calculateGradeBreakdown } from "@/lib/grades";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -16,7 +15,6 @@ type CategoryLike = {
   weight: number;
   conversionBase: number;
 };
-type Component = { name: string; percentage: number };
 
 const requestSchema = z.object({
   componentNames: z.array(z.string().trim().min(1).max(120)).max(40),
@@ -48,168 +46,14 @@ function categoryPath(category: CategoryLike, categories: CategoryLike[]) {
   return names.join(" / ");
 }
 
-function descendantIds(categoryId: string, categories: CategoryLike[]) {
-  const ids = new Set([categoryId]);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const category of categories) {
-      if (category.parentId && ids.has(category.parentId) && !ids.has(category.id)) {
-        ids.add(category.id);
-        changed = true;
-      }
-    }
-  }
-  return ids;
+function normalizeSignatureName(value: unknown) {
+  return String(value ?? "").trim().replace(/\s+/g, " ").toLocaleUpperCase();
 }
 
-function effectiveCategoryWeight(category: CategoryLike, categories: CategoryLike[]) {
-  let root = category;
-  const visited = new Set([category.id]);
-  while (root.parentId) {
-    if (visited.has(root.parentId)) return 0;
-    visited.add(root.parentId);
-    const parent = categories.find(item => item.id === root.parentId);
-    if (!parent) return 0;
-    root = parent;
-  }
-  return category.id === root.id ? root.weight : root.weight * category.weight / 100;
-}
-
-function calculationCategories(subject: any, enrollment: any) {
-  const scoreByAssessment = new Map(
-    enrollment.scores.map((score: any) => [score.assessmentId, score])
-  );
-  const itemsByCategory = new Map<string, any[]>();
-  for (const assessment of subject.assessments) {
-    const items = itemsByCategory.get(assessment.categoryId) ?? [];
-    const score = scoreByAssessment.get(assessment.id);
-    items.push({
-      title: assessment.title,
-      dueDate: assessment.dueDate,
-      maxScore: assessment.maxScore,
-      weight: assessment.weight,
-      scores: score ? [score] : []
-    });
-    itemsByCategory.set(assessment.categoryId, items);
-  }
-  return subject.categories.map((category: CategoryLike) => ({
-    id: category.id,
-    parentId: category.parentId,
-    weight: category.weight,
-    conversionBase: category.conversionBase,
-    assessments: itemsByCategory.get(category.id) ?? []
-  }));
-}
-
-function componentPercent(subject: any, enrollment: any, componentRoot: CategoryLike) {
-  if (componentRoot.name.toLocaleLowerCase().includes("attendance")) {
-    const includedIds = descendantIds(componentRoot.id, subject.categories);
-    const assessments = subject.assessments.filter((item: any) =>
-      item.title.toLocaleLowerCase().startsWith("attendance ·") && includedIds.has(item.categoryId)
-    );
-    if (!assessments.length) return null;
-    return calculateCategoryPercent({
-      conversionBase: 100,
-      assessments: assessments.map((item: any) => ({
-        id: item.id,
-        title: item.title,
-        dueDate: item.dueDate,
-        maxScore: item.maxScore,
-        weight: item.weight,
-        scores: [enrollment.scores.find((score: any) => score.assessmentId === item.id) || { points: null, remark: null }]
-      }))
-    });
-  }
-
-  const includedIds = descendantIds(componentRoot.id, subject.categories);
-  const leaves = subject.categories.filter((category: CategoryLike) =>
-    includedIds.has(category.id) && !subject.categories.some((child: CategoryLike) => child.parentId === category.id)
-  );
-  let weighted = 0;
-  let totalWeight = 0;
-  for (const category of leaves) {
-    const assessments = subject.assessments.filter((item: any) =>
-      item.categoryId === category.id && !item.title.toLocaleLowerCase().startsWith("attendance ·")
-    );
-    const percent = calculateCategoryPercent({
-      conversionBase: componentRoot.conversionBase,
-      assessments: assessments.map((item: any) => ({
-        id: item.id,
-        title: item.title,
-        dueDate: item.dueDate,
-        maxScore: item.maxScore,
-        weight: item.weight,
-        scores: [enrollment.scores.find((score: any) => score.assessmentId === item.id) || { points: null, remark: null }]
-      }))
-    });
-    const weight = effectiveCategoryWeight(category, subject.categories);
-    if (percent !== null && weight > 0) {
-      weighted += percent * weight;
-      totalWeight += weight;
-    }
-  }
-  return totalWeight > 0 ? Number((weighted / totalWeight).toFixed(2)) : null;
-}
-
-function componentContribution(
-  subject: any,
-  enrollment: any,
-  component: Component,
-  breakdown: ReturnType<typeof calculateGradeBreakdown>
-) {
-  const root = subject.categories.find((category: CategoryLike) =>
-    categoryPath(category, subject.categories).trim().toLocaleLowerCase() === component.name.trim().toLocaleLowerCase()
-  );
-  if (!root) return null;
-
-  // Top-level course groups display their actual earned course contribution.
-  if (!root.parentId) {
-    const includedIds = descendantIds(root.id, subject.categories);
-    const contributions = breakdown.items.filter(item => includedIds.has(item.categoryId));
-    if (!contributions.some(item => item.earnedCourse !== null)) return null;
-    return Number(contributions.reduce((sum, item) => sum + (item.earnedCourse ?? 0), 0).toFixed(2));
-  }
-
-  const percent = componentPercent(subject, enrollment, root);
-  return percent === null ? null : Number((percent * component.percentage / 100).toFixed(2));
-}
-
-function normalizeSignatureName(value: unknown, defaultPrefix = "") {
-  let name = String(value ?? "").trim().replace(/\s+/g, " ");
-  if (!name) return "";
-  name = name.replace(/^ENRG\.?\s*/i, "ENGR. ");
-  name = name.replace(/^ENGR\.?\s*/i, "ENGR. ");
-  const hasProfessionalPrefix = /^(?:ENGR|DR|PROF|MR|MS|MRS|ATTY|REV|FR)\.?\s/i.test(name);
-  if (defaultPrefix && !hasProfessionalPrefix) name = defaultPrefix + " " + name;
-  return name.toLocaleUpperCase();
-}
-
-function resolveSectionName(subject: any) {
-  const courseYear = String(subject.courseYear ?? "").trim();
-  if (courseYear) return courseYear;
+function resolveClassId(subject: any) {
   const classId = String(subject.classId ?? "").trim();
   if (!classId || /^migration[_-]\d{4}[_-]/i.test(classId)) return "";
   return classId;
-}
-
-function hasUnenteredMajorCategories(subject: any, enrollment: any) {
-  const scoreByAssessment = new Map(enrollment.scores.map((score: any) => [score.assessmentId, score]));
-  const leaves = subject.categories.filter((category: CategoryLike) =>
-    !subject.categories.some((child: CategoryLike) => child.parentId === category.id)
-  );
-  return leaves.some((category: CategoryLike) => {
-    const assessments = subject.assessments.filter((item: any) =>
-      item.categoryId === category.id && !item.title.toLocaleLowerCase().startsWith("attendance ·")
-    );
-    if (!assessments.length) return false;
-    const scores = assessments.map((item: any) => scoreByAssessment.get(item.id));
-    const hasRecorded = scores.some((score: any) =>
-      !!score && (score.points !== null || (!!score.remark && score.remark !== "EXCUSED"))
-    );
-    const fullyExcused = scores.every((score: any) => score?.remark === "EXCUSED");
-    return !hasRecorded && !fullyExcused;
-  });
 }
 
 function readHeaderConfig(teacher: any) {
@@ -248,8 +92,8 @@ function readHeaderConfig(teacher: any) {
       eomsTitle: config.eomsTitle + "\n" + config.isoStandard,
       affiliationLine1: config.affiliationLine1,
       affiliationLine2: config.affiliationLine2,
-      submittedBy: normalizeSignatureName(teacher.fullName, "ENGR."),
-      deanName: normalizeSignatureName(teacher.school.deanName || "", "ENGR.")
+      submittedBy: normalizeSignatureName(teacher.fullName),
+      deanName: normalizeSignatureName(teacher.school.deanName || "")
     }
   } as const;
 }
@@ -306,42 +150,20 @@ export async function POST(request: Request, context: Context) {
     "REMARKS"
   ];
 
+  // Export persisted score records as-is. No exporter-side grade calculations.
   const rows: unknown[][] = subject.enrollments.map((enrollment, index) => {
-    const calculation = calculationCategories(subject, enrollment);
-    const breakdown = calculateGradeBreakdown(calculation);
-    const special = ["INC", "NP", "DROPPED"].includes(enrollment.remarks || "");
-    const scores = academicAssessments.map(item =>
-      enrollment.scores.find(score => score.assessmentId === item.id)?.points ?? ""
-    );
-    const components = parsed.data.componentNames.map(name => {
-      if (special) return "";
-      const contribution = componentContribution(
-        subject,
-        enrollment,
-        { name, percentage: subject.categories.find(category =>
-          categoryPath(category, subject.categories).trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase()
-        )?.weight ?? 0 },
-        breakdown
-      );
-      return contribution === null ? "" : Number((contribution / 100).toFixed(6));
+    const scores = academicAssessments.map(item => {
+      const score = enrollment.scores.find(value => value.assessmentId === item.id);
+      return score?.points ?? score?.remark ?? "";
     });
-    const incompleteMajorCategories = !special && hasUnenteredMajorCategories(subject, enrollment);
-    const effectiveTotalPercent = incompleteMajorCategories ? null : breakdown.totalPercent;
-    const band = subject.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent).find(item =>
-      effectiveTotalPercent !== null && effectiveTotalPercent >= item.minPercent
-    );
-    const totalGrade = special || effectiveTotalPercent === null
-      ? ""
-      : Number((effectiveTotalPercent / 100).toFixed(6));
-    const finalGrade = special ? "" : enrollment.finalGradeOverride || (effectiveTotalPercent === null ? "" : band?.finalGrade || "");
     return [
       index + 1,
       enrollment.studentName || "",
       ...scores,
-      ...components,
-      totalGrade,
-      finalGrade,
-      special ? enrollment.remarks || "" : (effectiveTotalPercent === null ? "" : enrollment.remarks || band?.remarks || "")
+      ...parsed.data.componentNames.map(() => ""),
+      "",
+      enrollment.finalGradeOverride || "",
+      enrollment.remarks || ""
     ];
   });
 
@@ -365,7 +187,7 @@ export async function POST(request: Request, context: Context) {
       id: subject.id,
       semester: subject.term,
       academicYear: subject.academicYear,
-      sectionName: resolveSectionName(subject),
+      classId: resolveClassId(subject),
       teacherName: configuredHeader.header.submittedBy,
       deanName: configuredHeader.header.deanName
     },

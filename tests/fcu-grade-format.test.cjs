@@ -222,6 +222,11 @@ test("ISO Excel export uses dynamic class metadata and omits student-number colu
   assert.match(route, /id: subject\.id/);
   assert.match(route, /semester: subject\.term/);
   assert.match(route, /academicYear: subject\.academicYear/);
+  assert.match(route, /classId: resolveClassId\(subject\)/);
+  assert.doesNotMatch(route, /sectionName: resolveSectionName/);
+  assert.doesNotMatch(route, /calculateGradeBreakdown|calculateCategoryPercent|componentContribution/);
+  assert.match(route, /enrollment\.finalGradeOverride \|\| ""/);
+  assert.match(route, /enrollment\.remarks \|\| ""/);
 });
 
 test("ISO Excel export uses the authenticated Python openpyxl generator", () => {
@@ -231,7 +236,8 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(source, /renderIsoExcelSealPng\(\)/);
   assert.doesNotMatch(source, /renderIsoExcelLogoBlockPng/);
   assert.match(source, /ctx\.arc\(80, 80, 76/);
-  assert.match(source, /const activeInstitutionLogoPath = departmentLogoPath \|\| schoolLogoPath/);
+  assert.match(source, /loadGradeHeaderLogo\(schoolLogoPath\)/);
+  assert.doesNotMatch(source.slice(source.indexOf("async function renderIsoExcelSealPng"), source.indexOf("async function exportIsoGradesExcel")), /departmentLogoPath/);
   assert.match(source, /ctx\.drawImage\(schoolLogo, sourceX, sourceY, cropSize, cropSize, 4, 4, 152, 152\)/);
   assert.doesNotMatch(source.slice(source.indexOf("async function renderIsoExcelSealPng"), source.indexOf("async function exportIsoGradesExcel")), /fillText\(/);
   assert.match(source, /componentNames: gradeSheetComponents\.map/);

@@ -66,15 +66,8 @@ def _short_assessment_header(value: object) -> str:
 
 
 def _normalize_signature_name(value: object) -> str:
-    name = re.sub(r"\s+", " ", _safe_text(value).strip())
-    if not name:
-        return ""
-    name = re.sub(r"^ENRG\.?\s*", "ENGR. ", name, flags=re.IGNORECASE)
-    name = re.sub(r"^ENGR\.?\s*", "ENGR. ", name, flags=re.IGNORECASE)
-    has_prefix = re.match(r"^(?:ENGR|DR|PROF|MR|MS|MRS|ATTY|REV|FR)\.?\s", name, re.IGNORECASE)
-    if not has_prefix:
-        name = "ENGR. " + name
-    return name.upper()
+    """Preserve saved profile titles and names; normalize casing only."""
+    return re.sub(r"\s+", " ", _safe_text(value).strip()).upper()
 
 
 def _set_literal(cell, value: object) -> None:
@@ -240,14 +233,13 @@ def build_iso_workbook(payload: dict) -> bytes:
         class_metadata = {}
     course_code = _safe_text(class_metadata.get("courseCode", class_metadata.get("code", "")))
     course_title = _safe_text(class_metadata.get("courseTitle", class_metadata.get("title", "")))
-    class_id = _safe_text(class_metadata.get("id", ""))
+    class_id = _safe_text(class_metadata.get("classId", "")).strip()
+    if re.match(r"^migration[_-]\\d{4}[_-]", class_id, re.IGNORECASE):
+        class_id = ""
     semester = _safe_text(class_metadata.get("semester", class_metadata.get("term", "")))
     academic_year = _safe_text(class_metadata.get("academicYear", ""))
 
         # Rows 7–8 use separate label/value cells; section IDs are human-readable.
-    section_name = _safe_text(class_metadata.get("sectionName", "")).strip()
-    if re.match(r"^migration[_-]\d{4}[_-]", section_name, re.IGNORECASE):
-        section_name = ""
     _set_literal(worksheet["A7"], "Course No.")
     _set_literal(worksheet["B7"], course_code)
     _set_literal(worksheet["C7"], "Descriptive Title")
@@ -255,7 +247,7 @@ def build_iso_workbook(payload: dict) -> bytes:
     _set_literal(worksheet["D7"], course_title)
 
     _set_literal(worksheet["A8"], "Class I.D.")
-    _set_literal(worksheet["B8"], section_name)
+    _set_literal(worksheet["B8"], class_id)
     _set_literal(worksheet["C8"], "Semester")
     _set_literal(worksheet["D8"], semester)
     _set_literal(worksheet["E8"], "Academic Year")

@@ -40,18 +40,19 @@ class FcuIsoExportTests(unittest.TestCase):
                 "eomsTitle": "EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM\nISO 21001:2025",
                 "affiliationLine1": "Member: Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)",
                 "affiliationLine2": "Member: Association of Christian Schools, Colleges in Asia (ACUCA)",
-                "submittedBy": "Teacher Example",
-                "deanName": "Dean Example",
+                "submittedBy": "Dr. Teacher Example",
+                "deanName": "Prof. Dean Example",
             },
             "class": {
                 "courseCode": "ECE-16",
                 "courseTitle": "Digital Systems",
                 "id": "subject-class-123",
+                "classId": "BSECE 4",
                 "semester": "First Semester",
                 "academicYear": "2026-2027",
                 "sectionName": "BSECE 4",
-                "teacherName": "engr. Firstname M. Lastname",
-                "deanName": "dean Example",
+                "teacherName": "dr. Firstname M. Lastname",
+                "deanName": "prof. Dean Example",
             },
             "headers": [
                 "NO.",
@@ -168,8 +169,8 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertEqual(sheet["E12"].number_format, "0.00%")
         self.assertAlmostEqual(sheet["F12"].value, 0.9025)
         self.assertEqual(sheet["F12"].number_format, "0.00%")
-        self.assertEqual(sheet["A15"].value, "ENGR. FIRSTNAME M. LASTNAME")
-        self.assertEqual(sheet["E15"].value, "ENGR. DEAN EXAMPLE")
+        self.assertEqual(sheet["A15"].value, "DR. FIRSTNAME M. LASTNAME")
+        self.assertEqual(sheet["E15"].value, "PROF. DEAN EXAMPLE")
         self.assertIn("A14:D14", {str(item) for item in sheet.merged_cells.ranges})
         self.assertIn("E14:H14", {str(item) for item in sheet.merged_cells.ranges})
         self.assertNotIn("Student Number", [sheet.cell(11, col).value for col in range(1, sheet.max_column + 1)])
@@ -201,7 +202,13 @@ class FcuIsoExportTests(unittest.TestCase):
 
     def test_migration_slug_is_never_written_as_the_human_readable_section_name(self):
         payload = dict(self.payload)
-        payload["class"] = dict(self.payload["class"], sectionName="migration_2026_ece-16")
+        payload["class"] = dict(self.payload["class"], classId="")
+        workbook = load_workbook(BytesIO(build_iso_workbook(payload)))
+        self.assertEqual(workbook.active["B8"].value, "")
+
+    def test_class_id_never_falls_back_to_section_or_subject_id(self):
+        payload = dict(self.payload)
+        payload["class"] = dict(self.payload["class"], classId=None, sectionName="BSECE 4", id="migration_2026_ece-16")
         workbook = load_workbook(BytesIO(build_iso_workbook(payload)))
         self.assertEqual(workbook.active["B8"].value, "")
 
