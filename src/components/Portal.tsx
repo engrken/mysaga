@@ -281,8 +281,8 @@ function gradeSheetComponentPercent(detail: Detail, enrollment: Enrollment, comp
   return totalWeight > 0 ? Number((weighted / totalWeight).toFixed(2)) : null;
 }
 
-function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Detail, schoolName: string, schoolAddress: string, teacherName: string, deanName: string, components: GradeSheetComponent[] = [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }]) {
-  const academicAssessments = detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·"));
+function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Detail, schoolName: string, schoolAddress: string, teacherName: string, deanName: string, components: GradeSheetComponent[] = [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }], assessmentOrder?: Assessment[]) {
+  const academicAssessments = assessmentOrder ?? detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·"));
   const assessmentColumns = academicAssessments.map(item => {
     const category = detail.categories.find(value => value.id === item.categoryId);
     const categoryItems = academicAssessments.filter(value => value.categoryId === item.categoryId);
@@ -549,12 +549,12 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
   const merges = ["A1:" + last + "9", "A11:" + last + "11", "A12:" + last + "12", "A13:" + last + "13", "A14:" + last + "14", ...signatureRanges];
   const mergeXml = merges.map(range => '<mergeCell ref="' + range + '"/>').join("");
   const widths = '<cols>' +
-    '<col min="1" max="1" width="14" customWidth="1"/>' +
-    '<col min="2" max="2" width="32" customWidth="1"/>' +
-    (componentColumns.length ? '<col min="3" max="' + (totalCol) + '" width="15" customWidth="1"/>' : '') +
-    '<col min="' + (totalCol + 1) + '" max="' + (totalCol + 1) + '" width="15" customWidth="1"/>' +
-    '<col min="' + (totalCol + 2) + '" max="' + (totalCol + 2) + '" width="13" customWidth="1"/>' +
-    '<col min="' + (totalCol + 3) + '" max="' + (totalCol + 3) + '" width="18" customWidth="1"/>' +
+    '<col min="1" max="1" width="12" customWidth="1"/>' +
+    '<col min="2" max="2" width="28" customWidth="1"/>' +
+    (componentColumns.length ? '<col min="3" max="' + (totalCol) + '" width="12" customWidth="1"/>' : '') +
+    '<col min="' + (totalCol + 1) + '" max="' + (totalCol + 1) + '" width="12" customWidth="1"/>' +
+    '<col min="' + (totalCol + 2) + '" max="' + (totalCol + 2) + '" width="10" customWidth="1"/>' +
+    '<col min="' + (totalCol + 3) + '" max="' + (totalCol + 3) + '" width="14" customWidth="1"/>' +
     '</cols>';
   const worksheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
@@ -1443,7 +1443,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       user.school.address || "",
       user.fullName,
       deanName.trim(),
-      gradeSheetComponents
+      gradeSheetComponents,
+      scorebookAssessments
     );
   }
   function downloadScoreCsv(blank=false) {
