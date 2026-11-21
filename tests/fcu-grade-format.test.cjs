@@ -50,13 +50,13 @@ const student = (name, equivalents, finalPercent = 95, remarks = "", studentNumb
 
 test("OOXML ZIP writer encodes XML as UTF-8 and writes valid uncompressed ZIP records", () => {
   const start = source.indexOf("function crc32(");
-  const end = source.indexOf("\\nfunction downloadXlsx(", start);
+  const end = source.indexOf("\nfunction downloadXlsx(", start);
   assert.ok(start > 0 && end > start, "CRC and ZIP writer helpers are present");
   const compiledZip = ts.transpileModule(source.slice(start, end), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText;
   const context = { Uint8Array, DataView, TextEncoder, Math, Number, Error };
-  vm.runInNewContext(compiledZip + "\\nthis.writeZip = zipStored; this.calculateCrc32 = crc32;", context);
+  vm.runInNewContext(compiledZip + "\nthis.writeZip = zipStored; this.calculateCrc32 = crc32;", context);
 
   const xmlFiles = [
     {
