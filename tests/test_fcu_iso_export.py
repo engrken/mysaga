@@ -51,7 +51,7 @@ class FcuIsoExportTests(unittest.TestCase):
                 "semester": "First Semester",
                 "academicYear": "2026-2027",
                 "sectionName": "BSECE 4",
-                "teacherName": "dr. Firstname M. Lastname",
+                "teacherName": "Kenneth Mark D. Bulquerin",
                 "deanName": "prof. Dean Example",
             },
             "headers": [
