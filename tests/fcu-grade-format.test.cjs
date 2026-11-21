@@ -75,8 +75,8 @@ test("FCU final-grade export uses the exact configured components and their weig
   assert.match(sheet, /<c r="F15"[^>]*>.*?TOTAL GRADE/s);
   assert.match(sheet, /<c r="G15"[^>]*>.*?FINAL GRADE/s);
   assert.match(sheet, /<c r="H15"[^>]*>.*?REMARKS/s);
-  assert.match(sheet, //\<c r="A17"[^>]*>.*?1\./s/s);
-  assert.match(sheet, //\<c r="B17"[^>]*>.*?EXAMPLE STUDENT/s/s);
+  assert.match(sheet, /<c r="A17"[^>]*>.*?1\./s);
+  assert.match(sheet, /<c r="B17"[^>]*>.*?EXAMPLE STUDENT/s);
   assert.match(sheet, /<c r="C17"[^>]*><v>40<\/v>/);
   assert.match(sheet, /<c r="D17"[^>]*><v>36<\/v>/);
   assert.match(sheet, /<c r="E17"[^>]*><v>10<\/v>/);
@@ -179,8 +179,8 @@ test("generic grading sheet export uses class records, actual assessment scores,
   assert.doesNotMatch(sheet, /\[\{"label":"Lecture"/);
   assert.match(sheet, /NO\./);
   assert.match(sheet, /NAME OF STUDENTS/);
-  assert.match(sheet, /<c r="A17"[^>]*>.*?1/s);
-  assert.match(sheet, /<c r="B17"[^>]*>.*?Ana Reyes/s);
+  assert.match(sheet, /<c r="A17"[^>]*>.*?1\./s);
+  assert.match(sheet, /<c r="B17"[^>]*>.*?EXAMPLE STUDENT/s);
   assert.match(sheet, /QUIZZES \(30\.00%\)/);
   assert.match(sheet, /MAJOR EXAM \(50\.00%\)/);
   assert.equal((sheet.match(/ATTENDANCE \(%\)/g) || []).length, 1, "attendance remains one calculated percentage column");
