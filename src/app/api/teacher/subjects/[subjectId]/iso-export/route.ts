@@ -32,7 +32,7 @@ const FCU_DEFAULTS = {
   revisionNo: "1",
   eomsTitle: "EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM",
   isoStandard: "ISO 21001:2025",
-  affiliationLine1: "Member Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)",
+  affiliationLine1: "Member: Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)",
   affiliationLine2: "Member: Association of Christian Schools, Colleges in Asia (ACUCA)"
 };
 
@@ -185,6 +185,33 @@ function normalizeSignatureName(value: unknown, defaultPrefix = "") {
   return name.toLocaleUpperCase();
 }
 
+function resolveSectionName(subject: any) {
+  const courseYear = String(subject.courseYear ?? "").trim();
+  if (courseYear) return courseYear;
+  const classId = String(subject.classId ?? "").trim();
+  if (!classId || /^migration[_-]\d{4}[_-]/i.test(classId)) return "";
+  return classId;
+}
+
+function hasUnenteredMajorCategories(subject: any, enrollment: any) {
+  const scoreByAssessment = new Map(enrollment.scores.map((score: any) => [score.assessmentId, score]));
+  const leaves = subject.categories.filter((category: CategoryLike) =>
+    !subject.categories.some((child: CategoryLike) => child.parentId === category.id)
+  );
+  return leaves.some((category: CategoryLike) => {
+    const assessments = subject.assessments.filter((item: any) =>
+      item.categoryId === category.id && !item.title.toLocaleLowerCase().startsWith("attendance ·")
+    );
+    if (!assessments.length) return false;
+    const scores = assessments.map((item: any) => scoreByAssessment.get(item.id));
+    const hasRecorded = scores.some((score: any) =>
+      !!score && (score.points !== null || (!!score.remark && score.remark !== "EXCUSED"))
+    );
+    const fullyExcused = scores.every((score: any) => score?.remark === "EXCUSED");
+    return !hasRecorded && !fullyExcused;
+  });
+}
+
 function readHeaderConfig(teacher: any) {
   const isFcu = /filamer christian university/i.test(teacher.school.name) ||
     teacher.school.slug.toLocaleLowerCase() === "fcu";
@@ -211,18 +238,18 @@ function readHeaderConfig(teacher: any) {
   }
   return {
     header: {
-      organizationName: isFcu ? "FILAMER CHRISTIAN UNIVERSITY, INC." : teacher.school.name.toLocaleUpperCase(),
-      organizationAddress: config.organizationAddress,
+      organizationName: teacher.school.name.toLocaleUpperCase(),
+      organizationAddress: teacher.school.address?.trim() || config.organizationAddress,
       formName: config.formName,
       formNo: config.formNo,
       effectivity: config.effectivity,
       issuingOffice: config.issuingOffice.replace(/[‘’]/g, "'"),
       revisionNo: config.revisionNo,
-      eomsTitle: config.eomsTitle + " (" + config.isoStandard + ")",
+      eomsTitle: config.eomsTitle + "\n" + config.isoStandard,
       affiliationLine1: config.affiliationLine1,
       affiliationLine2: config.affiliationLine2,
       submittedBy: normalizeSignatureName(teacher.fullName, "ENGR."),
-      deanName: normalizeSignatureName(teacher.school.deanName || "")
+      deanName: normalizeSignatureName(teacher.school.deanName || "", "ENGR.")
     }
   } as const;
 }
@@ -288,22 +315,25 @@ export async function POST(request: Request, context: Context) {
     );
     const components = parsed.data.componentNames.map(name => {
       if (special) return "";
-      return componentContribution(
+      const contribution = componentContribution(
         subject,
         enrollment,
         { name, percentage: subject.categories.find(category =>
           categoryPath(category, subject.categories).trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase()
         )?.weight ?? 0 },
         breakdown
-      ) ?? "";
+      );
+      return contribution === null ? "" : Number((contribution / 100).toFixed(6));
     });
+    const incompleteMajorCategories = !special && hasUnenteredMajorCategories(subject, enrollment);
+    const effectiveTotalPercent = incompleteMajorCategories ? null : breakdown.totalPercent;
     const band = subject.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent).find(item =>
-      breakdown.totalPercent !== null && breakdown.totalPercent >= item.minPercent
+      effectiveTotalPercent !== null && effectiveTotalPercent >= item.minPercent
     );
-    const totalGrade = special || breakdown.totalPercent === null
+    const totalGrade = special || effectiveTotalPercent === null
       ? ""
-      : Number(breakdown.totalPercent.toFixed(2));
-    const finalGrade = special ? "" : enrollment.finalGradeOverride || band?.finalGrade || "";
+      : Number((effectiveTotalPercent / 100).toFixed(6));
+    const finalGrade = special ? "" : enrollment.finalGradeOverride || (effectiveTotalPercent === null ? "" : band?.finalGrade || "");
     return [
       index + 1,
       enrollment.studentName || "",
@@ -311,7 +341,7 @@ export async function POST(request: Request, context: Context) {
       ...components,
       totalGrade,
       finalGrade,
-      enrollment.remarks || band?.remarks || ""
+      special ? enrollment.remarks || "" : (effectiveTotalPercent === null ? "" : enrollment.remarks || band?.remarks || "")
     ];
   });
 
@@ -335,6 +365,7 @@ export async function POST(request: Request, context: Context) {
       id: subject.id,
       semester: subject.term,
       academicYear: subject.academicYear,
+      sectionName: resolveSectionName(subject),
       teacherName: configuredHeader.header.submittedBy,
       deanName: configuredHeader.header.deanName
     },

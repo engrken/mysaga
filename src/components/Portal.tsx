@@ -56,7 +56,7 @@ const FCU_ISO_HEADER_DEFAULTS: IsoHeaderConfig = {
   revisionNo: "1",
   eomsTitle: "EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM",
   isoStandard: "ISO 21001:2025",
-  affiliationLine1: "Member Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)",
+  affiliationLine1: "Member: Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)",
   affiliationLine2: "Member: Association of Christian Schools, Colleges in Asia (ACUCA)"
 };
 function emptyIsoHeaderConfig(): IsoHeaderConfig {
@@ -1820,7 +1820,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     return gradeHeaderCanvasBytes(canvas);
   }
   async function renderIsoExcelSealPng(): Promise<Uint8Array> {
-    const schoolLogo = await loadGradeHeaderLogo(schoolLogoPath);
+    const activeInstitutionLogoPath = departmentLogoPath || schoolLogoPath;
+    const schoolLogo = await loadGradeHeaderLogo(activeInstitutionLogoPath);
     const canvas = document.createElement("canvas");
     canvas.width = 160;
     canvas.height = 160;

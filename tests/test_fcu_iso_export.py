@@ -16,11 +16,9 @@ from api.iso_export import build_iso_workbook, _short_assessment_header
 
 
 def sample_logo() -> str:
-    image = PillowImage.new("RGB", (400, 540), "white")
+    image = PillowImage.new("RGB", (160, 160), "white")
     draw = ImageDraw.Draw(image)
-    draw.ellipse((130, 20, 270, 160), outline="black", width=5)
-    draw.text((32, 365), "FILAMER CHRISTIAN UNIVERSITY, INC.", fill="black")
-    draw.text((110, 430), "Roxas City, Capiz", fill="black")
+    draw.ellipse((8, 8, 152, 152), outline="black", width=5)
     output = BytesIO()
     image.save(output, format="PNG")
     return base64.b64encode(output.getvalue()).decode("ascii")
@@ -39,8 +37,8 @@ class FcuIsoExportTests(unittest.TestCase):
                 "effectivity": "October 1, 2025",
                 "issuingOffice": "REGISTRAR'S OFFICE",
                 "revisionNo": "1",
-                "eomsTitle": "EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM (ISO 21001:2025)",
-                "affiliationLine1": "Member Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)",
+                "eomsTitle": "EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM\nISO 21001:2025",
+                "affiliationLine1": "Member: Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)",
                 "affiliationLine2": "Member: Association of Christian Schools, Colleges in Asia (ACUCA)",
                 "submittedBy": "Teacher Example",
                 "deanName": "Dean Example",
@@ -51,8 +49,9 @@ class FcuIsoExportTests(unittest.TestCase):
                 "id": "subject-class-123",
                 "semester": "First Semester",
                 "academicYear": "2026-2027",
+                "sectionName": "BSECE 4",
                 "teacherName": "engr. Firstname M. Lastname",
-                "deanName": "Dean Example",
+                "deanName": "dean Example",
             },
             "headers": [
                 "NO.",
@@ -64,37 +63,42 @@ class FcuIsoExportTests(unittest.TestCase):
                 "FINAL GRADE",
                 "REMARKS",
             ],
-            "rows": [[1, "Sample Student", 45, 19, 45.5, 90.25, "1.50", "PASSED"]],
+            "rows": [[1, "Sample Student", 45, 19, 0.2226, 0.9025, "1.50", "PASSED"]],
             "logoPngBase64": sample_logo(),
         }
 
     def test_exact_fcu_header_grid_accreditation_and_page_setup(self):
         workbook_bytes = build_iso_workbook(self.payload)
-        workbook = load_workbook(BytesIO(workbook_bytes))
+        workbook = load_workbook(BytesIO(workbook_bytes), rich_text=True)
         sheet = workbook["ISO Grading Sheet"]
 
         merged = {str(item) for item in sheet.merged_cells.ranges}
         self.assertIn("A1:A4", merged)
-        self.assertIn("B1:B2", merged)
-        self.assertIn("C1:E2", merged)
+        self.assertIn("B1:E1", merged)
+        self.assertIn("C2:E2", merged)
         self.assertIn("C3:E3", merged)
-        self.assertIn("B4:E4", merged)
         self.assertIn("A5:G5", merged)
         self.assertIn("A6:G6", merged)
 
-        self.assertEqual(sheet["B1"].value, "Form Name:")
-        self.assertEqual(sheet["C1"].value, "COLLEGIATE GRADING SHEET")
-        self.assertEqual(sheet["C1"].font.sz, 11)
-        self.assertTrue(sheet["C1"].font.bold)
-        self.assertEqual(sheet["C3"].value, "EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM (ISO 21001:2025)")
-        self.assertEqual(sheet["F1"].value, "Effectivity:")
-        self.assertEqual(sheet["G1"].value, "October 1, 2025")
-        self.assertEqual(sheet["F2"].value, "Issuing Office:")
-        self.assertEqual(sheet["G2"].value, "REGISTRAR'S OFFICE")
-        self.assertEqual(sheet["F3"].value, "Form No:")
-        self.assertEqual(sheet["G3"].value, "FCU-EOMS-RO-006-F")
-        self.assertEqual(sheet["F4"].value, "Revision No. 1")
-        self.assertEqual(sheet["G4"].value, "Page No. 1")
+        identity = sheet["B1"].value
+        self.assertEqual(str(identity), "FILAMER CHRISTIAN UNIVERSITY, INC.\nRoxas City, Capiz")
+        self.assertEqual(identity[0].font.sz, 11)
+        self.assertTrue(identity[0].font.b)
+        self.assertEqual(identity[1].font.sz, 8.5)
+        self.assertTrue(identity[1].font.i)
+        self.assertEqual(sheet["B2"].value, "Form Name:")
+        self.assertEqual(sheet["C2"].value, "COLLEGIATE GRADING SHEET")
+        self.assertEqual(sheet["C2"].font.sz, 11)
+        self.assertTrue(sheet["C2"].font.bold)
+        self.assertEqual(sheet["B3"].value, "Form No:\nFCU-EOMS-RO-006-F")
+        self.assertEqual(sheet["C3"].value, "EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM\nISO 21001:2025")
+        self.assertEqual(sheet["B4"].value, "Revision No. 1")
+        self.assertEqual(sheet["F2"].value, "Effectivity:")
+        self.assertEqual(sheet["G2"].value, "October 1, 2025")
+        self.assertEqual(sheet["F3"].value, "Issuing Office:")
+        self.assertEqual(sheet["G3"].value, "REGISTRAR'S OFFICE")
+        self.assertEqual(sheet["F4"].value, "Page No.")
+        self.assertEqual(sheet["G4"].value, "1")
 
         self.assertEqual(sheet["A5"].value, self.payload["header"]["affiliationLine1"])
         self.assertEqual(sheet["A6"].value, self.payload["header"]["affiliationLine2"])
@@ -103,14 +107,15 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertEqual(sheet["A5"].alignment.horizontal, "center")
         self.assertIsNone(sheet["A5"].border.left.style)
         self.assertIsNone(sheet["A6"].border.bottom.style)
+        self.assertIsNone(sheet["A1"].value, "the seal is the only A1:A4 content")
 
-        self.assertIsNone(sheet["A1"].value, "A1:A4 must contain only the seal image")
-        self.assertEqual(sheet["A1"].border.left.style, "thin")
-        self.assertEqual(sheet["A4"].border.bottom.style, "thin")
-        self.assertEqual(sheet["B1"].border.top.style, "thin")
-        self.assertEqual(sheet["B2"].border.bottom.style, "thin")
-        self.assertEqual(sheet["G4"].border.right.style, "thin")
-        self.assertEqual(sheet["F2"].border.right.style, "thin")
+        for row in range(1, 5):
+            for column in range(1, 8):
+                cell = sheet.cell(row, column)
+                self.assertEqual(cell.border.top.style, "thin")
+                self.assertEqual(cell.border.bottom.style, "thin")
+                self.assertEqual(cell.border.left.style, "thin")
+                self.assertEqual(cell.border.right.style, "thin")
 
         self.assertTrue(sheet.sheet_view.showGridLines)
         self.assertEqual(sheet.page_setup.orientation, "portrait")
@@ -131,18 +136,19 @@ class FcuIsoExportTests(unittest.TestCase):
         workbook = load_workbook(BytesIO(workbook_bytes))
         sheet = workbook.active
 
-        self.assertIn("A7:B7", {str(item) for item in sheet.merged_cells.ranges})
-        self.assertIn("C7:H7", {str(item) for item in sheet.merged_cells.ranges})
-        self.assertIn("A8:B8", {str(item) for item in sheet.merged_cells.ranges})
-        self.assertIn("C8:D8", {str(item) for item in sheet.merged_cells.ranges})
-        self.assertIn("E8:H8", {str(item) for item in sheet.merged_cells.ranges})
-        self.assertEqual(sheet["A7"].value, "Course No.: ECE-16")
-        self.assertEqual(sheet["C7"].value, "Descriptive Title: Digital Systems")
-        self.assertEqual(sheet["A8"].value, "Class ID: subject-class-123")
-        self.assertEqual(sheet["C8"].value, "Semester: First Semester")
-        self.assertEqual(sheet["E8"].value, "Academic Year: 2026-2027")
-        self.assertEqual(sheet["A8"].border.bottom.style, "medium")
-        self.assertEqual(sheet["H8"].border.bottom.style, "medium")
+        self.assertIn("D7:G7", {str(item) for item in sheet.merged_cells.ranges})
+        self.assertEqual(sheet["A7"].value, "Course No.")
+        self.assertEqual(sheet["B7"].value, "ECE-16")
+        self.assertEqual(sheet["C7"].value, "Descriptive Title")
+        self.assertEqual(sheet["D7"].value, "Digital Systems")
+        self.assertEqual(sheet["A8"].value, "Class I.D.")
+        self.assertEqual(sheet["B8"].value, "BSECE 4")
+        self.assertEqual(sheet["C8"].value, "Semester")
+        self.assertEqual(sheet["D8"].value, "First Semester")
+        self.assertEqual(sheet["E8"].value, "Academic Year")
+        self.assertEqual(sheet["F8"].value, "2026-2027")
+        for column in range(1, 8):
+            self.assertEqual(sheet.cell(8, column).border.bottom.style, "medium")
 
         self.assertEqual(sheet["A11"].value, "NO.")
         self.assertEqual(sheet["B11"].value, "NAME OF STUDENTS")
@@ -158,12 +164,12 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertEqual(sheet["B12"].value, "Sample Student")
         self.assertEqual(sheet["C12"].value, 45)
         self.assertEqual(sheet["D12"].value, 19)
-        self.assertAlmostEqual(sheet["E12"].value, 0.455)
+        self.assertAlmostEqual(sheet["E12"].value, 0.2226)
         self.assertEqual(sheet["E12"].number_format, "0.00%")
         self.assertAlmostEqual(sheet["F12"].value, 0.9025)
         self.assertEqual(sheet["F12"].number_format, "0.00%")
         self.assertEqual(sheet["A15"].value, "ENGR. FIRSTNAME M. LASTNAME")
-        self.assertEqual(sheet["E15"].value, "DEAN EXAMPLE")
+        self.assertEqual(sheet["E15"].value, "ENGR. DEAN EXAMPLE")
         self.assertIn("A14:D14", {str(item) for item in sheet.merged_cells.ranges})
         self.assertIn("E14:H14", {str(item) for item in sheet.merged_cells.ranges})
         self.assertNotIn("Student Number", [sheet.cell(11, col).value for col in range(1, sheet.max_column + 1)])
@@ -176,9 +182,7 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertEqual(sheet.column_dimensions["G"].width, 12)
         self.assertEqual(sheet.column_dimensions["H"].width, 12)
         self.assertEqual(sheet["A14"].value, "Submitted by:")
-        self.assertEqual(sheet["A15"].value, "ENGR. FIRSTNAME M. LASTNAME")
         self.assertEqual(sheet["E14"].value, "Noted:")
-        self.assertEqual(sheet["E15"].value, "DEAN EXAMPLE")
         self.assertEqual(sheet["A15"].border.bottom.style, "thin")
         self.assertEqual(sheet["E15"].border.bottom.style, "thin")
         self.assertEqual(sheet.freeze_panes, "A12")
@@ -194,6 +198,12 @@ class FcuIsoExportTests(unittest.TestCase):
             _short_assessment_header("Lecture / Quizzes/Assignments · Quiz 1 (Max 20)"),
             "Quiz 1 (20)",
         )
+
+    def test_migration_slug_is_never_written_as_the_human_readable_section_name(self):
+        payload = dict(self.payload)
+        payload["class"] = dict(self.payload["class"], sectionName="migration_2026_ece-16")
+        workbook = load_workbook(BytesIO(build_iso_workbook(payload)))
+        self.assertEqual(workbook.active["B8"].value, "")
 
     def test_every_sheet_xml_row_serializes_cells_in_column_order(self):
         workbook_bytes = build_iso_workbook(self.payload)

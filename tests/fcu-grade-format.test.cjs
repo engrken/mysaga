@@ -231,6 +231,7 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(source, /renderIsoExcelSealPng\(\)/);
   assert.doesNotMatch(source, /renderIsoExcelLogoBlockPng/);
   assert.match(source, /ctx\.arc\(80, 80, 76/);
+  assert.match(source, /const activeInstitutionLogoPath = departmentLogoPath \|\| schoolLogoPath/);
   assert.match(source, /ctx\.drawImage\(schoolLogo, sourceX, sourceY, cropSize, cropSize, 4, 4, 152, 152\)/);
   assert.doesNotMatch(source.slice(source.indexOf("async function renderIsoExcelSealPng"), source.indexOf("async function exportIsoGradesExcel")), /fillText\(/);
   assert.match(source, /componentNames: gradeSheetComponents\.map/);
@@ -239,17 +240,28 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(source, /response\.blob\(\)/);
   assert.match(pythonSource, /from openpyxl import Workbook/);
   assert.match(pythonSource, /_merge_with_border\(worksheet, "A1:A4", THIN_BORDER\)/);
-  assert.match(pythonSource, /_merge_with_border\(worksheet, "B1:B2", THIN_BORDER\)/);
-  assert.match(pythonSource, /_merge_with_border\(worksheet, "C1:E2", THIN_BORDER\)/);
+  assert.match(pythonSource, /_merge_with_border\(worksheet, "B1:E1", THIN_BORDER\)/);
+  assert.match(pythonSource, /_merge_with_border\(worksheet, "C2:E2", THIN_BORDER\)/);
   assert.match(pythonSource, /_merge_with_border\(worksheet, "C3:E3", THIN_BORDER\)/);
-  assert.match(pythonSource, /_set_literal\(worksheet\["F3"\], "Form No:"\)/);
-  assert.match(pythonSource, /_set_literal\(worksheet\["F4"\], "Revision No\. "/);
-  assert.match(pythonSource, /_set_literal\(worksheet\["G4"\], "Page No\. 1"\)/);
+  assert.match(pythonSource, /CellRichText/);
+  assert.match(pythonSource, /InlineFont\(rFont="Arial", sz=11, b=True\)/);
+  assert.match(pythonSource, /InlineFont\(rFont="Arial", sz=8\.5, i=True\)/);
+  assert.match(pythonSource, /_set_literal\(worksheet\["B3"\], "Form No:/);
+  assert.match(pythonSource, /_set_literal\(worksheet\["B4"\], "Revision No\. "/);
+  assert.match(pythonSource, /_set_literal\(worksheet\["F2"\], "Effectivity:"\)/);
+  assert.match(pythonSource, /_set_literal\(worksheet\["F3"\], "Issuing Office:"\)/);
+  assert.match(pythonSource, /_set_literal\(worksheet\["F4"\], "Page No\."\)/);
+  assert.match(pythonSource, /_set_literal\(worksheet\["G4"\], "1"\)/);
+  assert.match(pythonSource, /worksheet\.merge_cells\("D7:G7"\)/);
+  assert.match(pythonSource, /_set_literal\(worksheet\["A8"\], "Class I\.D\."\)/);
+  assert.match(pythonSource, /METADATA_BOTTOM_BORDER/);
   assert.match(pythonSource, /image\.width = 80/);
   assert.match(pythonSource, /image\.height = 80/);
   assert.match(pythonSource, /OneCellAnchor/);
   assert.match(pythonSource, /cell\.number_format = "0\.00%"/);
-  assert.match(pythonSource, /_merge_with_border\(worksheet, "B4:E4", THIN_BORDER\)/);
+  assert.match(pythonSource, /Percentage columns are passed as fractions/);
+  assert.match(pythonSource, /def _normalize_signature_name/);
+  assert.match(pythonSource, /_set_literal\(worksheet\["B4"\], "Revision No\\. "/);
   assert.match(pythonSource, /merge_cells\("A5:G5"\)/);
   assert.match(pythonSource, /merge_cells\("A6:G6"\)/);
   assert.match(pythonSource, /paperSize = "14"/);
@@ -264,7 +276,12 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(endpoint, /componentContribution/);
   assert.match(endpoint, /function normalizeSignatureName\(/);
   assert.match(endpoint, /normalizeSignatureName\(teacher\.fullName, "ENGR\."\)/);
-  assert.match(endpoint, /normalizeSignatureName\(teacher\.school\.deanName \|\| ""\)/);
+  assert.match(endpoint, /normalizeSignatureName\(teacher\.school\.deanName \|\| "", "ENGR\."\)/);
+  assert.match(endpoint, /function resolveSectionName\(/);
+  assert.match(endpoint, /function hasUnenteredMajorCategories\(/);
+  assert.match(endpoint, /sectionName: resolveSectionName\(subject\)/);
+  assert.match(endpoint, /Number\(\(contribution \/ 100\)\.toFixed\(6\)\)/);
+  assert.match(endpoint, /Number\(\(effectiveTotalPercent \/ 100\)\.toFixed\(6\)\)/);
   assert.match(endpoint, /teacherName: configuredHeader\.header\.submittedBy/);
   assert.match(endpoint, /deanName: configuredHeader\.header\.deanName/);
   assert.match(endpoint, /process\.env\.VERCEL_PROJECT_PRODUCTION_URL/, "production calls use the stable project domain");
@@ -283,11 +300,40 @@ test("teacher and dean signature names are normalized from their active profile 
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText;
   const context = {};
-  vm.runInNewContext(compiled + "\nthis.normalizeSignatureName = normalizeSignatureName;", context);
+  vm.runInNewContext(compiled + "\nthis.normalizeSignatureName = normalizeSignatureName; this.resolveSectionName = resolveSectionName; this.hasUnenteredMajorCategories = hasUnenteredMajorCategories;", context);
   assert.equal(context.normalizeSignatureName("enrg. Firstname M. Lastname", "ENGR."), "ENGR. FIRSTNAME M. LASTNAME");
   assert.equal(context.normalizeSignatureName("Firstname M. Lastname", "ENGR."), "ENGR. FIRSTNAME M. LASTNAME");
   assert.equal(context.normalizeSignatureName("engr.Firstname M. Lastname", "ENGR."), "ENGR. FIRSTNAME M. LASTNAME");
-  assert.equal(context.normalizeSignatureName("enrg. Dean Example", ""), "ENGR. DEAN EXAMPLE");
+  assert.equal(context.normalizeSignatureName("enrg. Dean Example", "ENGR."), "ENGR. DEAN EXAMPLE");
+  assert.equal(context.resolveSectionName({ courseYear: "BSECE 4", classId: "migration_2026_ece-16" }), "BSECE 4");
+  assert.equal(context.resolveSectionName({ courseYear: "", classId: "migration_2026_ece-16" }), "");
+
+  const subject = {
+    categories: [
+      { id: "lecture", parentId: null },
+      { id: "midterm", parentId: "lecture" },
+      { id: "laboratory", parentId: null }
+    ],
+    assessments: [
+      { id: "exam", categoryId: "midterm", title: "Midterm Exam" },
+      { id: "lab", categoryId: "laboratory", title: "Laboratory Design" }
+    ]
+  };
+  assert.equal(context.hasUnenteredMajorCategories(subject, {
+    scores: [{ assessmentId: "exam", points: 80, remark: null }]
+  }), true, "an unentered major category prevents a provisional failed mark");
+  assert.equal(context.hasUnenteredMajorCategories(subject, {
+    scores: [
+      { assessmentId: "exam", points: 80, remark: null },
+      { assessmentId: "lab", points: 0, remark: null }
+    ]
+  }), false, "a recorded zero is distinct from a blank evaluation");
+  assert.equal(context.hasUnenteredMajorCategories(subject, {
+    scores: [
+      { assessmentId: "exam", points: 80, remark: null },
+      { assessmentId: "lab", points: null, remark: "EXCUSED" }
+    ]
+  }), false, "a fully excused category does not remain pending");
 });
 
 test("Attendance component calculates its own session percentage and weighted contribution", () => {

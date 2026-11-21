@@ -18,6 +18,8 @@ from io import BytesIO
 from urllib.parse import urlsplit
 
 from openpyxl import Workbook
+from openpyxl.cell.rich_text import CellRichText, TextBlock
+from openpyxl.cell.text import InlineFont
 from openpyxl.drawing.image import Image as ExcelImage
 from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor
 from openpyxl.drawing.xdr import XDRPositiveSize2D
@@ -63,6 +65,18 @@ def _short_assessment_header(value: object) -> str:
     return f"{activity} ({points})" if activity else f"({points})"
 
 
+def _normalize_signature_name(value: object) -> str:
+    name = re.sub(r"\s+", " ", _safe_text(value).strip())
+    if not name:
+        return ""
+    name = re.sub(r"^ENRG\.?\s*", "ENGR. ", name, flags=re.IGNORECASE)
+    name = re.sub(r"^ENGR\.?\s*", "ENGR. ", name, flags=re.IGNORECASE)
+    has_prefix = re.match(r"^(?:ENGR|DR|PROF|MR|MS|MRS|ATTY|REV|FR)\.?\s", name, re.IGNORECASE)
+    if not has_prefix:
+        name = "ENGR. " + name
+    return name.upper()
+
+
 def _set_literal(cell, value: object) -> None:
     """Write values without allowing user-entered text to become a formula."""
     if value is None:
@@ -98,7 +112,7 @@ def _add_logo(ws: Worksheet, logo_png_base64: str) -> None:
         image.width = 80
         image.height = 80
         image.anchor = OneCellAnchor(
-            _from=AnchorMarker(col=0, colOff=4 * 9525, row=0, rowOff=35 * 9525),
+            _from=AnchorMarker(col=0, colOff=4 * 9525, row=0, rowOff=40 * 9525),
             ext=XDRPositiveSize2D(cx=80 * 9525, cy=80 * 9525),
         )
         ws.add_image(image)
@@ -152,47 +166,49 @@ def build_iso_workbook(payload: dict) -> bytes:
     worksheet.print_title_rows = "11:11"
 
     worksheet.sheet_format.defaultRowHeight = 20
-    for row_number in range(1, 5):
-        worksheet.row_dimensions[row_number].height = 28
+    for row_number, height in enumerate((34, 28, 34, 24), start=1):
+        worksheet.row_dimensions[row_number].height = height
         for column_number in range(1, 8):
             cell = worksheet.cell(row_number, column_number)
             cell.border = THIN_BORDER
             cell.font = Font(name="Arial", size=9, color="FF000000")
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-    # FCU-EOMS-RO-006-F institutional document-control grid.
+        # FCU-EOMS-RO-006-F institutional header. Border all 28 source cells
+    # before merging so every visible perimeter remains explicitly outlined.
     _merge_with_border(worksheet, "A1:A4", THIN_BORDER)
-    _merge_with_border(worksheet, "B1:B2", THIN_BORDER)
-    _merge_with_border(worksheet, "C1:E2", THIN_BORDER)
+    _merge_with_border(worksheet, "B1:E1", THIN_BORDER)
+    _merge_with_border(worksheet, "C2:E2", THIN_BORDER)
     _merge_with_border(worksheet, "C3:E3", THIN_BORDER)
-    _merge_with_border(worksheet, "B4:E4", THIN_BORDER)
 
-    _set_literal(worksheet["B1"], "Form Name:")
-    _set_literal(worksheet["C1"], clean_header["formName"])
-    _set_literal(worksheet["C3"], clean_header["eomsTitle"])
-
-    _set_literal(worksheet["F1"], "Effectivity:")
-    _set_literal(worksheet["G1"], clean_header["effectivity"])
-    _set_literal(worksheet["F2"], "Issuing Office:")
-    _set_literal(worksheet["G2"], clean_header["issuingOffice"])
-    _set_literal(worksheet["F3"], "Form No:")
-    _set_literal(worksheet["G3"], clean_header["formNo"])
-    _set_literal(worksheet["F4"], "Revision No. " + clean_header["revisionNo"])
-    _set_literal(worksheet["G4"], "Page No. 1")
-
-    worksheet["B1"].font = Font(name="Arial", size=8, bold=True, color="FF000000")
+    identity = CellRichText(
+        TextBlock(InlineFont(rFont="Arial", sz=11, b=True), clean_header["organizationName"] + "\n"),
+        TextBlock(InlineFont(rFont="Arial", sz=8.5, i=True), clean_header["organizationAddress"]),
+    )
+    worksheet["B1"] = identity
     worksheet["B1"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    worksheet["C1"].font = Font(name="Arial", size=11, bold=True, color="FF000000")
-    worksheet["C1"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    _set_literal(worksheet["B2"], "Form Name:")
+    _set_literal(worksheet["C2"], clean_header["formName"])
+    _set_literal(worksheet["B3"], "Form No:\n" + clean_header["formNo"])
+    _set_literal(worksheet["C3"], clean_header["eomsTitle"])
+    _set_literal(worksheet["B4"], "Revision No. " + clean_header["revisionNo"])
+
+    _set_literal(worksheet["F2"], "Effectivity:")
+    _set_literal(worksheet["G2"], clean_header["effectivity"])
+    _set_literal(worksheet["F3"], "Issuing Office:")
+    _set_literal(worksheet["G3"], clean_header["issuingOffice"])
+    _set_literal(worksheet["F4"], "Page No.")
+    _set_literal(worksheet["G4"], "1")
+
+    for coordinate in ("B2", "B3", "B4", "F2", "F3", "F4", "G2", "G3", "G4"):
+        worksheet[coordinate].font = Font(name="Arial", size=8, bold=True, color="FF000000")
+        worksheet[coordinate].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    worksheet["C2"].font = Font(name="Arial", size=11, bold=True, color="FF000000")
+    worksheet["C2"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     worksheet["C3"].font = Font(name="Arial", size=8, bold=True, color="FF000000")
     worksheet["C3"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    for coordinate in ("F1", "F2", "F3", "F4"):
-        worksheet[coordinate].font = Font(name="Arial", size=7, bold=True, color="FF000000")
-        worksheet[coordinate].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    for coordinate in ("G1", "G2", "G3", "G4"):
-        worksheet[coordinate].font = Font(name="Arial", size=7, bold=True, color="FF000000")
-        worksheet[coordinate].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    worksheet["A1"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    worksheet["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
     # Accreditation copy is outside the bordered box and deliberately borderless.
     worksheet.merge_cells("A5:G5")
@@ -228,23 +244,29 @@ def build_iso_workbook(payload: dict) -> bytes:
     semester = _safe_text(class_metadata.get("semester", class_metadata.get("term", "")))
     academic_year = _safe_text(class_metadata.get("academicYear", ""))
 
-    # Rows 7–8 carry the active class details; row 8 has a continuous medium underline.
-    metadata_ranges = (
-        ("A7:B7", "A7", "Course No.: " + course_code),
-        ("C7:" + last_column_letter + "7", "C7", "Descriptive Title: " + course_title),
-        ("A8:B8", "A8", "Class ID: " + class_id),
-        ("C8:D8", "C8", "Semester: " + semester),
-        ("E8:" + last_column_letter + "8", "E8", "Academic Year: " + academic_year),
-    )
-    for cell_range, _anchor, _value in metadata_ranges:
-        border = METADATA_BOTTOM_BORDER if cell_range.endswith("8") else None
-        _merge_with_border(worksheet, cell_range, border)
-    for _cell_range, anchor, value in metadata_ranges:
-        _set_literal(worksheet[anchor], value)
-        worksheet[anchor].font = Font(name="Arial", size=9, bold=True, color="FF000000")
-        worksheet[anchor].alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
-    worksheet.row_dimensions[7].height = 22
-    worksheet.row_dimensions[8].height = 24
+        # Rows 7–8 use separate label/value cells; section IDs are human-readable.
+    section_name = _safe_text(class_metadata.get("sectionName", "")).strip()
+    if re.match(r"^migration[_-]\d{4}[_-]", section_name, re.IGNORECASE):
+        section_name = ""
+    _set_literal(worksheet["A7"], "Course No.")
+    _set_literal(worksheet["B7"], course_code)
+    _set_literal(worksheet["C7"], "Descriptive Title")
+    worksheet.merge_cells("D7:G7")
+    _set_literal(worksheet["D7"], course_title)
+
+    _set_literal(worksheet["A8"], "Class I.D.")
+    _set_literal(worksheet["B8"], section_name)
+    _set_literal(worksheet["C8"], "Semester")
+    _set_literal(worksheet["D8"], semester)
+    _set_literal(worksheet["E8"], "Academic Year")
+    _set_literal(worksheet["F8"], academic_year)
+    for column_number in range(1, 8):
+        worksheet.cell(8, column_number).border = METADATA_BOTTOM_BORDER
+    for coordinate in ("A7", "B7", "C7", "D7", "A8", "B8", "C8", "D8", "E8", "F8"):
+        worksheet[coordinate].font = Font(name="Arial", size=9, bold=coordinate[0] in ("A", "C", "E"), color="FF000000")
+        worksheet[coordinate].alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    worksheet.row_dimensions[7].height = 23
+    worksheet.row_dimensions[8].height = 25
 
     # Keep rows 9–10 open as breathing room below the class details.
     worksheet.row_dimensions[9].height = 8
@@ -272,9 +294,7 @@ def build_iso_workbook(payload: dict) -> bytes:
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 horizontal = "right"
                 if "(%)" in heading or "TOTAL GRADE" in heading:
-                    # Grade values arrive as percentage points (e.g. 90.25);
-                    # Excel percent formatting expects a 0.9025 fraction.
-                    cell.value = float(value) / 100
+                    # Percentage columns are passed as fractions (0.2226 = 22.26%).
                     cell.number_format = "0.00%"
             if "FINAL GRADE" in heading:
                 horizontal = "center"
@@ -326,12 +346,10 @@ def build_iso_workbook(payload: dict) -> bytes:
 
     _set_literal(worksheet.cell(signature_label_row, 1), "Submitted by:")
     _set_literal(worksheet.cell(signature_label_row, right_start), "Noted:")
-    teacher_name = _safe_text(class_metadata.get("teacherName") or clean_header["submittedBy"]).strip()
-    dean_name = _safe_text(class_metadata.get("deanName") or clean_header["deanName"]).strip()
-    teacher_name = re.sub(r"^ENRG\.?\s*", "ENGR. ", teacher_name, flags=re.IGNORECASE)
-    dean_name = re.sub(r"^ENRG\.?\s*", "ENGR. ", dean_name, flags=re.IGNORECASE)
-    _set_literal(worksheet.cell(signature_name_row, 1), teacher_name.upper())
-    _set_literal(worksheet.cell(signature_name_row, right_start), dean_name.upper())
+    teacher_name = _normalize_signature_name(class_metadata.get("teacherName") or clean_header["submittedBy"])
+    dean_name = _normalize_signature_name(class_metadata.get("deanName") or clean_header["deanName"])
+    _set_literal(worksheet.cell(signature_name_row, 1), teacher_name)
+    _set_literal(worksheet.cell(signature_name_row, right_start), dean_name)
     _set_literal(worksheet.cell(signature_role_row, 1), "TEACHER'S SIGNATURE OVER PRINTED NAME")
     _set_literal(worksheet.cell(signature_role_row, right_start), "DEAN'S SIGNATURE OVER PRINTED NAME")
 
