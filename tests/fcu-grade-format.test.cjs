@@ -208,7 +208,8 @@ test("FCU final-grade export uses the exact configured components and their weig
 
 test("Generic PDF export is offered only once inside the export dropdown", () => {
   assert.match(source, /<strong>Save \/ Print Generic PDF<\/strong>/, "the Generic dropdown retains its PDF option");
-  assert.match(source, /<strong>Download Generic Excel Sheet<\/strong>/, "the Generic dropdown retains its Excel option");
+  assert.match(source, /"Download Generic Excel Sheet"/, "the Generic dropdown retains its idle Excel option label");
+  assert.match(source, /"Generating Excel file…"/, "the Generic dropdown exposes its loading label");
   assert.doesNotMatch(source, /<button className="btn btn-outline-primary" onClick=\{\(\) => printFinalGradesPdf\("generic"\)\}>Save \/ Print Generic PDF<\/button>/, "the duplicate standalone PDF button is removed");
 });
 
@@ -421,6 +422,7 @@ test("Record Scores Excel export mirrors the full grouped scorebook and saved si
     setTimeout() {},
     zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
     excelColumn: columns,
+    sortWorksheetRowCells: value => value,
     xmlEscape: escape,
     categoryPath: category => category.name,
     formatSchedule: raw => { try { return JSON.parse(raw).map(row => `${row.label || "Class"} · ${row.day}, ${row.startTime}–${row.endTime}`).join(" / "); } catch { return raw || ""; } },
@@ -522,7 +524,7 @@ test("generic grading sheet supports a class with no assessment items without in
     document: { createElement: () => ({ click() {} }) },
     setTimeout() {},
     zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
-    excelColumn: columns, xmlEscape: escape, categoryPath: category => category.name,
+    excelColumn: columns, sortWorksheetRowCells: value => value, xmlEscape: escape, categoryPath: category => category.name,
     formatSchedule: raw => { try { return JSON.parse(raw).map(row => `${row.label || "Class"} · ${row.day}, ${row.startTime}–${row.endTime}`).join(" / "); } catch { return raw || ""; } }
   };
   vm.runInNewContext(compiledGeneric + "\nthis.generateGeneric = downloadGradeSheetXlsx;", context);
