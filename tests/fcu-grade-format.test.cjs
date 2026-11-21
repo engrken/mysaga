@@ -406,7 +406,7 @@ test("FCU final-grade export supports a variable number of components", async ()
   assert.match(sheet, /<c r="I15"[^>]*>.*?REMARKS/s);
 });
 
-test("generic grading sheet export uses class records, actual assessment scores, and editable Dean name", () => {
+test("Record Scores Excel export mirrors the full grouped scorebook and saved signature profiles", () => {
   const start = source.indexOf("function gradeSheetAttendancePercent(");
   const end = source.indexOf("async function downloadFcuGradeXlsx(", start);
   assert.ok(start > 0 && end > start, "generic grading-sheet exporter is present");
@@ -436,8 +436,16 @@ test("generic grading sheet export uses class records, actual assessment scores,
       }
       return category.id === root.id ? root.weight : root.weight * category.weight / 100;
     },
-    calculateCategoryPercent: category => { const active = category.assessments.filter(item => item.scores[0]?.remark !== "EXCUSED" && (item.scores[0]?.remark || item.scores[0]?.points != null)); if (!active.length) return null; const earned = active.filter(item => ["PRESENT", "LATE"].includes(item.scores[0]?.remark) || (item.scores[0]?.points ?? 0) > 0).length; return Math.round(earned / active.length * 10000) / 100; }
+    attendanceDays: assessments => assessments,
+    consecutiveLateAbsences: () => new Set()
   };
+  const gradeSource = fs.readFileSync("src/lib/grades.ts", "utf8")
+    .replace('import { attendanceDays, consecutiveLateAbsences } from "./attendance";', "")
+    .replace(/^export\s+/gm, "");
+  const compiledGrades = ts.transpileModule(gradeSource, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  vm.runInNewContext(compiledGrades + "\nthis.calculateGradeBreakdown = calculateGradeBreakdown;", context);
   vm.runInNewContext(compiledGeneric + "\nthis.generateGeneric = downloadGradeSheetXlsx;", context);
   const detail = {
     code: "ECE 16", title: "Design Project", classId: "BSECE-4A",
@@ -456,44 +464,46 @@ test("generic grading sheet export uses class records, actual assessment scores,
     ],
     gradeBands: [{ minPercent: 75, finalGrade: "2.25", remarks: "PASSED" }]
   };
-  context.generateGeneric("record-scores.xlsx", "Record Scores", detail, "Example University", "123 College Road", "Teacher One", "Dean Two", [{ name: "Quizzes", percentage: 30 }, { name: "Major Exam", percentage: 50 }]);
+  context.generateGeneric("record-scores.xlsx", "Record Scores", detail, "Example University", "123 College Road", "COLLEGE OF ENGINEERING", "Teacher One", "Dean Two", [{ name: "Quizzes", percentage: 30 }, { name: "Major Exam", percentage: 50 }]);
   const files = Object.fromEntries(saved.map(file => [file.name, file.content]));
   const sheet = files["xl/worksheets/sheet1.xml"];
   assert.match(sheet, /Example University/);
-  assert.match(sheet, /School Address: 123 College Road/);
-  assert.match(sheet, /RECORD SCORES/);
+  assert.match(sheet, /123 College Road/);
+  assert.doesNotMatch(sheet, /School Address:/);
+  assert.match(sheet, /COLLEGE OF ENGINEERING/);
+  assert.doesNotMatch(sheet, /RECORD SCORES|RECORD SCORED/);
   assert.match(sheet, /Course Number: ECE 16/);
   assert.match(sheet, /Descriptive Title: Design Project/);
   assert.match(sheet, /Class ID: BSECE-4A/);
   assert.match(sheet, /Semester: 1st Semester/);
   assert.match(sheet, /Academic Year: 2026-2027/);
   assert.match(sheet, /Schedule: Lecture · Monday, 04:00 PM–05:30 PM/);
-  assert.match(sheet, /Dean: Dean Two/);
+  assert.doesNotMatch(sheet, /Teacher: Teacher One|Dean: Dean Two/);
   assert.match(sheet, /Display Components: Quizzes 30\.00% · Major Exam 50\.00%/);
-  assert.doesNotMatch(sheet, /\[\{"label":"Lecture"/);
   assert.match(sheet, /NO\./);
   assert.match(sheet, /NAME OF STUDENTS/);
-  assert.match(sheet, /<c r="A17"[^>]*>.*?1<\/t>/s);
-  assert.match(sheet, /<c r="B17"[^>]*>.*?Ana Reyes/s);
-  assert.match(sheet, /QUIZZES \(30\.00%\)/);
-  assert.match(sheet, /MAJOR EXAM \(50\.00%\)/);
-  assert.equal((sheet.match(/ATTENDANCE \(%\)/g) || []).length, 1, "attendance remains one calculated percentage column");
-  assert.match(files["xl/styles.xml"], /<fonts count="5">.*?<sz val="9"\/>/s);
-  assert.match(sheet, /Quizzes · Quiz 1 \(Max 10 · Item wt Points-based · Course wt 30\.00%\)/);
-  assert.match(sheet, /8 \/ 10/);
-  assert.match(sheet, /EXCUSED/);
-  assert.match(sheet, /42 \/ 50/);
-  assert.match(sheet, /90\.00%/);
-  assert.match(sheet, /2\.00/);
+  assert.match(sheet, /QUIZZES/);
+  assert.match(sheet, /MAJOR EXAM/);
+  assert.match(sheet, /Quiz 1 \(10\)/);
+  assert.match(sheet, /Equivalent \(%\)/);
+  assert.doesNotMatch(sheet, /Lecture \/ Quizzes|Quizzes · Quiz 1|Item wt|Course wt|Student Number|2023-0001/);
+  assert.match(sheet, /<mergeCell ref="D14:E14"\/>/);
+  assert.match(sheet, /<mergeCell ref="F14:G14"\/>/);
+  assert.match(sheet, /<c r="A16"[^>]*><v>1<\/v><\/c>/);
+  assert.match(sheet, /<c r="B16"[^>]*>.*?Ana Reyes/s);
+  assert.match(sheet, /<c r="A17"[^>]*><v>2<\/v><\/c>/);
+  assert.match(sheet, /<c r="D16"[^>]*>.*?8 \/ 10/s);
+  assert.match(sheet, /<c r="E16"[^>]*>.*?27\.00%/s);
+  assert.match(sheet, /<c r="G16"[^>]*>.*?46\.00%/s);
+  assert.match(sheet, /<c r="H16"[^>]*>.*?90\.00%/s);
+  assert.match(sheet, /<c r="I16"[^>]*>.*?2\.00/s);
+  assert.match(sheet, /<c r="J16"[^>]*>.*?PASSED/s);
   assert.match(sheet, /Teacher One/);
   assert.match(sheet, /Dean Two/);
-  assert.match(sheet, /Teacher&apos;s Signature over Printed Name/);
-  assert.match(sheet, /Dean&apos;s Signature over Printed Name/);
+  assert.match(sheet, /SIGNATURE OVER PRINTED NAME \/ DATE/);
+  assert.doesNotMatch(sheet, /Teacher&apos;s Signature over Printed Name|Dean&apos;s Signature over Printed Name/);
   assert.match(sheet, /orientation="landscape" fitToWidth="1"/);
-  assert.match(sheet, /ATTENDANCE \(%\)/);
-  assert.match(sheet, /50\.00%/);
-  assert.doesNotMatch(sheet, /Attendance · 2026-11-02|Attendance · 2026-11-03|Attendance · 2026-11-04/);
-  assert.match(sheet, /paperSize="256" orientation="landscape"/);
+  assert.match(sheet, /<pane ySplit="15" topLeftCell="A16"/);
   assert.match(source, /@page \{ size: 8\.5in 13in/);
   assert.doesNotMatch(sheet, /Class Summary|Certification/);
   assert.ok(files["xl/styles.xml"]);
@@ -517,7 +527,7 @@ test("generic grading sheet supports a class with no assessment items without in
   };
   vm.runInNewContext(compiledGeneric + "\nthis.generateGeneric = downloadGradeSheetXlsx;", context);
   const detail = { code:"X",title:"No Assessments",classId:"A",term:"1st",academicYear:"2026",categories:[],assessments:[],enrollments:[],gradeBands:[] };
-  context.generateGeneric("empty.xlsx","Grading Sheet",detail,"School","Address","Teacher","");
+  context.generateGeneric("empty.xlsx","Grading Sheet",detail,"School","Address","DEPARTMENT OF ENGINEERING","Teacher","");
   const sheet = saved.find(file => file.name === "xl/worksheets/sheet1.xml").content;
   assert.match(sheet, /<col min="2" max="2"/);
   assert.match(sheet, /orientation="landscape"/);
@@ -700,6 +710,19 @@ test("ISO header configuration is isolated per school and FCU receives its suppl
 });
 
  
+test("Final Grades Excel exports expose busy feedback and always reset the button state", () => {
+  assert.match(source, /const \[gradeExcelExporting, setGradeExcelExporting\] = useState<"generic" \| "iso" \| null>\(null\)/);
+  assert.match(source, /setGradeExcelExporting\("generic"\)/);
+  assert.match(source, /setGradeExcelExporting\("iso"\)/);
+  assert.ok((source.match(/setGradeExcelExporting\(null\)/g) || []).length >= 2);
+  assert.match(source, /finally \{\s*setGradeExcelExporting\(null\);\s*\}/);
+  assert.match(source, /Generating Excel file…/);
+  assert.match(source, /Preparing download…/);
+  assert.match(source, /disabled=\{gradeExcelExporting !== null\}/);
+  assert.match(source, /aria-busy=\{gradeExcelExporting === "generic"\}/);
+  assert.match(source, /aria-busy=\{gradeExcelExporting === "iso"\}/);
+});
+
 test("Final Grades exposes a universal ISO export format picker and includes nested category components", () => {
   assert.ok(source.includes("Download Generic Excel Sheet"));
   assert.ok(source.includes("Export / Save Generic Grading Sheet"));

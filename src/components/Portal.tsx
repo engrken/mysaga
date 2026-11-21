@@ -467,32 +467,73 @@ function gradeSheetComponentContribution(detail: Detail, enrollment: Enrollment,
   return componentPercent === null ? null : Number((componentPercent * component.percentage / 100).toFixed(2));
 }
 
-function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Detail, schoolName: string, schoolAddress: string, teacherName: string, deanName: string, components: GradeSheetComponent[] = [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }], assessmentOrder?: Assessment[]) {
-  const academicAssessments = assessmentOrder ?? detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·"));
-  const assessmentColumns = academicAssessments.map(item => {
-    const category = detail.categories.find(value => value.id === item.categoryId);
-    const categoryItems = academicAssessments.filter(value => value.categoryId === item.categoryId);
-    const hasExplicitWeights = categoryItems.some(value => value.weight != null);
-    const itemWeightLabel = item.weight == null
-      ? (hasExplicitWeights ? "0.00% (unset)" : "Points-based")
-      : item.weight.toFixed(2) + "%";
-    const categoryWeight = category ? effectiveCategoryWeight(category, detail.categories) : null;
-    const weightNote = " · Item wt " + itemWeightLabel + (categoryWeight === null ? "" : " · Course wt " + categoryWeight.toFixed(2) + "%");
-    return (category ? categoryPath(category, detail.categories) + " · " : "") + item.title + " (Max " + item.maxScore + weightNote + ")";
-  });
-  const componentColumns = components.map(item => item.name.toLocaleUpperCase() + " (" + item.percentage.toFixed(2) + "%)");
-  const headers = ["NO.", "NAME OF STUDENTS", ...assessmentColumns, ...componentColumns, "ATTENDANCE (%)", "TOTAL GRADE", "FINAL GRADE", "REMARKS"];
-  const columnCount = headers.length;
+function downloadGradeSheetXlsx(
+  filename: string, sheetName: string, detail: Detail,
+  schoolName: string, schoolAddress: string, departmentName: string,
+  teacherName: string, deanName: string,
+  components: GradeSheetComponent[] = [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }],
+  assessmentOrder?: Assessment[]
+) {
+  type ExportCell = { value: unknown; style: number };
+  type ScoreColumn = { kind: "assessment"; category: Category; item: Assessment } | { kind: "equivalent"; category: Category };
+  type ExportCategoryNode = {
+    category: Category; depth: number; items: Assessment[];
+    children: ExportCategoryNode[]; startColumn: number; columnCount: number;
+  };
+
+  const academicAssessments = (assessmentOrder ?? detail.assessments.filter(item =>
+    !item.title.toLocaleLowerCase().startsWith("attendance ·")
+  )).filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·"));
+  const assessmentTitle = (item: Assessment) => {
+    let title = item.title.trim();
+    if (title.includes("·")) title = title.split("·").pop()?.trim() ?? title;
+    if (title.includes("/")) title = title.split("/").pop()?.trim() ?? title;
+    title = title.replace(/\s*\(Max\s+[^)]+\)\s*$/i, "").replace(/\s*\(\d+(?:\.\d+)?\)\s*$/, "").trim();
+    return title + " (" + item.maxScore + ")";
+  };
+
+  const buildCategoryNode = (category: Category, depth: number): ExportCategoryNode | null => {
+    const items = academicAssessments.filter(item => item.categoryId === category.id);
+    const children = detail.categories.filter(item => item.parentId === category.id)
+      .slice().sort((a, b) => a.sortOrder - b.sortOrder)
+      .map(child => buildCategoryNode(child, depth + 1))
+      .filter((child): child is ExportCategoryNode => !!child);
+    const columnCount = items.length + (items.length ? 1 : 0) + children.reduce((sum, child) => sum + child.columnCount, 0);
+    return columnCount ? { category, depth, items, children, startColumn: 0, columnCount } : null;
+  };
+  const rootNodes = detail.categories.filter(category => !category.parentId)
+    .slice().sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(category => buildCategoryNode(category, 0))
+    .filter((node): node is ExportCategoryNode => !!node);
+
+  const scoreColumns: ScoreColumn[] = [];
+  let nextColumn = 3;
+  let maxCategoryDepth = 0;
+  const assignColumns = (node: ExportCategoryNode) => {
+    node.startColumn = nextColumn;
+    maxCategoryDepth = Math.max(maxCategoryDepth, node.depth);
+    for (const item of node.items) { scoreColumns.push({ kind: "assessment", category: node.category, item }); nextColumn++; }
+    if (node.items.length) { scoreColumns.push({ kind: "equivalent", category: node.category }); nextColumn++; }
+    node.children.forEach(assignColumns);
+    node.columnCount = nextColumn - node.startColumn;
+  };
+  rootNodes.forEach(assignColumns);
+
+  const totalColumn = nextColumn;
+  const finalColumn = totalColumn + 1;
+  const remarksColumn = totalColumn + 2;
+  const columnCount = remarksColumn + 1;
   const last = excelColumn(columnCount - 1);
-  const rows: Array<Array<{ value: unknown; style: number }>> = [];
+  const rows: ExportCell[][] = [];
   const addRow = (values: Array<{ col: number; value: unknown; style?: number }>) => {
-    const row = Array.from({ length: columnCount }, () => ({ value: "", style: 0 } as { value: unknown; style: number }));
+    const row = Array.from({ length: columnCount }, () => ({ value: "", style: 0 } as ExportCell));
     for (const value of values) row[value.col] = { value: value.value, style: value.style ?? 0 };
     rows.push(row);
   };
+
   addRow([{ col: 0, value: schoolName, style: 1 }]);
-  addRow([{ col: 0, value: "School Address: " + (schoolAddress || "School address not set"), style: 2 }]);
-  addRow([{ col: 0, value: sheetName.toLocaleUpperCase(), style: 3 }]);
+  addRow([{ col: 0, value: schoolAddress || "School address not set", style: 2 }]);
+  addRow([{ col: 0, value: (departmentName || schoolName).toLocaleUpperCase(), style: 3 }]);
   addRow([]);
   addRow([{ col: 0, value: "Course Number: " + detail.code, style: 4 }]);
   addRow([{ col: 0, value: "Descriptive Title: " + detail.title, style: 4 }]);
@@ -501,75 +542,163 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
   addRow([{ col: 0, value: "Academic Year: " + detail.academicYear, style: 4 }]);
   addRow([{ col: 0, value: "Course & Year: " + (detail.courseYear || "—"), style: 4 }]);
   addRow([{ col: 0, value: "Schedule: " + (formatSchedule(detail.schedule) || "—"), style: 4 }]);
-  addRow([{ col: 0, value: "Teacher: " + teacherName, style: 4 }]);
-  addRow([{ col: 0, value: "Dean: " + (deanName || "—"), style: 4 }]);
   addRow([{ col: 0, value: "Display Components: " + components.map(item => item.name + " " + item.percentage.toFixed(2) + "%").join(" · "), style: 4 }]);
   addRow([]);
-  addRow(headers.map((value, col) => ({ col, value, style: 5 })));
-  for (const [index, enrollment] of detail.enrollments.entries()) {
-    const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
-    const special = ["INC", "NP", "DROPPED"].includes(enrollment.remarks || "");
-    const attendancePercent = gradeSheetAttendancePercent(detail, enrollment);
-    const scores = academicAssessments.map(item => {
-      const score = enrollment.scores.find(value => value.assessmentId === item.id);
-      if (score?.remark) return score.remark;
-      return score?.points == null ? "" : score.points + " / " + item.maxScore;
-    });
-    const values = [
-      enrollment.studentNumber || String(index + 1),
-      enrollment.studentName,
-      ...scores,
-      ...components.map(component => { const percent = gradeSheetComponentPercent(detail, enrollment, component); return percent === null ? "" : percent.toFixed(2) + "%"; }),
-      attendancePercent === null ? "" : attendancePercent.toFixed(2) + "%",
-      special || enrollment.finalPercent === null ? "" : enrollment.finalPercent.toFixed(2) + "%",
-      special ? "" : enrollment.finalGradeOverride || band?.finalGrade || "",
-      enrollment.remarks || band?.remarks || ""
-    ];
-    addRow(values.map((value, col) => ({ col, value, style: col === 1 ? 6 : 7 })));
+
+  const tableHeaderStartRow = rows.length + 1;
+  const categoryRowCount = rootNodes.length ? maxCategoryDepth + 1 : 0;
+  const itemHeaderRow = tableHeaderStartRow + categoryRowCount;
+  const categoryNodesAtDepth: ExportCategoryNode[][] = Array.from({ length: categoryRowCount }, () => []);
+  const collectNodes = (node: ExportCategoryNode) => {
+    categoryNodesAtDepth[node.depth].push(node);
+    node.children.forEach(collectNodes);
+  };
+  rootNodes.forEach(collectNodes);
+  for (let depth = 0; depth < categoryRowCount; depth++) {
+    addRow(categoryNodesAtDepth[depth].map(node => ({ col: node.startColumn, value: node.category.name.toLocaleUpperCase(), style: 5 })));
   }
+
+  addRow([
+    { col: 0, value: "NO.", style: 5 },
+    { col: 1, value: "NAME OF STUDENTS", style: 5 },
+    { col: 2, value: "ATTENDANCE %", style: 5 },
+    ...scoreColumns.map((column, index) => ({
+      col: 3 + index, value: column.kind === "assessment" ? assessmentTitle(column.item) : "EQUIVALENT (%)", style: 5
+    })),
+    { col: totalColumn, value: "TOTAL GRADE", style: 5 },
+    { col: finalColumn, value: "FINAL GRADE", style: 5 },
+    { col: remarksColumn, value: "CLASS REMARK", style: 5 }
+  ]);
+
+  const mergedRanges: string[] = [];
+  for (const rowNumber of [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12]) mergedRanges.push("A" + rowNumber + ":" + last + rowNumber);
+  const headerBottomRow = itemHeaderRow;
+  const mergeVertical = (columnIndex: number) => {
+    if (headerBottomRow > tableHeaderStartRow) {
+      const coordinate = excelColumn(columnIndex) + tableHeaderStartRow;
+      mergedRanges.push(coordinate + ":" + excelColumn(columnIndex) + headerBottomRow);
+    }
+  };
+  [0, 1, 2, totalColumn, finalColumn, remarksColumn].forEach(mergeVertical);
+  const mergeCategoryNode = (node: ExportCategoryNode) => {
+    const startRow = tableHeaderStartRow + node.depth;
+    const endRow = node.children.length ? startRow : tableHeaderStartRow + maxCategoryDepth;
+    const startCell = excelColumn(node.startColumn) + startRow;
+    const endCell = excelColumn(node.startColumn + node.columnCount - 1) + endRow;
+    if (node.columnCount > 1 || endRow > startRow) mergedRanges.push(startCell + ":" + endCell);
+    node.children.forEach(mergeCategoryNode);
+  };
+  rootNodes.forEach(mergeCategoryNode);
+
+  const gradeBands = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent);
+  for (const [index, enrollment] of detail.enrollments.entries()) {
+    const specialRemark = ["INC", "NP", "DROPPED"].includes(enrollment.remarks || "");
+    const band = gradeBands.find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
+    const attendancePercent = gradeSheetAttendancePercent(detail, enrollment);
+    const groupedAssessments = new Map<string, Assessment[]>();
+    for (const assessment of detail.assessments) {
+      const list = groupedAssessments.get(assessment.categoryId) ?? [];
+      list.push(assessment);
+      groupedAssessments.set(assessment.categoryId, list);
+    }
+    const breakdown = calculateGradeBreakdown(detail.categories.map(category => ({
+      id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase,
+      assessments: (groupedAssessments.get(category.id) ?? []).map(assessment => {
+        const score = enrollment.scores.find(item => item.assessmentId === assessment.id);
+        return { title: assessment.title, dueDate: assessment.dueDate, maxScore: assessment.maxScore, weight: assessment.weight, scores: score ? [score] : [] };
+      })
+    })));
+    const contributionByCategory = new Map(breakdown.items.map(item => [item.categoryId, item]));
+    const values: Array<{ col: number; value: unknown; style?: number }> = [
+      { col: 0, value: index + 1, style: 7 },
+      { col: 1, value: enrollment.studentName, style: 6 },
+      { col: 2, value: attendancePercent === null ? "—" : attendancePercent.toFixed(2) + "%", style: 7 }
+    ];
+    scoreColumns.forEach((column, columnIndex) => {
+      if (column.kind === "assessment") {
+        const score = enrollment.scores.find(item => item.assessmentId === column.item.id);
+        const value = score?.remark ? score.remark : score?.points == null ? "" : score.points + " / " + column.item.maxScore;
+        values.push({ col: 3 + columnIndex, value, style: 7 });
+      } else {
+        const contribution = contributionByCategory.get(column.category.id);
+        const value = specialRemark || contribution?.earnedWithinRoot == null ? "—" : contribution.earnedWithinRoot.toFixed(2) + "%";
+        values.push({ col: 3 + columnIndex, value, style: 7 });
+      }
+    });
+    values.push(
+      { col: totalColumn, value: enrollment.finalPercent === null ? "—" : enrollment.finalPercent.toFixed(2) + "%", style: 7 },
+      { col: finalColumn, value: specialRemark ? enrollment.remarks : enrollment.finalGradeOverride || band?.finalGrade || "—", style: 7 },
+      { col: remarksColumn, value: specialRemark ? enrollment.remarks : band?.remarks || "Not yet graded", style: 7 }
+    );
+    addRow(values);
+  }
+
   addRow([]);
-  const signatureRow = rows.length + 1;
-  const split = Math.max(0, Math.floor((columnCount - 1) / 2));
-  addRow([{ col: 0, value: "Submitted by:", style: 8 }, { col: split + 1, value: "Noted:", style: 8 }]);
-  addRow([{ col: 0, value: teacherName, style: 9 }, { col: split + 1, value: deanName, style: 9 }]);
-  addRow([{ col: 0, value: "Teacher's Signature over Printed Name", style: 10 }, { col: split + 1, value: "Dean's Signature over Printed Name", style: 10 }]);
-  const mergeRanges = [
-    "A1:" + last + "1", "A2:" + last + "2", "A3:" + last + "3",
-    "A5:" + last + "5", "A6:" + last + "6", "A7:" + last + "7",
-    "A8:" + last + "8", "A9:" + last + "9", "A10:" + last + "10",
-    "A11:" + last + "11", "A12:" + last + "12", "A13:" + last + "13", "A14:" + last + "14",
-    "A" + signatureRow + ":" + excelColumn(split) + signatureRow,
-    excelColumn(split + 1) + signatureRow + ":" + last + signatureRow,
-    "A" + (signatureRow + 1) + ":" + excelColumn(split) + (signatureRow + 1),
-    excelColumn(split + 1) + (signatureRow + 1) + ":" + last + (signatureRow + 1),
-    "A" + (signatureRow + 2) + ":" + excelColumn(split) + (signatureRow + 2),
-    excelColumn(split + 1) + (signatureRow + 2) + ":" + last + (signatureRow + 2)
-  ];
+  const signatureLabelRow = rows.length + 1;
+  const signatureNameRow = signatureLabelRow + 1;
+  const signatureRoleRow = signatureLabelRow + 2;
+  const leftEndColumn = Math.max(1, Math.floor(columnCount / 2));
+  const rightStartColumn = leftEndColumn + 1;
+  const leftEnd = excelColumn(leftEndColumn - 1);
+  const rightStart = excelColumn(rightStartColumn - 1);
+  addRow([
+    { col: 0, value: "Submitted by:", style: 8 },
+    { col: rightStartColumn - 1, value: "Noted:", style: 8 }
+  ]);
+  addRow([
+    { col: 0, value: "____ " + teacherName.trim().toLocaleUpperCase() + " ____", style: 9 },
+    { col: rightStartColumn - 1, value: "____ " + deanName.trim().toLocaleUpperCase() + " ____", style: 9 }
+  ]);
+  addRow([
+    { col: 0, value: "SIGNATURE OVER PRINTED NAME / DATE", style: 10 },
+    { col: rightStartColumn - 1, value: "SIGNATURE OVER PRINTED NAME / DATE", style: 10 }
+  ]);
+  for (const rowNumber of [signatureLabelRow, signatureNameRow, signatureRoleRow]) {
+    mergedRanges.push("A" + rowNumber + ":" + leftEnd + rowNumber, rightStart + rowNumber + ":" + last + rowNumber);
+  }
+
   const xmlRows = rows.map((values, rowIndex) => {
     const rowNumber = rowIndex + 1;
-    const xmlCells = values.map((cell, colIndex) => {
+    const xmlCells = sortWorksheetRowCells(values.map((cell, colIndex) => {
       const reference = excelColumn(colIndex) + rowNumber;
       if (typeof cell.value === "number" && Number.isFinite(cell.value)) return '<c r="' + reference + '" s="' + cell.style + '"><v>' + cell.value + '</v></c>';
       return '<c r="' + reference + '" s="' + cell.style + '" t="inlineStr"><is><t xml:space="preserve">' + xmlEscape(cell.value) + '</t></is></c>';
-    }).join("");
-    const height = rowIndex === 0 ? ' ht="26" customHeight="1"' : rowIndex === 2 ? ' ht="24" customHeight="1"' : rowIndex === 15 ? ' ht="42" customHeight="1"' : rowIndex >= 16 && rowIndex < 16 + detail.enrollments.length ? ' ht="22" customHeight="1"' : ' ht="20" customHeight="1"';
-    return '<row r="' + rowNumber + '"' + height + '>' + xmlCells + '</row>';
+    }).join(""));
+    const rowHeight = rowIndex === 0 ? 26 : rowIndex === 2 ? 26
+      : rowNumber >= tableHeaderStartRow && rowNumber < itemHeaderRow ? 28
+      : rowNumber === itemHeaderRow ? 52
+      : rowNumber > itemHeaderRow && rowNumber <= itemHeaderRow + detail.enrollments.length ? 22
+      : rowNumber === signatureNameRow ? 28 : 20;
+    return '<row r="' + rowNumber + '" ht="' + rowHeight + '" customHeight="1">' + xmlCells + '</row>';
   }).join("");
-  const componentStart = 3 + academicAssessments.length;
-  const attendanceColumn = componentStart + components.length;
-  const totalColumn = attendanceColumn + 1;
-  const widths = "<cols>" + headers.map((header,index) => {
-    const width = index === 0 ? 14 : index === 1 ? 32 : index >= totalColumn
-      ? (header === "FINAL GRADE" ? 12 : header === "REMARKS" ? 16 : 14)
-      : index === attendanceColumn - 1 ? 14
-      : Math.max(16, Math.min(26, Math.ceil(header.length * 0.72)));
+
+  const textByColumn = Array.from({ length: columnCount }, () => [] as string[]);
+  for (const row of rows) row.forEach((cell, index) => textByColumn[index].push(String(cell.value ?? "")));
+  scoreColumns.forEach((column, index) => textByColumn[3 + index].push(column.kind === "assessment" ? assessmentTitle(column.item) : "EQUIVALENT (%)"));
+  const addGroupLabelWidths = (node: ExportCategoryNode) => {
+    for (let column = node.startColumn; column < node.startColumn + node.columnCount; column++) textByColumn[column].push(node.category.name);
+    node.children.forEach(addGroupLabelWidths);
+  };
+  rootNodes.forEach(addGroupLabelWidths);
+  const widths = "<cols>" + textByColumn.map((texts, index) => {
+    const maxLength = Math.max(0, ...texts.map(value => value.length));
+    let width: number;
+    if (index === 0) width = Math.max(7, Math.min(10, maxLength + 2));
+    else if (index === 1) width = Math.max(24, Math.min(44, Math.ceil(maxLength * 0.9) + 2));
+    else if (index === 2) width = Math.max(14, Math.min(18, Math.ceil(maxLength * 0.85) + 2));
+    else if (index >= totalColumn) width = index === finalColumn ? 13 : index === remarksColumn ? 20 : 16;
+    else if (scoreColumns[index - 3]?.kind === "equivalent") width = Math.max(14, Math.min(20, Math.ceil(maxLength * 0.85) + 2));
+    else width = Math.max(14, Math.min(32, Math.ceil(maxLength * 0.82) + 2));
     return '<col min="' + (index + 1) + '" max="' + (index + 1) + '" width="' + width + '" customWidth="1"/>';
   }).join("") + "</cols>";
+
+  const safeSheetName = sheetName.replace(/[\\/?*\\[\\]:]/g, " ").slice(0, 31) || "Grading Sheet";
+  const firstDataRow = itemHeaderRow + 1;
   const worksheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" zoomScale="90" workbookViewId="0"><pane ySplit="16" topLeftCell="A17" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A17" sqref="A17"/></sheetView></sheetViews>' +
-    '<sheetFormatPr defaultRowHeight="18"/>' + widths + '<sheetData>' + xmlRows + '</sheetData>' +
-    '<mergeCells count="' + mergeRanges.length + '">' + mergeRanges.map(range => '<mergeCell ref="' + range + '"/>').join("") + '</mergeCells>' +
+    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" zoomScale="90" workbookViewId="0"><pane ySplit="' + (firstDataRow - 1) + '" topLeftCell="A' + firstDataRow + '" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A' + firstDataRow + '" sqref="A' + firstDataRow + '"/></sheetView></sheetViews>' +
+    '<sheetFormatPr defaultRowHeight="20"/>' + widths + '<sheetData>' + xmlRows + '</sheetData>' +
+    '<mergeCells count="' + mergedRanges.length + '">' + mergedRanges.map(range => '<mergeCell ref="' + range + '"/>').join("") + '</mergeCells>' +
     '<printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.35" bottom="0.35" header="0.15" footer="0.15"/>' +
     '<pageSetup paperSize="256" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
   const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -591,7 +720,6 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
-  const safeSheetName = sheetName.replace(/[\\/?*\\[\\]:]/g, " ").slice(0, 31) || "Grading Sheet";
   const files = [
     { name: "[Content_Types].xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
     { name: "_rels/.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
@@ -601,9 +729,13 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     { name: "xl/styles.xml", content: styles }
   ];
   const url = URL.createObjectURL(new Blob([zipStored(files) as BlobPart], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-  const link = document.createElement("a"); link.href = url; link.download = filename; link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
 
 async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail: Detail, categories: Category[], teacherName: string, deanName: string, components: GradeSheetComponent[], headerPng: Uint8Array) {
   const componentCategoryPath = (category: Category) => {
@@ -913,7 +1045,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>([]); const [copyFromId, setCopyFromId] = useState(""); const [rosterText, setRosterText] = useState(""); const [rosterFileName, setRosterFileName] = useState(""); const [categoryName, setCategoryName] = useState(""); const [categoryParent, setCategoryParent] = useState(""); const [categoryWeight, setCategoryWeight] = useState("50"); const [categoryOpen, setCategoryOpen] = useState(false);
   const [lectureCourseWeight, setLectureCourseWeight] = useState("60"); const [laboratoryCourseWeight, setLaboratoryCourseWeight] = useState("40");
   const [gradingSetupType, setGradingSetupType] = useState<"SINGLE" | "COMBINED">("SINGLE"); const [singleGroupType, setSingleGroupType] = useState<"LECTURE" | "LABORATORY">("LECTURE");
-  const [theme, setTheme] = useState<"light" | "dark">("light"); const [academicYear, setAcademicYear] = useState("2026-2027"); const [calendarSystem, setCalendarSystem] = useState<"SEMESTER" | "TRIMESTER">("SEMESTER"); const [activeTerm, setActiveTerm] = useState("1st Semester"); const [academicPeriodReady, setAcademicPeriodReady] = useState(false); const academicYears = [...Array.from({length: 10}, (_, index) => 2016 + index), ...Array.from({length: 10}, (_, index) => 2026 + index)].map(start => `${start}-${start + 1}`).sort((a,b) => b.localeCompare(a)); const [schoolYearFilter, setSchoolYearFilter] = useState("All School Years"); const [termFilter, setTermFilter] = useState("All Terms"); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | "iso-grades" | null>(null); const [deanName, setDeanName] = useState(user.school.deanName || "");
+  const [theme, setTheme] = useState<"light" | "dark">("light"); const [academicYear, setAcademicYear] = useState("2026-2027"); const [calendarSystem, setCalendarSystem] = useState<"SEMESTER" | "TRIMESTER">("SEMESTER"); const [activeTerm, setActiveTerm] = useState("1st Semester"); const [academicPeriodReady, setAcademicPeriodReady] = useState(false); const academicYears = [...Array.from({length: 10}, (_, index) => 2016 + index), ...Array.from({length: 10}, (_, index) => 2026 + index)].map(start => `${start}-${start + 1}`).sort((a,b) => b.localeCompare(a)); const [schoolYearFilter, setSchoolYearFilter] = useState("All School Years"); const [termFilter, setTermFilter] = useState("All Terms"); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | "iso-grades" | null>(null); const [deanName, setDeanName] = useState(user.school.deanName || ""); const [gradeExcelExporting, setGradeExcelExporting] = useState<"generic" | "iso" | null>(null);
   const [schoolAddress, setSchoolAddress] = useState(user.school.address || "");
   const [departmentName, setDepartmentName] = useState(user.school.departmentName || "");
   const [isoHeaderConfig, setIsoHeaderConfig] = useState<IsoHeaderConfig>(() => readIsoHeaderConfig(user.school.name, user.school.slug, user.school.isoHeaderConfig));
@@ -1850,8 +1982,11 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     return gradeHeaderCanvasBytes(canvas);
   }
   async function exportIsoGradesExcel() {
-    if (!detail || !ensureIsoHeaderConfigured()) return;
+    if (!detail || gradeExcelExporting || !ensureIsoHeaderConfigured()) return;
+    setGradeExcelExporting("iso");
+    setErr("");
     try {
+      await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
       const sealPng = await renderIsoExcelSealPng();
       const binary = Array.from(sealPng, byte => String.fromCharCode(byte)).join("");
       const logoPngBase64 = window.btoa(binary);
@@ -1887,11 +2022,16 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     } catch (error) {
       console.error("ISO Excel export failed:", error);
       setErr(error instanceof Error ? error.message : "Unable to prepare the ISO Excel sheet. Please try again.");
+    } finally {
+      setGradeExcelExporting(null);
     }
   }
   async function exportGrades() {
-    if (!detail || !ensureGenericHeaderConfigured()) return;
+    if (!detail || gradeExcelExporting || !ensureGenericHeaderConfigured()) return;
+    setGradeExcelExporting("generic");
+    setErr("");
     try {
+      await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
       const headerPng = await renderGenericGradeHeaderPng(detail);
       await downloadFcuGradeXlsx(
         detail.code.replace(/[^a-z0-9-_]+/gi, "-") + "-final-grades.xlsx",
@@ -1906,7 +2046,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       setErr("");
     } catch (error) {
       console.error("Generic Excel export failed:", error);
-      setErr("Unable to prepare the generic Excel sheet. Please try again.");
+      setErr(error instanceof Error ? error.message : "Unable to prepare the generic Excel sheet. Please try again.");
+    } finally {
+      setGradeExcelExporting(null);
     }
   }
   function exportRecordScoresExcel() {
@@ -1917,8 +2059,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       detail,
       user.school.name,
       user.school.address || "",
+      user.school.departmentName || user.school.name,
       user.fullName,
-      deanName.trim(),
+      (user.school.deanName || deanName).trim(),
       gradeSheetComponents,
       scorebookAssessments
     );
@@ -2468,7 +2611,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
             <div className="scorebook-legend"><span><b>Excused</b> removes an item from its category denominator.</span><span><b>Absent / Did not submit</b> records zero raw points (the configured transmutation base still applies to academic assessments).</span><span><b>Blank</b> is pending, not zero. Equivalent columns show weighted percentages within the parent Lecture/Laboratory component; the final grade also applies its course weight.</span><span>Attendance sessions are recorded in the Attendance tab, not as assessment scores.</span></div>
           </section>}
           {classSection === "analytics" && <section className="class-analytics"><div className="surface analytics-heading"><span className="eyebrow">CLASS INSIGHTS</span><h2>{detail.code} performance</h2><p className="muted">{detail.title} · {detail.term} {detail.academicYear}. INC, NP, and DROPPED records are excluded from numeric averages.</p></div><div className="analytics-stat-grid"><article className="surface analytics-stat"><small>CLASS AVERAGE</small><strong>{analytics.average == null ? "—" : analytics.average.toFixed(2)+"%"}</strong><span>{analytics.graded.length} scored students</span></article><article className="surface analytics-stat"><small>PASSING</small><strong>{analytics.passing}</strong><span>75% and above</span></article><article className="surface analytics-stat analytics-warning"><small>AT RISK</small><strong>{analytics.atRisk}</strong><span>60%–74.99%</span></article><article className="surface analytics-stat analytics-danger"><small>BELOW 60%</small><strong>{analytics.failing}</strong><span>Needs follow-up</span></article><article className="surface analytics-stat analytics-danger"><small>ATTENDANCE DANGER OF FAILING</small><strong>{analytics.attendanceDanger}</strong><span>More than 20% absent days</span></article></div><div className="analytics-panels"><section className="surface analytics-panel"><h3>Grade distribution</h3><p className="muted">Current computed course percentages.</p>{analytics.bands.map(band=><div className="distribution-row" key={band.label}><span>{band.label}</span><div className="progress"><div className="progress-bar" style={{width:analytics.graded.length ? (band.count/analytics.graded.length*100)+"%" : "0%"}}/></div><b>{band.count}</b></div>)}</section><section className="surface analytics-panel"><h3>Leading students</h3><p className="muted">Highest computed percentages.</p>{analytics.graded.length ? [...analytics.graded].sort((a,b)=>(b.finalPercent??0)-(a.finalPercent??0)).slice(0,5).map((student,index)=><div className="leader-row" key={student.id}><span>{index+1}</span><b>{student.studentName}</b><strong>{student.finalPercent?.toFixed(2)}%</strong></div>) : <div className="inline-empty">Scores will appear here after they are entered.</div>}</section><section className="surface analytics-panel analytics-risk-list"><h3>Students to review</h3><p className="muted">Students below the 75% passing threshold.</p>{analytics.graded.filter(student=>(student.finalPercent??0)<75).sort((a,b)=>(a.finalPercent??0)-(b.finalPercent??0)).map(student=><div className="leader-row" key={student.id}><span className="risk-dot">!</span><b>{student.studentName}</b><strong>{student.finalPercent?.toFixed(2)}%</strong></div>)}{!analytics.graded.some(student=>(student.finalPercent??0)<75)&&<div className="inline-empty">No scored students are currently below 75%.</div>}</section></div></section>}
-          {classSection === "final" && <section id="class-section-final" className="surface final-grades-page"><span className="print-only">{detail.code}: {detail.title} · {detail.term} {detail.academicYear}</span><div className="section-heading"><div><span className="eyebrow">GRADE SUBMISSION</span><h2>Final grades</h2><p className="muted">Review and submit provisional results. After official school-record submission, confirm the Registrar status.</p></div><div className="final-grade-tools"><label className="grading-sheet-dean-field">Dean&apos;s Name (for grading sheet)<input className="form-control form-control-sm" value={deanName} onChange={event=>setDeanName(event.target.value)} placeholder="Enter Dean&apos;s name"/></label><button className="btn btn-outline-secondary" onClick={()=>{setComponentDraft(gradeSheetComponents.map(item=>({...item})));setComponentEditorOpen(true);}}>Edit Components</button><details className="iso-export-menu generic-export-menu"><summary className="btn btn-outline-primary" onClick={event => { if (!ensureGenericHeaderConfigured()) event.preventDefault(); }}>Export / Save Generic Grading Sheet <span aria-hidden="true">▾</span></summary><div className="iso-export-options" role="group" aria-label="Generic grading sheet export formats"><button type="button" className="iso-export-option" onClick={event => { printFinalGradesPdf("generic"); event.currentTarget.closest("details")?.removeAttribute("open"); }}><span className="iso-export-option-icon pdf" aria-hidden="true">PDF</span><span><strong>Save / Print Generic PDF</strong><small>Print-ready grading sheet</small></span></button><button type="button" className="iso-export-option" onClick={event => { exportGrades(); event.currentTarget.closest("details")?.removeAttribute("open"); }}><span className="iso-export-option-icon xlsx" aria-hidden="true">XLSX</span><span><strong>Download Generic Excel Sheet</strong><small>Editable spreadsheet</small></span></button></div></details><details className="iso-export-menu"><summary className="btn btn-outline-primary" onClick={event => { if (!ensureIsoHeaderConfigured()) event.preventDefault(); }}>Export / Save ISO Grading Sheet <span aria-hidden="true">▾</span></summary><div className="iso-export-options" role="group" aria-label="ISO grading sheet export formats"><button type="button" className="iso-export-option" onClick={event => { printFinalGradesPdf("iso"); event.currentTarget.closest("details")?.removeAttribute("open"); }}><span className="iso-export-option-icon pdf" aria-hidden="true">PDF</span><span><strong>Save / Print ISO PDF</strong><small>Print-ready official record</small></span></button><button type="button" className="iso-export-option" onClick={event => { exportIsoGradesExcel(); event.currentTarget.closest("details")?.removeAttribute("open"); }}><span className="iso-export-option-icon xlsx" aria-hidden="true">XLSX</span><span><strong>Download ISO Excel Sheet</strong><small>Editable spreadsheet</small></span></button></div></details>{detail.gradeStatus !== "DRAFT" && <button className="btn btn-outline-danger" onClick={recallSubmittedGrades} disabled={busy}>Recall grades</button>}{detail.gradeStatus === "VERIFIED" && <button className="btn btn-primary" onClick={emailVerifiedGrades} disabled={busy}>✉ Email verified grades</button>}</div></div>{componentEditorOpen && <div className="modal-backdrop-custom" onMouseDown={event=>{if(event.target===event.currentTarget)setComponentEditorOpen(false);}}><div className="modal-card component-editor-modal"><button className="modal-x" onClick={()=>setComponentEditorOpen(false)}>×</button><span className="eyebrow">GRADING SHEET LAYOUT</span><h2>Edit Components</h2><p className="muted">Choose one or more categories or subcategories from this class Grading Setup. Each component summarizes that category’s Assessment items; its weight is read from Grading Setup and is display-only. These selections never change computed grades.</p>{componentDraft.map((item,index)=><div className="row g-2 align-items-center mb-2" key={item.name}><div className="col"><label className="form-label">Component {index+1}</label><input className="form-control" value={item.name} readOnly/></div><div className="col-4"><label className="form-label">Grading Setup weight</label><div className="form-control bg-light">{item.percentage.toFixed(2)}%</div></div><div className="col-auto"><button type="button" className="btn btn-outline-danger btn-sm" onClick={()=>setComponentDraft(current=>current.filter(value=>value.name!==item.name))} aria-label={"Remove "+item.name}>Remove</button></div></div>)}<div className="d-flex flex-wrap gap-2 align-items-end border-top mt-3 pt-3"><label className="form-label flex-grow-1">Add category or subcategory from Grading Setup<select className="form-select" value="" onChange={event=>{const category=detail?.categories.find(value=>value.id===event.target.value);if(category){const component={name:categoryPath(category,detail?.categories||[]),percentage:Number(localCategoryWeight(category).toFixed(2))};setComponentDraft(current=>current.some(item=>item.name.toLocaleLowerCase()===component.name.toLocaleLowerCase())?current:[...current,component]);}}}><option value="">Choose a category or subcategory…</option>{orderedCategoryTree(detail.categories).filter(category=>categoryHasGradingAssessments(category,detail.categories,detail.assessments)&&!componentDraft.some(item=>item.name.toLocaleLowerCase()===categoryPath(category,detail.categories).toLocaleLowerCase())).map(category=><option key={category.id} value={category.id}>{categoryPath(category,detail.categories)} · {localCategoryWeight(category).toFixed(2)}%</option>)}</select></label><b>Selected weight: {componentDraft.reduce((sum,item)=>sum+Number(item.percentage||0),0).toFixed(2)}%</b></div><div className="d-flex flex-wrap justify-content-end gap-2 mt-3"><button className="btn btn-outline-secondary" onClick={()=>setComponentEditorOpen(false)}>Cancel</button><button className="btn btn-outline-primary" onClick={saveComponentsAsDefault} disabled={busy}>Save as My Default</button><button className="btn btn-primary" onClick={saveComponentsForClass} disabled={busy || !detail || componentDraft.length===0}>Save for This Class</button></div></div></div>}<div className={`grade-notice ${detail.gradeStatus === "VERIFIED" ? "final" : detail.gradeStatus === "SUBMITTED" ? "provisional" : "draft"}`}>{detail.gradeStatus === "VERIFIED" ? "The teacher confirmed official submission to the Registrar. This record is final and locked until recalled for correction." : detail.gradeStatus === "SUBMITTED" ? `Submitted ${detail.submittedAt ? new Date(detail.submittedAt).toLocaleString() : ""}. Student visibility is controlled separately; visible grades remain provisional until the teacher confirms submission to the Registrar.` : detail.isPublished ? "This grade record is a draft but student viewing is enabled. Grades have not been submitted or verified to the Registrar and may change." : "This class record is still a draft and is hidden from students."}</div>{submissionProblems.length>0 && detail.gradeStatus!=="VERIFIED" && <div className="alert alert-warning py-2"><b>Before submission:</b><ul className="mb-0 mt-1">{submissionProblems.map(problem=><li key={problem}>{problem}</li>)}</ul></div>}<div className="final-grades-summary"><span>Overall weights <b>{detail.categories.filter(c=>!c.parentId).reduce((sum,c)=>sum+c.weight,0).toFixed(2)}%</b></span><span>Students <b>{detail.enrollments.length}</b></span><span>Assessment items <b>{detail.assessments.length}</b></span></div><div className="table-scroll"><table className="table grade-table"><thead><tr><th>STUDENT NAME</th><th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th>{detail.gradeStatus === "VERIFIED" && <th>GRADE HISTORY</th>}</tr></thead><tbody>{filteredEnrollments.map(en=>{const band=detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>en.finalPercent!==null&&en.finalPercent>=item.minPercent);return <tr key={en.id}><td>{en.studentName}</td><td>{en.finalPercent===null?"—":`${en.finalPercent.toFixed(2)}%`}</td><td>{en.finalGradeOverride||band?.finalGrade||"—"}{en.finalGradeOverride&&<small className="d-block text-primary">Manually changed</small>}</td><td>{en.remarks||band?.remarks||"Not yet graded"}</td>{detail.gradeStatus === "VERIFIED" && <td><button className="btn btn-outline-primary btn-sm" onClick={()=>{setGradeChangeEnrollmentId(en.id);setGradeChangeGrade(en.finalGradeOverride||"AUTO");setGradeChangeRemark(en.remarks||"AUTO");setGradeChangeReason("")}}>Change / history ({en.gradeChangeCount ?? 0})</button></td>}</tr>})}</tbody></table></div>{detail.gradeStatus === "DRAFT" && <button className="btn btn-success mt-3" onClick={submitGrades} disabled={busy||submissionProblems.length>0}>Submit grades to students</button>}{detail.gradeStatus === "SUBMITTED" && <button className="btn btn-primary mt-3" onClick={verifyGrades} disabled={busy}>Verified to Registrar</button>}{detail.gradeStatus === "VERIFIED" && <div className="grade-notice final mt-3">Verified to Registrar · {detail.verifiedAt ? new Date(detail.verifiedAt).toLocaleString() : "Confirmed"}</div>}<p className="privacy-note text-start mt-3">Student visibility is separate from submission: open Manage grade visibility to show or hide results, including drafts. Submitting locks the class record but does not change visibility. Teacher verification records a confirmation of Registrar submission; final and official grades are published by the school’s official student portal. Recall reopens the record and hides it until you make it visible again.</p></section>}
+          {classSection === "final" && <section id="class-section-final" className="surface final-grades-page"><span className="print-only">{detail.code}: {detail.title} · {detail.term} {detail.academicYear}</span><div className="section-heading"><div><span className="eyebrow">GRADE SUBMISSION</span><h2>Final grades</h2><p className="muted">Review and submit provisional results. After official school-record submission, confirm the Registrar status.</p></div><div className="final-grade-tools"><label className="grading-sheet-dean-field">Dean&apos;s Name (for grading sheet)<input className="form-control form-control-sm" value={deanName} onChange={event=>setDeanName(event.target.value)} placeholder="Enter Dean&apos;s name"/></label><button className="btn btn-outline-secondary" onClick={()=>{setComponentDraft(gradeSheetComponents.map(item=>({...item})));setComponentEditorOpen(true);}}>Edit Components</button><details className="iso-export-menu generic-export-menu"><summary className="btn btn-outline-primary" onClick={event => { if (!ensureGenericHeaderConfigured()) event.preventDefault(); }}>Export / Save Generic Grading Sheet <span aria-hidden="true">▾</span></summary><div className="iso-export-options" role="group" aria-label="Generic grading sheet export formats"><button type="button" className="iso-export-option" onClick={event => { printFinalGradesPdf("generic"); event.currentTarget.closest("details")?.removeAttribute("open"); }}><span className="iso-export-option-icon pdf" aria-hidden="true">PDF</span><span><strong>Save / Print Generic PDF</strong><small>Print-ready grading sheet</small></span></button><button type="button" className="iso-export-option" onClick={() => { void exportGrades(); }} disabled={gradeExcelExporting !== null} aria-busy={gradeExcelExporting === "generic"}><span className="iso-export-option-icon xlsx" aria-hidden="true">XLSX</span><span><strong>{gradeExcelExporting === "generic" ? <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"/>Generating Excel file…</> : "Download Generic Excel Sheet"}</strong><small>{gradeExcelExporting === "generic" ? "Building workbook and preparing download" : "Editable spreadsheet"}</small></span></button></div></details><details className="iso-export-menu"><summary className="btn btn-outline-primary" onClick={event => { if (!ensureIsoHeaderConfigured()) event.preventDefault(); }}>Export / Save ISO Grading Sheet <span aria-hidden="true">▾</span></summary><div className="iso-export-options" role="group" aria-label="ISO grading sheet export formats"><button type="button" className="iso-export-option" onClick={event => { printFinalGradesPdf("iso"); event.currentTarget.closest("details")?.removeAttribute("open"); }}><span className="iso-export-option-icon pdf" aria-hidden="true">PDF</span><span><strong>Save / Print ISO PDF</strong><small>Print-ready official record</small></span></button><button type="button" className="iso-export-option" onClick={() => { void exportIsoGradesExcel(); }} disabled={gradeExcelExporting !== null} aria-busy={gradeExcelExporting === "iso"}><span className="iso-export-option-icon xlsx" aria-hidden="true">XLSX</span><span><strong>{gradeExcelExporting === "iso" ? <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"/>Preparing download…</> : "Download ISO Excel Sheet"}</strong><small>{gradeExcelExporting === "iso" ? "Generating workbook and preparing download" : "Editable spreadsheet"}</small></span></button></div></details>{detail.gradeStatus !== "DRAFT" && <button className="btn btn-outline-danger" onClick={recallSubmittedGrades} disabled={busy}>Recall grades</button>}{detail.gradeStatus === "VERIFIED" && <button className="btn btn-primary" onClick={emailVerifiedGrades} disabled={busy}>✉ Email verified grades</button>}</div></div>{componentEditorOpen && <div className="modal-backdrop-custom" onMouseDown={event=>{if(event.target===event.currentTarget)setComponentEditorOpen(false);}}><div className="modal-card component-editor-modal"><button className="modal-x" onClick={()=>setComponentEditorOpen(false)}>×</button><span className="eyebrow">GRADING SHEET LAYOUT</span><h2>Edit Components</h2><p className="muted">Choose one or more categories or subcategories from this class Grading Setup. Each component summarizes that category’s Assessment items; its weight is read from Grading Setup and is display-only. These selections never change computed grades.</p>{componentDraft.map((item,index)=><div className="row g-2 align-items-center mb-2" key={item.name}><div className="col"><label className="form-label">Component {index+1}</label><input className="form-control" value={item.name} readOnly/></div><div className="col-4"><label className="form-label">Grading Setup weight</label><div className="form-control bg-light">{item.percentage.toFixed(2)}%</div></div><div className="col-auto"><button type="button" className="btn btn-outline-danger btn-sm" onClick={()=>setComponentDraft(current=>current.filter(value=>value.name!==item.name))} aria-label={"Remove "+item.name}>Remove</button></div></div>)}<div className="d-flex flex-wrap gap-2 align-items-end border-top mt-3 pt-3"><label className="form-label flex-grow-1">Add category or subcategory from Grading Setup<select className="form-select" value="" onChange={event=>{const category=detail?.categories.find(value=>value.id===event.target.value);if(category){const component={name:categoryPath(category,detail?.categories||[]),percentage:Number(localCategoryWeight(category).toFixed(2))};setComponentDraft(current=>current.some(item=>item.name.toLocaleLowerCase()===component.name.toLocaleLowerCase())?current:[...current,component]);}}}><option value="">Choose a category or subcategory…</option>{orderedCategoryTree(detail.categories).filter(category=>categoryHasGradingAssessments(category,detail.categories,detail.assessments)&&!componentDraft.some(item=>item.name.toLocaleLowerCase()===categoryPath(category,detail.categories).toLocaleLowerCase())).map(category=><option key={category.id} value={category.id}>{categoryPath(category,detail.categories)} · {localCategoryWeight(category).toFixed(2)}%</option>)}</select></label><b>Selected weight: {componentDraft.reduce((sum,item)=>sum+Number(item.percentage||0),0).toFixed(2)}%</b></div><div className="d-flex flex-wrap justify-content-end gap-2 mt-3"><button className="btn btn-outline-secondary" onClick={()=>setComponentEditorOpen(false)}>Cancel</button><button className="btn btn-outline-primary" onClick={saveComponentsAsDefault} disabled={busy}>Save as My Default</button><button className="btn btn-primary" onClick={saveComponentsForClass} disabled={busy || !detail || componentDraft.length===0}>Save for This Class</button></div></div></div>}<div className={`grade-notice ${detail.gradeStatus === "VERIFIED" ? "final" : detail.gradeStatus === "SUBMITTED" ? "provisional" : "draft"}`}>{detail.gradeStatus === "VERIFIED" ? "The teacher confirmed official submission to the Registrar. This record is final and locked until recalled for correction." : detail.gradeStatus === "SUBMITTED" ? `Submitted ${detail.submittedAt ? new Date(detail.submittedAt).toLocaleString() : ""}. Student visibility is controlled separately; visible grades remain provisional until the teacher confirms submission to the Registrar.` : detail.isPublished ? "This grade record is a draft but student viewing is enabled. Grades have not been submitted or verified to the Registrar and may change." : "This class record is still a draft and is hidden from students."}</div>{submissionProblems.length>0 && detail.gradeStatus!=="VERIFIED" && <div className="alert alert-warning py-2"><b>Before submission:</b><ul className="mb-0 mt-1">{submissionProblems.map(problem=><li key={problem}>{problem}</li>)}</ul></div>}<div className="final-grades-summary"><span>Overall weights <b>{detail.categories.filter(c=>!c.parentId).reduce((sum,c)=>sum+c.weight,0).toFixed(2)}%</b></span><span>Students <b>{detail.enrollments.length}</b></span><span>Assessment items <b>{detail.assessments.length}</b></span></div><div className="table-scroll"><table className="table grade-table"><thead><tr><th>STUDENT NAME</th><th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th>{detail.gradeStatus === "VERIFIED" && <th>GRADE HISTORY</th>}</tr></thead><tbody>{filteredEnrollments.map(en=>{const band=detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>en.finalPercent!==null&&en.finalPercent>=item.minPercent);return <tr key={en.id}><td>{en.studentName}</td><td>{en.finalPercent===null?"—":`${en.finalPercent.toFixed(2)}%`}</td><td>{en.finalGradeOverride||band?.finalGrade||"—"}{en.finalGradeOverride&&<small className="d-block text-primary">Manually changed</small>}</td><td>{en.remarks||band?.remarks||"Not yet graded"}</td>{detail.gradeStatus === "VERIFIED" && <td><button className="btn btn-outline-primary btn-sm" onClick={()=>{setGradeChangeEnrollmentId(en.id);setGradeChangeGrade(en.finalGradeOverride||"AUTO");setGradeChangeRemark(en.remarks||"AUTO");setGradeChangeReason("")}}>Change / history ({en.gradeChangeCount ?? 0})</button></td>}</tr>})}</tbody></table></div>{detail.gradeStatus === "DRAFT" && <button className="btn btn-success mt-3" onClick={submitGrades} disabled={busy||submissionProblems.length>0}>Submit grades to students</button>}{detail.gradeStatus === "SUBMITTED" && <button className="btn btn-primary mt-3" onClick={verifyGrades} disabled={busy}>Verified to Registrar</button>}{detail.gradeStatus === "VERIFIED" && <div className="grade-notice final mt-3">Verified to Registrar · {detail.verifiedAt ? new Date(detail.verifiedAt).toLocaleString() : "Confirmed"}</div>}<p className="privacy-note text-start mt-3">Student visibility is separate from submission: open Manage grade visibility to show or hide results, including drafts. Submitting locks the class record but does not change visibility. Teacher verification records a confirmation of Registrar submission; final and official grades are published by the school’s official student portal. Recall reopens the record and hides it until you make it visible again.</p></section>}
         </>}
       </>}</> : <>{tab === "overview" && <>
         <section className="student-welcome student-overview-hero">
