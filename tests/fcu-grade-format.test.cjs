@@ -483,3 +483,36 @@ test("Edit Components displays each category weight relative to its immediate pa
   assert.match(source, /localCategoryWeight\(category\)\.toFixed\(2\)\}%/);
   assert.doesNotMatch(source.slice(source.indexOf("Add category or subcategory from Grading Setup")), /effectiveCategoryWeight/);
 });
+
+test("Edit Components category picker includes parents and every eligible nested descendant", () => {
+  const start = source.indexOf("function categoryHasGradingAssessments(");
+  const end = source.indexOf("\nfunction rootCategory", start);
+  assert.ok(start > 0 && end > start, "recursive category assessment helper is present");
+  const compiled = ts.transpileModule(source.slice(start, end), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  const context = {};
+  vm.runInNewContext(compiled + "\nthis.hasGradingAssessments = categoryHasGradingAssessments;", context);
+
+  const categories = [
+    { id: "lecture", parentId: null, name: "Lecture", weight: 60, conversionBase: 50, sortOrder: 0 },
+    { id: "major-exams", parentId: "lecture", name: "Major Examinations", weight: 50, conversionBase: 50, sortOrder: 0 },
+    { id: "midterm", parentId: "major-exams", name: "Midterm", weight: 20, conversionBase: 50, sortOrder: 0 },
+    { id: "finals", parentId: "major-exams", name: "Finals", weight: 30, conversionBase: 50, sortOrder: 1 },
+    { id: "unused", parentId: null, name: "Unused", weight: 10, conversionBase: 50, sortOrder: 1 },
+    { id: "attendance", parentId: "unused", name: "Attendance", weight: 100, conversionBase: 50, sortOrder: 0 }
+  ];
+  const assessments = [
+    { id: "a-midterm", categoryId: "midterm", title: "Midterm Exam" },
+    { id: "a-finals", categoryId: "finals", title: "Final Examination" },
+    { id: "a-attendance", categoryId: "attendance", title: "Attendance · Session 1" }
+  ];
+
+  for (const id of ["lecture", "major-exams", "midterm", "finals"]) {
+    const category = categories.find(item => item.id === id);
+    assert.equal(context.hasGradingAssessments(category, categories, assessments), true, `${id} should appear in the picker`);
+  }
+  assert.equal(context.hasGradingAssessments(categories.find(item => item.id === "unused"), categories, assessments), false, "a category with only attendance descendants should stay out of the picker");
+  assert.match(source, /orderedCategoryTree\\(detail\\.categories\\)\\.filter\\(category=>categoryHasGradingAssessments/);
+  assert.match(source, /orderedCategoryTree\\(detail\\?\\.categories \\|\\| \\[\\]\\)\\.filter\\(category => categoryHasGradingAssessments/);
+});
