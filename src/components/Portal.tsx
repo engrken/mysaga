@@ -409,6 +409,11 @@ function downloadIsoXlsx(
     leftStart + signatureRoleRow + ":" + leftEnd + signatureRoleRow,
     rightStart + signatureRoleRow + ":" + lastColumn + signatureRoleRow
   );
+  for (let column = 0; column < columnCount; column++) {
+    putCell(signatureLabelRow, column, "", 9);
+    putCell(signatureNameRow, column, "", 8);
+    putCell(signatureRoleRow, column, "", 9);
+  }
   putCell(signatureLabelRow, 0, "Submitted by:", 9);
   putCell(signatureLabelRow, splitColumn + 1, "Noted:", 9);
   putCell(signatureNameRow, 0, header.submittedBy, 8);
