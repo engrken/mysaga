@@ -24,6 +24,7 @@ from openpyxl.drawing.image import Image as ExcelImage
 from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor
 from openpyxl.drawing.xdr import XDRPositiveSize2D
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
 
@@ -105,7 +106,7 @@ def _add_logo(ws: Worksheet, logo_png_base64: str) -> None:
         image.width = 80
         image.height = 80
         image.anchor = OneCellAnchor(
-            _from=AnchorMarker(col=0, colOff=4 * 9525, row=0, rowOff=40 * 9525),
+            _from=AnchorMarker(col=0, colOff=4 * 9525, row=0, rowOff=28 * 9525),
             ext=XDRPositiveSize2D(cx=80 * 9525, cy=80 * 9525),
         )
         ws.add_image(image)
@@ -158,54 +159,91 @@ def build_iso_workbook(payload: dict) -> bytes:
     worksheet.page_margins.footer = 0.15
     worksheet.print_title_rows = "11:11"
 
+    # Determine active width before building the header. All header and
+    # accreditation spans are tied to the final number of table columns (N).
+    column_count = max(7, len(headers), max((len(row) for row in rows), default=0))
+    last_column_letter = get_column_letter(column_count)
+    center_end_column = column_count - 2
+    center_end_letter = get_column_letter(center_end_column)
+    metadata_label_column = column_count - 1
+    metadata_value_column = column_count
+
     worksheet.sheet_format.defaultRowHeight = 20
-    for row_number, height in enumerate((34, 28, 34, 24), start=1):
+    for row_number, height in enumerate((32, 24, 24, 22), start=1):
         worksheet.row_dimensions[row_number].height = height
-        for column_number in range(1, 8):
+        for column_number in range(1, column_count + 1):
             cell = worksheet.cell(row_number, column_number)
             cell.border = THIN_BORDER
             cell.font = Font(name="Arial", size=9, color="FF000000")
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-        # FCU-EOMS-RO-006-F institutional header. Border all 28 source cells
-    # before merging so every visible perimeter remains explicitly outlined.
+    # FCU-EOMS-RO-006-F institutional header:
+    # A = seal; B = document-control box; C:(N-2) = centered title;
+    # (N-1):N = the effectivity / office / page metadata grid.
     _merge_with_border(worksheet, "A1:A4", THIN_BORDER)
-    _merge_with_border(worksheet, "B1:E1", THIN_BORDER)
-    _merge_with_border(worksheet, "C2:E2", THIN_BORDER)
-    _merge_with_border(worksheet, "C3:E3", THIN_BORDER)
+    _merge_with_border(worksheet, "B1:B4", THIN_BORDER)
+    for row_number in range(1, 5):
+        _merge_with_border(
+            worksheet,
+            "C{0}:{1}{0}".format(row_number, center_end_letter),
+            THIN_BORDER,
+        )
+
+    document_control = CellRichText(
+        TextBlock(InlineFont(rFont="Arial", sz=7, b=True), "FORM NAME:\n"),
+        TextBlock(InlineFont(rFont="Arial", sz=7), clean_header["formName"] + "\n"),
+        TextBlock(InlineFont(rFont="Arial", sz=7, b=True), "FORM NO.:\n"),
+        TextBlock(InlineFont(rFont="Arial", sz=7), clean_header["formNo"] + "\n"),
+        TextBlock(InlineFont(rFont="Arial", sz=7, b=True), "REVISION NO.: "),
+        TextBlock(InlineFont(rFont="Arial", sz=7), clean_header["revisionNo"]),
+    )
+    worksheet["B1"] = document_control
+    worksheet["B1"].alignment = Alignment(
+        horizontal="center", vertical="center", wrap_text=True, shrink_to_fit=True
+    )
 
     identity = CellRichText(
         TextBlock(InlineFont(rFont="Arial", sz=11, b=True), clean_header["organizationName"] + "\n"),
         TextBlock(InlineFont(rFont="Arial", sz=8.5, i=True), clean_header["organizationAddress"]),
     )
-    worksheet["B1"] = identity
-    worksheet["B1"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    worksheet["C1"] = identity
+    worksheet["C1"].alignment = Alignment(
+        horizontal="center", vertical="center", wrap_text=False, shrink_to_fit=True
+    )
 
-    _set_literal(worksheet["B2"], "Form Name:")
     _set_literal(worksheet["C2"], clean_header["formName"])
-    _set_literal(worksheet["B3"], "Form No:\n" + clean_header["formNo"])
-    _set_literal(worksheet["C3"], clean_header["eomsTitle"])
-    _set_literal(worksheet["B4"], "Revision No. " + clean_header["revisionNo"])
-
-    _set_literal(worksheet["F2"], "Effectivity:")
-    _set_literal(worksheet["G2"], clean_header["effectivity"])
-    _set_literal(worksheet["F3"], "Issuing Office:")
-    _set_literal(worksheet["G3"], clean_header["issuingOffice"])
-    _set_literal(worksheet["F4"], "Page No.")
-    _set_literal(worksheet["G4"], "1")
-
-    for coordinate in ("B2", "B3", "B4", "F2", "F3", "F4", "G2", "G3", "G4"):
-        worksheet[coordinate].font = Font(name="Arial", size=8, bold=True, color="FF000000")
-        worksheet[coordinate].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    eoms_lines = [line.strip() for line in clean_header["eomsTitle"].splitlines() if line.strip()]
+    _set_literal(worksheet["C3"], eoms_lines[0] if eoms_lines else "")
+    _set_literal(worksheet["C4"], " ".join(eoms_lines[1:]) if len(eoms_lines) > 1 else "")
     worksheet["C2"].font = Font(name="Arial", size=11, bold=True, color="FF000000")
-    worksheet["C2"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     worksheet["C3"].font = Font(name="Arial", size=8, bold=True, color="FF000000")
-    worksheet["C3"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    worksheet["C4"].font = Font(name="Arial", size=9, bold=True, color="FF000000")
+    for coordinate in ("C2", "C3", "C4"):
+        worksheet[coordinate].alignment = Alignment(
+            horizontal="center", vertical="center", wrap_text=False, shrink_to_fit=True
+        )
+
+    metadata = (
+        (2, "Effectivity:", clean_header["effectivity"]),
+        (3, "Issuing Office:", clean_header["issuingOffice"]),
+        (4, "Page No.", "1"),
+    )
+    for row_number, label, value in metadata:
+        label_cell = worksheet.cell(row_number, metadata_label_column)
+        value_cell = worksheet.cell(row_number, metadata_value_column)
+        _set_literal(label_cell, label)
+        _set_literal(value_cell, value)
+        for cell in (label_cell, value_cell):
+            cell.font = Font(name="Arial", size=8, bold=True, color="FF000000")
+            cell.alignment = Alignment(
+                horizontal="center", vertical="center", wrap_text=False, shrink_to_fit=True
+            )
+
     worksheet["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
-    # Accreditation copy is outside the bordered box and deliberately borderless.
-    worksheet.merge_cells("A5:G5")
-    worksheet.merge_cells("A6:G6")
+    # Accreditation text is borderless and spans every active table column.
+    worksheet.merge_cells("A5:{0}5".format(last_column_letter))
+    worksheet.merge_cells("A6:{0}6".format(last_column_letter))
     _set_literal(worksheet["A5"], clean_header["affiliationLine1"])
     _set_literal(worksheet["A6"], clean_header["affiliationLine2"])
     for coordinate in ("A5", "A6"):
@@ -218,8 +256,6 @@ def build_iso_workbook(payload: dict) -> bytes:
 
     _add_logo(worksheet, _safe_text(payload.get("logoPngBase64", "")))
 
-    column_count = max(7, len(headers), max((len(row) for row in rows), default=0))
-    last_column_letter = __import__("openpyxl").utils.get_column_letter(column_count)
     normalized_headers = [_short_assessment_header(value) for value in headers]
     normalized_headers.extend([""] * (column_count - len(normalized_headers)))
     header_fill = PatternFill(fill_type="solid", fgColor="FFEFEFEF")
@@ -309,7 +345,12 @@ def build_iso_workbook(payload: dict) -> bytes:
             width = 12
         else:
             width = 10
-        worksheet.column_dimensions[__import__("openpyxl").utils.get_column_letter(index + 1)].width = width
+        worksheet.column_dimensions[get_column_letter(index + 1)].width = width
+
+    # The final two columns form the right metadata grid. A combined 40-character
+    # allocation keeps "REGISTRAR'S OFFICE" and "October 1, 2025" on one line.
+    worksheet.column_dimensions[get_column_letter(metadata_label_column)].width = 18
+    worksheet.column_dimensions[get_column_letter(metadata_value_column)].width = 22
 
     # Signature block: merged left/right areas and a thin bottom rule for signing.
     data_end_row = 11 + len(rows)
@@ -318,9 +359,9 @@ def build_iso_workbook(payload: dict) -> bytes:
     signature_role_row = data_end_row + 4
     left_end = max(1, column_count // 2)
     right_start = left_end + 1
-    last_column = __import__("openpyxl").utils.get_column_letter(column_count)
-    left_end_letter = __import__("openpyxl").utils.get_column_letter(left_end)
-    right_start_letter = __import__("openpyxl").utils.get_column_letter(right_start)
+    last_column = get_column_letter(column_count)
+    left_end_letter = get_column_letter(left_end)
+    right_start_letter = get_column_letter(right_start)
 
     left_label_range = "A{0}:{1}{0}".format(signature_label_row, left_end_letter)
     right_label_range = "{0}{1}:{2}{1}".format(right_start_letter, signature_label_row, last_column)

@@ -75,31 +75,45 @@ class FcuIsoExportTests(unittest.TestCase):
 
         merged = {str(item) for item in sheet.merged_cells.ranges}
         self.assertIn("A1:A4", merged)
-        self.assertIn("B1:E1", merged)
-        self.assertIn("C2:E2", merged)
-        self.assertIn("C3:E3", merged)
-        self.assertIn("A5:G5", merged)
-        self.assertIn("A6:G6", merged)
+        self.assertIn("B1:B4", merged)
+        self.assertIn("C1:F1", merged)
+        self.assertIn("C2:F2", merged)
+        self.assertIn("C3:F3", merged)
+        self.assertIn("C4:F4", merged)
+        self.assertIn("A5:H5", merged)
+        self.assertIn("A6:H6", merged)
 
-        identity = sheet["B1"].value
+        control_text = str(sheet["B1"].value)
+        self.assertIn("FORM NAME:", control_text)
+        self.assertIn("COLLEGIATE GRADING SHEET", control_text)
+        self.assertIn("FORM NO.:", control_text)
+        self.assertIn("FCU-EOMS-RO-006-F", control_text)
+        self.assertIn("REVISION NO.: 1", control_text)
+
+        identity = sheet["C1"].value
         self.assertEqual(str(identity), "FILAMER CHRISTIAN UNIVERSITY, INC.\nRoxas City, Capiz")
         self.assertEqual(identity[0].font.sz, 11)
         self.assertTrue(identity[0].font.b)
         self.assertEqual(identity[1].font.sz, 8.5)
         self.assertTrue(identity[1].font.i)
-        self.assertEqual(sheet["B2"].value, "Form Name:")
         self.assertEqual(sheet["C2"].value, "COLLEGIATE GRADING SHEET")
         self.assertEqual(sheet["C2"].font.sz, 11)
         self.assertTrue(sheet["C2"].font.bold)
-        self.assertEqual(sheet["B3"].value, "Form No:\nFCU-EOMS-RO-006-F")
-        self.assertEqual(sheet["C3"].value, "EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM\nISO 21001:2025")
-        self.assertEqual(sheet["B4"].value, "Revision No. 1")
-        self.assertEqual(sheet["F2"].value, "Effectivity:")
-        self.assertEqual(sheet["G2"].value, "October 1, 2025")
-        self.assertEqual(sheet["F3"].value, "Issuing Office:")
-        self.assertEqual(sheet["G3"].value, "REGISTRAR'S OFFICE")
-        self.assertEqual(sheet["F4"].value, "Page No.")
-        self.assertEqual(sheet["G4"].value, "1")
+        self.assertEqual(sheet["C3"].value, "EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM")
+        self.assertEqual(sheet["C4"].value, "ISO 21001:2025")
+        self.assertEqual(sheet["G2"].value, "Effectivity:")
+        self.assertEqual(sheet["H2"].value, "October 1, 2025")
+        self.assertEqual(sheet["G3"].value, "Issuing Office:")
+        self.assertEqual(sheet["H3"].value, "REGISTRAR'S OFFICE")
+        self.assertEqual(sheet["G4"].value, "Page No.")
+        self.assertEqual(sheet["H4"].value, "1")
+        for coordinate in ("G2", "H2", "G3", "H3", "G4", "H4"):
+            self.assertFalse(sheet[coordinate].alignment.wrap_text)
+            self.assertTrue(sheet[coordinate].alignment.shrink_to_fit)
+        self.assertEqual(sheet.row_dimensions[1].height, 32)
+        self.assertEqual(sheet.row_dimensions[2].height, 24)
+        self.assertEqual(sheet.row_dimensions[3].height, 24)
+        self.assertEqual(sheet.row_dimensions[4].height, 22)
 
         self.assertEqual(sheet["A5"].value, self.payload["header"]["affiliationLine1"])
         self.assertEqual(sheet["A6"].value, self.payload["header"]["affiliationLine2"])
@@ -111,7 +125,7 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertIsNone(sheet["A1"].value, "the seal is the only A1:A4 content")
 
         for row in range(1, 5):
-            for column in range(1, 8):
+            for column in range(1, 9):
                 cell = sheet.cell(row, column)
                 self.assertEqual(cell.border.top.style, "thin")
                 self.assertEqual(cell.border.bottom.style, "thin")
@@ -180,14 +194,53 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertEqual(sheet.column_dimensions["C"].width, 10)
         self.assertEqual(sheet.column_dimensions["E"].width, 12)
         self.assertEqual(sheet.column_dimensions["F"].width, 14)
-        self.assertEqual(sheet.column_dimensions["G"].width, 12)
-        self.assertEqual(sheet.column_dimensions["H"].width, 12)
+        self.assertEqual(sheet.column_dimensions["G"].width, 18)
+        self.assertEqual(sheet.column_dimensions["H"].width, 22)
         self.assertEqual(sheet["A14"].value, "Submitted by:")
         self.assertEqual(sheet["E14"].value, "Noted:")
         self.assertEqual(sheet["A15"].border.bottom.style, "thin")
         self.assertEqual(sheet["E15"].border.bottom.style, "thin")
         self.assertEqual(sheet.freeze_panes, "A12")
         self.assertEqual(sheet.print_title_rows, "11:11")
+
+    def test_header_and_accreditation_spans_follow_a_wide_active_table(self):
+        payload = dict(self.payload)
+        payload["headers"] = list(self.payload["headers"]) + [f"Assessment {index}" for index in range(1, 7)]
+        payload["rows"] = [list(row) + [index for index in range(1, 7)] for row in self.payload["rows"]]
+
+        sheet = load_workbook(BytesIO(build_iso_workbook(payload))).active
+        merged = {str(item) for item in sheet.merged_cells.ranges}
+
+        # N = 14: the centre block ends at L; the metadata grid occupies M:N.
+        self.assertIn("A1:A4", merged)
+        self.assertIn("B1:B4", merged)
+        for row_number in range(1, 5):
+            self.assertIn(f"C{row_number}:L{row_number}", merged)
+        self.assertIn("A5:N5", merged)
+        self.assertIn("A6:N6", merged)
+        self.assertEqual(sheet["M2"].value, "Effectivity:")
+        self.assertEqual(sheet["N2"].value, "October 1, 2025")
+        self.assertEqual(sheet["M3"].value, "Issuing Office:")
+        self.assertEqual(sheet["N3"].value, "REGISTRAR'S OFFICE")
+        self.assertEqual(sheet["M4"].value, "Page No.")
+        self.assertEqual(sheet["N4"].value, "1")
+        self.assertEqual(sheet.column_dimensions["M"].width, 18)
+        self.assertEqual(sheet.column_dimensions["N"].width, 22)
+
+    def test_minimum_width_header_uses_columns_f_and_g_for_metadata(self):
+        payload = dict(self.payload)
+        payload["headers"] = list(self.payload["headers"][:7])
+        payload["rows"] = [list(row[:7]) for row in self.payload["rows"]]
+
+        sheet = load_workbook(BytesIO(build_iso_workbook(payload))).active
+        merged = {str(item) for item in sheet.merged_cells.ranges}
+        self.assertIn("C1:E1", merged)
+        self.assertIn("C4:E4", merged)
+        self.assertIn("A5:G5", merged)
+        self.assertIn("A6:G6", merged)
+        self.assertEqual(sheet["F3"].value, "Issuing Office:")
+        self.assertEqual(sheet["G3"].value, "REGISTRAR'S OFFICE")
+        self.assertFalse(sheet["G3"].alignment.wrap_text)
 
     def test_activity_and_subtotal_headers_are_shortened_without_parent_paths(self):
         self.assertEqual(_short_assessment_header("Final Design / Design (%)"), "Design (%)")
