@@ -720,6 +720,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [theme, setTheme] = useState<"light" | "dark">("light"); const [academicYear, setAcademicYear] = useState("2026-2027"); const [calendarSystem, setCalendarSystem] = useState<"SEMESTER" | "TRIMESTER">("SEMESTER"); const [activeTerm, setActiveTerm] = useState("1st Semester"); const [academicPeriodReady, setAcademicPeriodReady] = useState(false); const academicYears = [...Array.from({length: 10}, (_, index) => 2016 + index), ...Array.from({length: 10}, (_, index) => 2026 + index)].map(start => `${start}-${start + 1}`).sort((a,b) => b.localeCompare(a)); const [schoolYearFilter, setSchoolYearFilter] = useState("All School Years"); const [termFilter, setTermFilter] = useState("All Terms"); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | null>(null); const [deanName, setDeanName] = useState(user.school.deanName || "");
   const [schoolAddress, setSchoolAddress] = useState(user.school.address || "");
   const [departmentName, setDepartmentName] = useState(user.school.departmentName || "");
+  useEffect(() => { setSchoolAddress(user.school.address || ""); }, [user.school.address]);
   useEffect(() => { setDepartmentName(user.school.departmentName || ""); }, [user.school.departmentName]);
   const defaultGradeSheetComponents = useMemo<GradeSheetComponent[]>(() => { const roots = (detail?.categories || []).filter(category => !category.parentId && (detail?.assessments || []).some(item => !item.title.toLocaleLowerCase().startsWith("attendance ·") && rootCategory(detail?.categories?.find(value => value.id === item.categoryId)!, detail?.categories || []).id === category.id)).sort((a,b) => a.sortOrder-b.sortOrder); const configured = roots.map(category => ({ name: category.name, percentage: Number(effectiveCategoryWeight(category, detail?.categories || []).toFixed(2)) })); try { const saved = JSON.parse(user.defaultGradeSheetComponents || ""); if (Array.isArray(saved) && saved.length) { const matched = saved.map((item: GradeSheetComponent) => configured.find(option => option.name.toLocaleLowerCase() === String(item.name).toLocaleLowerCase())).filter((item): item is GradeSheetComponent => Boolean(item)); if (matched.length) return matched; } } catch {} return configured.length ? configured : [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }]; }, [user.defaultGradeSheetComponents, detail?.categories, detail?.assessments]);
   const [gradeSheetComponents, setGradeSheetComponents] = useState<GradeSheetComponent[]>(defaultGradeSheetComponents);
@@ -2173,16 +2174,21 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           .generic-print-sheet { display:block!important; width:100%!important; color:#000!important; background:#fff!important; font-family:Arial,Helvetica,sans-serif!important; }
           .generic-print-sheet { font-size:9pt; }
           .generic-print-sheet>header { display:flex; flex-direction:column; align-items:stretch; gap:2px; width:100%; max-width:100%; box-sizing:border-box; text-align:center; border:0; padding:0 4px 8px; margin:0 auto 8px; }
-          .generic-print-header-layout { display:grid; grid-template-columns:64px minmax(0,1fr) 64px; grid-template-rows:auto minmax(1.2em,auto) minmax(1.2em,auto); align-items:center; column-gap:6px; row-gap:2px; width:100%; text-align:center; }
+          .generic-print-header-layout { display:grid; grid-template-columns:64px minmax(0,1fr) 64px; grid-template-rows:auto auto auto 1.2em auto auto; align-items:center; column-gap:6px; row-gap:2px; width:100%; text-align:center; }
           .generic-print-logo-slot { display:flex; align-items:center; justify-content:center; align-self:stretch; min-width:0; }
-          .generic-print-logo-slot img { display:block; max-width:58px; max-height:78px; width:auto; height:auto; object-fit:contain; margin:0 auto; }
-          .generic-print-school-logo { grid-column:1; grid-row:1 / span 3; }
-          .generic-print-department-logo { grid-column:3; grid-row:1 / span 3; }
-          .generic-print-school-name { grid-column:2; grid-row:1; min-width:0; margin:0; font-size:14pt; font-weight:700; line-height:1.15; text-align:center; }
-          .generic-print-address { grid-column:2; grid-row:2; min-width:0; min-height:1.2em; margin:0; font-size:8.5pt; line-height:1.2; text-align:center; }
-          .generic-print-department { grid-column:2; grid-row:3; min-width:0; min-height:1.2em; margin:0; font-size:9pt; font-weight:600; line-height:1.2; text-align:center; overflow-wrap:anywhere; }
-          .generic-print-header-spacer { display:block; height:12px; }
-          .generic-print-sheet>header .generic-print-title { display:block; font-size:12pt; letter-spacing:.04em; }.generic-print-course-details { display:flex; flex-direction:column; gap:7px; margin:8px 0 12px; padding:0; font-size:8.5pt; border:0; }
+          .generic-print-logo-slot img { display:block; max-width:58px; max-height:104px; width:auto; height:auto; object-fit:contain; margin:0 auto; }
+          .generic-print-logo-placeholder { display:block; width:54px; height:54px; box-sizing:border-box; border:1px dashed #777; }
+          .generic-print-school-placeholder { border-radius:50%; }
+          .generic-print-department-placeholder { border-radius:5px; }
+          .generic-print-school-logo { grid-column:1; grid-row:1 / span 6; }
+          .generic-print-department-logo { grid-column:3; grid-row:1 / span 6; }
+          .generic-print-school-name { grid-column:2; grid-row:1; min-width:0; margin:0; font-size:14pt; font-weight:700; line-height:1.15; text-align:center; text-transform:uppercase; }
+          .generic-print-department { grid-column:2; grid-row:2; min-width:0; min-height:1.2em; margin:0; font-size:9pt; font-weight:700; line-height:1.2; text-align:center; text-transform:uppercase; overflow-wrap:anywhere; }
+          .generic-print-address { grid-column:2; grid-row:3; min-width:0; min-height:1.2em; margin:0; font-size:8.5pt; line-height:1.2; text-align:center; }
+          .generic-print-header-blank { grid-column:2; grid-row:4; display:block; min-height:1.2em; }
+          .generic-print-title { grid-column:2; grid-row:5; display:block; margin:0; font-size:12pt; font-weight:700; line-height:1.2; letter-spacing:.04em; text-align:center; }
+          .generic-print-term-year { grid-column:2; grid-row:6; display:block; margin:0; font-size:9pt; font-weight:600; line-height:1.2; text-align:center; text-transform:uppercase; }
+          .generic-print-course-details { display:flex; flex-direction:column; gap:7px; margin:8px 0 12px; padding:0; font-size:8.5pt; border:0; }
           .generic-print-course-details-row { display:grid; align-items:baseline; gap:18px; min-width:0; }
           .generic-print-course-details-row-primary { grid-template-columns:minmax(0,1fr) minmax(0,2.2fr); }
           .generic-print-course-details-row-secondary { grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.25fr); }
@@ -2208,17 +2214,18 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         <header>
           <div className="generic-print-header-layout">
             <div className="generic-print-logo-slot generic-print-school-logo">
-              {schoolLogoPath ? <img src={"/api/media?pathname=" + encodeURIComponent(schoolLogoPath)} alt="School / institution logo"/> : <span aria-hidden="true"/>}
+              {schoolLogoPath ? <img src={"/api/media?pathname=" + encodeURIComponent(schoolLogoPath)} alt="Primary institutional seal — Filamer Christian University, Inc."/> : <span className="generic-print-logo-placeholder generic-print-school-placeholder" aria-hidden="true"/>}
             </div>
             <h1 className="generic-print-school-name">{user.school.name}</h1>
-            <p className="generic-print-address">{user.school.address || "School address not set"}</p>
             <p className="generic-print-department">{departmentName.trim()}</p>
+            <p className="generic-print-address">{schoolAddress.trim() || "School address not set"}</p>
+            <span className="generic-print-header-blank" aria-hidden="true"/>
+            <strong className="generic-print-title">COLLEGIATE GRADE SHEET</strong>
+            <p className="generic-print-term-year">{detail.term.toLocaleUpperCase()} A.Y. {detail.academicYear}</p>
             <div className="generic-print-logo-slot generic-print-department-logo">
-              {departmentLogoPath ? <img src={"/api/media?pathname=" + encodeURIComponent(departmentLogoPath)} alt="College / department logo"/> : <span aria-hidden="true"/>}
+              {departmentLogoPath ? <img src={"/api/media?pathname=" + encodeURIComponent(departmentLogoPath)} alt="College of Engineering / department logo"/> : <span className="generic-print-logo-placeholder generic-print-department-placeholder" aria-hidden="true"/>}
             </div>
           </div>
-          <span className="generic-print-header-spacer" aria-hidden="true"/>
-          <strong className="generic-print-title">GRADING SHEETS</strong>
         </header>
         <div className="generic-print-course-details">
           <div className="generic-print-course-details-row generic-print-course-details-row-primary">
