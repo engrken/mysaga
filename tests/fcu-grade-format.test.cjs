@@ -436,6 +436,9 @@ test("ISO header configuration is isolated per school and FCU receives its suppl
  
 test("Final Grades exposes a universal ISO export format picker and includes nested category components", () => {
   assert.ok(source.includes("Download Generic Excel Sheet"));
+  assert.ok(source.includes("Export / Save Generic Grading Sheet"));
+  assert.ok(source.includes('aria-label="Generic grading sheet export formats"'));
+  assert.ok(source.includes("ensureGenericHeaderConfigured()"));
   assert.ok(source.includes("Export / Save ISO Grading Sheet"));
   assert.ok(source.includes("Save / Print ISO PDF"));
   assert.ok(source.includes("Download ISO Excel Sheet"));
