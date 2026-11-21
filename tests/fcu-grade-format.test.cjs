@@ -354,10 +354,10 @@ test("PDF component values are weighted by the configured course allocation", ()
   const compiledContribution = ts.transpileModule(source.slice(start, end), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText;
-  const context = { gradeSheetComponentPercent: () => 90 };
+  const context = { categoryPath: () => "", gradeSheetComponentPercent: () => 90 };
   vm.runInNewContext(compiledContribution + "\nthis.contribution = gradeSheetComponentContribution;", context);
-  assert.equal(context.contribution({}, {}, { percentage: 70 }), 63);
-  assert.equal(context.contribution({}, {}, { percentage: 40 }), 36);
+  assert.equal(context.contribution({ categories: [] }, {}, { name: "Quiz", percentage: 70 }), 63);
+  assert.equal(context.contribution({ categories: [] }, {}, { name: "Exam", percentage: 40 }), 36);
   assert.match(source, /gradeSheetComponentContribution\(detail,enrollment,component\)/);
   const printHeader = source.slice(source.indexOf('<article className="print-grade-sheet'), source.indexOf('<div className="generic-print-course-details">'));
   assert.match(source, /<thead><tr><th aria-label="Sequence number"><\/th><th>NAME OF STUDENTS<\/th>/);
@@ -578,4 +578,76 @@ test("Edit Components category picker includes parents and every eligible nested
   assert.equal(context.hasGradingAssessments(categories.find(item => item.id === "unused"), categories, assessments), false, "a non-attendance parent with only attendance descendants should stay out of the picker");
   assert.ok(source.includes("orderedCategoryTree(detail.categories).filter(category=>categoryHasGradingAssessments(category,detail.categories,detail.assessments)"), "the picker renders the full category tree");
   assert.ok(source.includes("orderedCategoryTree(categories).filter(category => categoryHasGradingAssessments(category, categories, assessments))"), "saved defaults can resolve parent and nested categories");
+});
+
+test("printable Collegiate sheet shows each root group's weighted course contribution across classes", () => {
+  const helperStart = source.indexOf("function categoryDescendantIds(");
+  const helperEnd = source.indexOf("\\nfunction downloadGradeSheetXlsx(", helperStart);
+  assert.ok(helperStart > 0 && helperEnd > helperStart, "print component helpers are present");
+  const compiledHelpers = ts.transpileModule(source.slice(helperStart, helperEnd), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  const gradeSource = fs.readFileSync("src/lib/grades.ts", "utf8")
+    .replace('import { attendanceDays, consecutiveLateAbsences } from "./attendance";', "")
+    .replace(/^export\\s+/gm, "");
+  const compiledGrades = ts.transpileModule(gradeSource, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  const categoryPath = (category, categories) => {
+    const names = [category.name];
+    let parent = categories.find(item => item.id === category.parentId);
+    const visited = new Set([category.id]);
+    while (parent && !visited.has(parent.id)) {
+      names.unshift(parent.name);
+      visited.add(parent.id);
+      parent = categories.find(item => item.id === parent.parentId);
+    }
+    return names.join(" / ");
+  };
+  const context = {
+    categoryPath,
+    attendanceDays: assessments => assessments,
+    consecutiveLateAbsences: () => new Set()
+  };
+  vm.runInNewContext(compiledGrades + "\\nthis.calculateGradeBreakdown = calculateGradeBreakdown;", context);
+  vm.runInNewContext(compiledHelpers + "\\nthis.componentContribution = gradeSheetComponentContribution;", context);
+
+  const makeClass = (lectureWeight, labWeight, lectureScore, labScore) => {
+    const categories = [
+      { id: "lecture", parentId: null, name: "Lecture", weight: lectureWeight, conversionBase: 100, sortOrder: 0 },
+      { id: "lecture-leaf", parentId: "lecture", name: "Lecture Work", weight: 100, conversionBase: 100, sortOrder: 0 },
+      { id: "laboratory", parentId: null, name: "Laboratory", weight: labWeight, conversionBase: 100, sortOrder: 1 },
+      { id: "laboratory-leaf", parentId: "laboratory", name: "Laboratory Work", weight: 100, conversionBase: 100, sortOrder: 0 }
+    ];
+    const assessments = [
+      { id: "lecture-score", categoryId: "lecture-leaf", title: "Lecture Assessment", maxScore: 100, weight: null, dueDate: null },
+      { id: "lab-score", categoryId: "laboratory-leaf", title: "Laboratory Assessment", maxScore: 100, weight: null, dueDate: null }
+    ];
+    const enrollment = {
+      studentName: "AMBITO, JENSEN ANTON",
+      scores: [
+        { assessmentId: "lecture-score", points: lectureScore, remark: null },
+        { assessmentId: "lab-score", points: labScore, remark: null }
+      ]
+    };
+    return { categories, assessments, enrollments: [enrollment] };
+  };
+
+  const fcuClass = makeClass(60, 40, 58.983, 96.5);
+  const lecture = context.componentContribution(fcuClass, fcuClass.enrollments[0], { name: "Lecture", percentage: 60 });
+  const laboratory = context.componentContribution(fcuClass, fcuClass.enrollments[0], { name: "Laboratory", percentage: 40 });
+  assert.equal(lecture, 35.39);
+  assert.equal(laboratory, 38.6);
+  assert.equal(Number((lecture + laboratory).toFixed(2)), 73.99);
+
+  const differentlyWeightedClass = makeClass(70, 30, 80, 90);
+  assert.equal(context.componentContribution(differentlyWeightedClass, differentlyWeightedClass.enrollments[0], { name: "Lecture", percentage: 70 }), 56);
+  assert.equal(context.componentContribution(differentlyWeightedClass, differentlyWeightedClass.enrollments[0], { name: "Laboratory", percentage: 30 }), 27);
+
+  const printSectionStart = source.indexOf('<table className="print-grade-table generic-print-grade-table">');
+  const printSectionEnd = source.indexOf("</table>", printSectionStart);
+  const printTable = source.slice(printSectionStart, printSectionEnd);
+  assert.ok(printTable.includes("gradeSheetComponentContribution(detail,enrollment,component)"), "each printable component cell uses the weighted contribution mapper");
+  assert.ok(printTable.includes('enrollment.finalPercent.toFixed(2)+"%"'), "TOTAL GRADE continues to show the official calculated course total");
+  assert.ok(source.includes('{classSection === "final" && <section id="class-section-final"'), "the same print component is reached from each class Final Grades preview");
 });
