@@ -8,9 +8,16 @@ const source = fs.readFileSync("src/components/Portal.tsx", "utf8");
 const start = source.indexOf("async function downloadFcuGradeXlsx(");
 const end = source.indexOf("function categoryPercent(", start);
 assert.ok(start > 0 && end > start, "FCU exporter is present");
-const compiled = ts.transpileModule(source.slice(start, end), {
+const sortStart = source.indexOf("function sortWorksheetRowCells(");
+const sortEnd = source.indexOf("function crc32(", sortStart);
+assert.ok(sortStart >= 0 && sortEnd > sortStart, "shared worksheet cell sorter is present");
+const compiledSorter = ts.transpileModule(source.slice(sortStart, sortEnd), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
 }).outputText;
+const compiledExporter = ts.transpileModule(source.slice(start, end), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+}).outputText;
+const compiled = compiledSorter + "\n" + compiledExporter;
 
 const columns = index => {
   let n = index + 1, value = "";
