@@ -183,131 +183,33 @@ test("Generic PDF export is offered only once inside the export dropdown", () =>
   assert.doesNotMatch(source, /<button className="btn btn-outline-primary" onClick=\{\(\) => printFinalGradesPdf\("generic"\)\}>Save \/ Print Generic PDF<\/button>/, "the duplicate standalone PDF button is removed");
 });
 
-test("ISO Excel export follows the FCU editable A1:G4 header grid, Folio setup, and safe binary download", async () => {
-  const start = source.indexOf("function downloadIsoXlsx(");
-  const end = source.indexOf("\nfunction categoryDescendantIds(", start);
-  assert.ok(start > 0 && end > start, "dedicated ISO XLSX writer is present");
-  const compiledWriter = ts.transpileModule(source.slice(start, end), {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
-  }).outputText;
-  let saved;
-  let createdBlob;
-  let appendedLink;
-  let clicked = false;
-  let removedLink;
-  let revokeCallback;
-  let revokeDelay;
-  let revokeCalled = false;
-  const context = {
-    Uint8Array, Number, String, Math, Blob,
-    URL: {
-      createObjectURL: blob => { createdBlob = blob; return "blob:iso"; },
-      revokeObjectURL: url => { assert.equal(url, "blob:iso"); revokeCalled = true; }
-    },
-    document: {
-      body: {
-        appendChild: link => { appendedLink = link; },
-        removeChild: link => { removedLink = link; }
-      },
-      createElement: () => ({ click() { clicked = true; } })
-    },
-    setTimeout: (callback, delay) => { revokeCallback = callback; revokeDelay = delay; return 1; },
-    zipStored: files => { saved = files; return Uint8Array.from([0x50, 0x4b, 0x03, 0x04, 0, 0]); },
-    excelColumn: columns,
-    xmlEscape: escape
-  };
-  vm.runInNewContext(compiledWriter + "\nthis.writeIsoWorkbook = downloadIsoXlsx;", context);
-  context.writeIsoWorkbook(
-    "iso.xlsx",
-    "ISO Grading Sheet",
-    ["No.", "Student Name", "Student Number", "Quiz 1", "TOTAL GRADE (%)", "FINAL GRADE", "REMARKS"],
-    [[1, "A Very Long Example Student Name", "2025-0001", 80, 73.99, "2.00", "PASSED"]],
-    Uint8Array.from([137, 80, 78, 71]),
-    {
-      organizationName: "FILAMER CHRISTIAN UNIVERSITY, INC.",
-      organizationAddress: "Roxas City, Capiz",
-      formName: "COLLEGIATE GRADING SHEET",
-      formNo: "FCU-EOMS-RO-006-F",
-      effectivity: "October 1, 2025",
-      issuingOffice: "REGISTRAR'S OFFICE",
-      revisionNo: "1",
-      eomsTitle: "EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM (ISO 21001:2025)",
-      affiliationLine1: "Member Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)",
-      affiliationLine2: "Member: Association of Christian Schools, Colleges in Asia (ACUCA)",
-      submittedBy: "Teacher Example",
-      deanName: "Dean Example"
-    }
-  );
-  const files = Object.fromEntries(saved.map(file => [file.name, file.content]));
-  const sheet = files["xl/worksheets/sheet1.xml"];
-  const styles = files["xl/styles.xml"];
-  assert.ok(createdBlob instanceof Blob, "the downloaded archive is passed to Blob as binary data");
-  assert.equal(createdBlob.type, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  assert.deepEqual([...new Uint8Array(await createdBlob.arrayBuffer())], [0x50, 0x4b, 0x03, 0x04, 0, 0]);
-  assert.equal(appendedLink.href, "blob:iso");
-  assert.equal(appendedLink.download, "iso.xlsx");
-  assert.equal(removedLink, appendedLink, "the temporary anchor is removed after clicking");
-  assert.equal(clicked, true, "the download link is clicked");
-  assert.equal(typeof revokeCallback, "function", "Blob URL cleanup is deferred");
-  assert.equal(revokeDelay, 1000, "Blob URL stays alive briefly for the browser download");
-  assert.equal(revokeCalled, false, "Blob URL is not revoked synchronously");
-  revokeCallback();
-  assert.equal(revokeCalled, true, "Blob URL is revoked after the download handoff");
-  assert.ok(files["xl/media/iso-school-block.png"], "the university seal/name image is embedded in the A-column block");
-  assert.match(sheet, /mergeCell ref="A1:A4"/);
-  assert.match(sheet, /mergeCell ref="C1:E1"/);
-  assert.match(sheet, /mergeCell ref="C2:E2"/);
-  assert.match(sheet, /mergeCell ref="C3:E3"/);
-  assert.match(sheet, /mergeCell ref="B4:E4"/);
-  assert.match(sheet, /mergeCell ref="A5:G5"/);
-  assert.match(sheet, /mergeCell ref="A6:G6"/);
-  // Every coordinate in A1:G4 has an explicit cell style with all four thin borders,
-  // including the interior cells covered by merged ranges.
-  for (let row = 1; row <= 4; row++) {
-    for (const column of ["A", "B", "C", "D", "E", "F", "G"]) {
-      const cell = sheet.match(new RegExp('<c r="' + column + row + '" s="(\\d+)"'));
-      assert.ok(cell, column + row + " is explicitly written to the worksheet");
-      assert.ok([1, 2, 3].includes(Number(cell[1])), column + row + " uses a bordered cell style");
-    }
-  }
-  // Accreditation cells are written separately with the borderless style 4.
-  for (const row of [5, 6]) {
-    for (const column of ["A", "B", "C", "D", "E", "F", "G"]) {
-      assert.match(sheet, new RegExp('<c r="' + column + row + '" s="4"'));
-    }
-  }
-  assert.match(styles, /<xf numFmtId="0" fontId="4" fillId="0" borderId="0"/);
-  assert.match(sheet, /Form Name:/);
-  assert.match(sheet, /FILAMER CHRISTIAN UNIVERSITY, INC\./);
-  assert.match(sheet, /COLLEGIATE GRADING SHEET/);
-  assert.match(sheet, /Form No: FCU-EOMS-RO-006-F/);
-  assert.match(sheet, /EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM \(ISO 21001:2025\)/);
-  assert.match(sheet, /Revision No\. 1/);
-  assert.match(sheet, /October 1, 2025/);
-  assert.match(sheet, /REGISTRAR&apos;S OFFICE|REGISTRAR'S OFFICE/);
-  assert.match(sheet, /ACSCU-ACI/);
-  assert.match(sheet, /ACUCA/);
-  assert.match(sheet, /showGridLines="1"/);
-  assert.match(sheet, /pageSetup paperSize="14" orientation="portrait" fitToWidth="1" fitToHeight="0"/);
-  assert.match(sheet, /<row r="8".*?TOTAL GRADE/s);
-  assert.match(sheet, /<row r="9".*?<v>73\.99<\/v>/s);
-  assert.match(sheet, /<mergeCell ref="A12:D12"/);
-  assert.match(sheet, /<mergeCell ref="E12:G12"/);
-  assert.match(sheet, /<c r="A12" s="8"/, "signature names have a bottom border underline style");
-  assert.match(sheet, /<drawing r:id="rId1"\/>/);
-  assert.match(files["xl/drawings/drawing1.xml"], /University Seal and Name Block/);
-  assert.match(files["xl/drawings/drawing1.xml"], /<a:blip r:embed="rId1"\/>/);
-  assert.match(styles, /<left style="thin"><color rgb="FF000000"\/><\/left>/);
-  assert.match(styles, /<sz val="11"\/>/);
-  assert.match(styles, /<sz val="8"\/>/);
-  assert.match(sheet, /<col min="2" max="2" width="3[0-8]\.00" customWidth="1"\/>/);
-  const exporterStart = source.indexOf("async function exportIsoGradesExcel()");
-  const exporterEnd = source.indexOf("async function exportGrades()", exporterStart);
-  const exporter = source.slice(exporterStart, exporterEnd);
-  assert.ok(exporter.includes("gradeSheetComponentContribution(detail, enrollment, component)"), "component outputs use the weighted grading-sheet contribution");
-  assert.ok(exporter.includes('"TOTAL GRADE (%)"'), "the official total percentage is included as its own column");
-  assert.ok(exporter.includes("Number(enrollment.finalPercent.toFixed(2))"), "the total column uses the official calculated final percent");
-  assert.ok(exporter.includes("downloadIsoXlsx("), "ISO export calls the dedicated editable-grid writer");
+test("ISO Excel export uses the authenticated Python openpyxl generator", () => {
+  const pythonSource = fs.readFileSync("api/iso_export.py", "utf8");
+  const endpoint = fs.readFileSync("src/app/api/teacher/subjects/[subjectId]/iso-export/route.ts", "utf8");
+  assert.doesNotMatch(source, /function downloadIsoXlsx\(/, "the handwritten ISO OOXML writer is removed");
+  assert.match(source, /renderIsoExcelLogoBlockPng\(\)/);
+  assert.match(source, /componentNames: gradeSheetComponents\.map/);
+  assert.match(source, /\/iso-export/);
+  assert.match(source, /window\.btoa\(binary\)/);
+  assert.match(source, /response\.blob\(\)/);
+  assert.match(pythonSource, /from openpyxl import Workbook/);
+  assert.match(pythonSource, /merge_cells\("A1:A4"\)/);
+  assert.match(pythonSource, /merge_cells\("C1:E1"\)/);
+  assert.match(pythonSource, /merge_cells\("C2:E2"\)/);
+  assert.match(pythonSource, /merge_cells\("C3:E3"\)/);
+  assert.match(pythonSource, /merge_cells\("B4:E4"\)/);
+  assert.match(pythonSource, /merge_cells\("A5:G5"\)/);
+  assert.match(pythonSource, /merge_cells\("A6:G6"\)/);
+  assert.match(pythonSource, /paperSize = "14"/);
+  assert.match(pythonSource, /showGridLines = True/);
+  assert.match(pythonSource, /fitToWidth = 1/);
+  assert.match(pythonSource, /fitToHeight = 0/);
+  assert.match(pythonSource, /SAGA-ISO-EXPORT-v1/);
+  assert.match(endpoint, /requireRole\("TEACHER"\)/);
+  assert.match(endpoint, /teacherId: teacher\.id, schoolId: teacher\.schoolId/);
+  assert.match(endpoint, /calculateGradeBreakdown/);
+  assert.match(endpoint, /createHmac\("sha256", secret\)/);
+  assert.match(endpoint, /componentContribution/);
 });
 
 test("Attendance component calculates its own session percentage and weighted contribution", () => {
