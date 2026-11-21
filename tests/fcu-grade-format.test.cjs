@@ -609,8 +609,8 @@ test("printable Collegiate sheet shows each root group's weighted course contrib
     attendanceDays: assessments => assessments,
     consecutiveLateAbsences: () => new Set()
   };
-  vm.runInNewContext(compiledGrades + "\\nthis.calculateGradeBreakdown = calculateGradeBreakdown;", context);
-  vm.runInNewContext(compiledHelpers + "\\nthis.componentContribution = gradeSheetComponentContribution;", context);
+  vm.runInNewContext(compiledGrades + "\nthis.calculateGradeBreakdown = calculateGradeBreakdown;", context);
+  vm.runInNewContext(compiledHelpers + "\nthis.componentContribution = gradeSheetComponentContribution;", context);
 
   const makeClass = (lectureWeight, labWeight, lectureScore, labScore) => {
     const categories = [
