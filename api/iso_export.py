@@ -234,7 +234,7 @@ def build_iso_workbook(payload: dict) -> bytes:
     course_code = _safe_text(class_metadata.get("courseCode", class_metadata.get("code", "")))
     course_title = _safe_text(class_metadata.get("courseTitle", class_metadata.get("title", "")))
     class_id = _safe_text(class_metadata.get("classId", "")).strip()
-    if re.match(r"^migration[_-]\\d{4}[_-]", class_id, re.IGNORECASE):
+    if re.match(r"^migration[_-]\d{4}[_-]", class_id, re.IGNORECASE):
         class_id = ""
     semester = _safe_text(class_metadata.get("semester", class_metadata.get("term", "")))
     academic_year = _safe_text(class_metadata.get("academicYear", ""))

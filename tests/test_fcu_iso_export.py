@@ -169,7 +169,7 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertEqual(sheet["E12"].number_format, "0.00%")
         self.assertAlmostEqual(sheet["F12"].value, 0.9025)
         self.assertEqual(sheet["F12"].number_format, "0.00%")
-        self.assertEqual(sheet["A15"].value, "DR. FIRSTNAME M. LASTNAME")
+        self.assertEqual(sheet["A15"].value, "KENNETH MARK D. BULQUERIN")
         self.assertEqual(sheet["E15"].value, "PROF. DEAN EXAMPLE")
         self.assertIn("A14:D14", {str(item) for item in sheet.merged_cells.ranges})
         self.assertIn("E14:H14", {str(item) for item in sheet.merged_cells.ranges})
@@ -202,7 +202,7 @@ class FcuIsoExportTests(unittest.TestCase):
 
     def test_migration_slug_is_never_written_as_the_human_readable_section_name(self):
         payload = dict(self.payload)
-        payload["class"] = dict(self.payload["class"], classId="")
+        payload["class"] = dict(self.payload["class"], classId="migration_2026_ece-16")
         workbook = load_workbook(BytesIO(build_iso_workbook(payload)))
         self.assertEqual(workbook.active["B8"].value, "")
 
