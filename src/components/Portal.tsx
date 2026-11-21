@@ -2163,13 +2163,14 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           .generic-print-sheet { display:block!important; width:100%!important; color:#000!important; background:#fff!important; font-family:Arial,Helvetica,sans-serif!important; }
           .generic-print-sheet { font-size:9pt; }
           .generic-print-sheet>header { display:flex; flex-direction:column; align-items:stretch; gap:2px; width:100%; max-width:680px; box-sizing:border-box; text-align:center; border:0; padding:0 4px 8px; margin:0 auto 8px; }
-          .generic-print-header-row { display:grid; grid-template-columns:54px minmax(0,1fr) 54px; align-items:center; column-gap:5px; min-height:28px; }
-          .generic-print-logo-slot { display:flex; align-items:center; justify-content:center; justify-self:center; width:54px; min-width:54px; min-height:28px; }
-          .generic-print-logo { display:block; width:24px; height:24px; object-fit:contain; margin:0 auto; }
-          .generic-print-header-row h1 { min-width:0; margin:0; font-size:14pt; font-weight:700; }
-          .generic-print-sheet>header .generic-print-address { margin:0; font-size:8.5pt; line-height:1.2; }
-          .generic-print-sheet>header .generic-print-department { margin:0; font-size:9pt; font-weight:600; min-height:0; }
-          .generic-print-sheet>header .generic-print-department:empty { display:none; }
+          .generic-print-header-layout { display:grid; grid-template-columns:60px minmax(0,1fr) 60px; grid-template-rows:auto auto auto; align-items:center; column-gap:6px; row-gap:2px; width:100%; }
+          .generic-print-logo-slot { display:flex; align-items:center; justify-content:center; align-self:stretch; min-width:0; }
+          .generic-print-logo-slot img { display:block; max-width:56px; max-height:78px; width:auto; height:auto; object-fit:contain; margin:0 auto; }
+          .generic-print-school-logo { grid-column:1; grid-row:1 / span 3; }
+          .generic-print-department-logo { grid-column:3; grid-row:1 / span 3; }
+          .generic-print-school-name { grid-column:2; grid-row:1; min-width:0; margin:0; font-size:14pt; font-weight:700; }
+          .generic-print-address { grid-column:2; grid-row:2; min-width:0; margin:0; font-size:8.5pt; line-height:1.2; }
+          .generic-print-department { grid-column:2; grid-row:3; min-width:0; margin:0; font-size:9pt; font-weight:600; }
           .generic-print-header-spacer { display:block; height:12px; }
           .generic-print-sheet>header .generic-print-title { display:block; font-size:12pt; letter-spacing:.04em; }.generic-print-course-details { display:flex; flex-direction:column; gap:7px; margin:8px 0 12px; padding:0; font-size:8.5pt; border:0; }
           .generic-print-course-details-row { display:grid; align-items:baseline; gap:18px; min-width:0; }
@@ -2195,31 +2196,15 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         }`}</style>}
       {printMode === "grades" && detail && <article className="print-grade-sheet generic-print-sheet">
         <header>
-          <div className="generic-print-header-row">
-            <div className="generic-print-logo-slot">
-              {schoolLogoPath ? <img className="generic-print-logo" src={"/api/media?pathname=" + encodeURIComponent(schoolLogoPath)} alt="School / institution logo"/> : <span aria-hidden="true"/>}
+          <div className="generic-print-header-layout">
+            <div className="generic-print-logo-slot generic-print-school-logo">
+              {schoolLogoPath ? <img src={"/api/media?pathname=" + encodeURIComponent(schoolLogoPath)} alt="School / institution logo"/> : <span aria-hidden="true"/>}
             </div>
-            <h1>{user.school.name}</h1>
-            <div className="generic-print-logo-slot">
-              {departmentLogoPath ? <img className="generic-print-logo" src={"/api/media?pathname=" + encodeURIComponent(departmentLogoPath)} alt="College / department logo"/> : <span aria-hidden="true"/>}
-            </div>
-          </div>
-          <div className="generic-print-header-row">
-            <div className="generic-print-logo-slot">
-              {schoolLogoPath ? <img className="generic-print-logo" src={"/api/media?pathname=" + encodeURIComponent(schoolLogoPath)} alt="School / institution logo"/> : <span aria-hidden="true"/>}
-            </div>
+            <h1 className="generic-print-school-name">{user.school.name}</h1>
             <p className="generic-print-address">{user.school.address || "School address not set"}</p>
-            <div className="generic-print-logo-slot">
-              {departmentLogoPath ? <img className="generic-print-logo" src={"/api/media?pathname=" + encodeURIComponent(departmentLogoPath)} alt="College / department logo"/> : <span aria-hidden="true"/>}
-            </div>
-          </div>
-          <div className="generic-print-header-row">
-            <div className="generic-print-logo-slot">
-              {schoolLogoPath ? <img className="generic-print-logo" src={"/api/media?pathname=" + encodeURIComponent(schoolLogoPath)} alt="School / institution logo"/> : <span aria-hidden="true"/>}
-            </div>
             <p className="generic-print-department">{user.school.departmentName || ""}</p>
-            <div className="generic-print-logo-slot">
-              {departmentLogoPath ? <img className="generic-print-logo" src={"/api/media?pathname=" + encodeURIComponent(departmentLogoPath)} alt="College / department logo"/> : <span aria-hidden="true"/>}
+            <div className="generic-print-logo-slot generic-print-department-logo">
+              {departmentLogoPath ? <img src={"/api/media?pathname=" + encodeURIComponent(departmentLogoPath)} alt="College / department logo"/> : <span aria-hidden="true"/>}
             </div>
           </div>
           <span className="generic-print-header-spacer" aria-hidden="true"/>
