@@ -280,7 +280,10 @@ test("PDF component values are weighted by the configured course allocation", ()
   assert.match(source, /<thead><tr><th aria-label="Sequence number"><\/th><th>NAME OF STUDENTS<\/th>/);
   assert.match(source, /<td>\{index\+1\}\.<\/td><td>\{enrollment\.studentName\.toLocaleUpperCase\(\)\}<\/td>/);
   assert.match(printHeader, /generic-print-logo-slot[\s\S]*?School \/ institution logo[\s\S]*?generic-print-school-heading[\s\S]*?user\.school\.name[\s\S]*?departmentLogoPath[\s\S]*?College \/ department logo/);
-  assert.match(source, /grid-template-columns:88px minmax\(0,1fr\) 88px/);
+  assert.match(source, /grid-template-columns:54px minmax\(0,1fr\) 54px/);
+  assert.match(source, /generic-print-school-name/);
+  assert.match(source, /generic-print-address/);
+  assert.match(source, /generic-print-title/);
   assert.match(source, /justify-content:center; justify-self:center/);
   assert.match(source, /text-align:center/);
   assert.doesNotMatch(source, /generic-print-doc-control|generic-print-membership|grade-sheet-calculation-note|Institutional membership \/ accreditation|Form Name:/);
