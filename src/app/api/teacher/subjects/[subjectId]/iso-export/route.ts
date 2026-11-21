@@ -335,8 +335,18 @@ export async function POST(request: Request, context: Context) {
     .update("SAGA-ISO-EXPORT-v1\n" + timestamp + "\n" + body)
     .digest("hex");
 
-  const baseUrl = process.env.ISO_EXPORT_FUNCTION_URL?.trim() ||
-    (process.env.VERCEL_URL ? "https://" + process.env.VERCEL_URL + "/api/iso_export" : "");
+  // Production deployment URLs may require Vercel Authentication when called
+  // server-to-server. Use the stable production alias in production so this
+  // internal call does not hit the protected deployment-specific hostname.
+  // Preview deployments keep their own deployment URL (and optional bypass).
+  const configuredFunctionUrl = process.env.ISO_EXPORT_FUNCTION_URL?.trim();
+  const productionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  const deploymentHost = process.env.VERCEL_URL?.trim();
+  const functionHost = process.env.VERCEL_ENV === "production"
+    ? productionHost || deploymentHost
+    : deploymentHost || productionHost;
+  const baseUrl = configuredFunctionUrl ||
+    (functionHost ? "https://" + functionHost + "/api/iso_export" : "");
   if (!baseUrl) {
     return NextResponse.json({ error: "The Python XLSX function is available after deployment to Vercel." }, { status: 503 });
   }

@@ -210,6 +210,11 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(endpoint, /calculateGradeBreakdown/);
   assert.match(endpoint, /createHmac\("sha256", secret\)/);
   assert.match(endpoint, /componentContribution/);
+  assert.match(endpoint, /process\.env\.VERCEL_PROJECT_PRODUCTION_URL/, "production calls use the stable project domain");
+  assert.match(endpoint, /process\.env\.VERCEL_ENV === "production"/, "the routing choice distinguishes production from previews");
+  assert.match(endpoint, /productionHost \|\| deploymentHost/, "production prefers the stable production host");
+  assert.match(endpoint, /deploymentHost \|\| productionHost/, "previews prefer their own deployment host");
+  assert.match(endpoint, /ISO_EXPORT_FUNCTION_URL/, "an explicit internal function URL can override automatic routing");
 });
 
 test("Attendance component calculates its own session percentage and weighted contribution", () => {
