@@ -193,11 +193,11 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(source, /window\.btoa\(binary\)/);
   assert.match(source, /response\.blob\(\)/);
   assert.match(pythonSource, /from openpyxl import Workbook/);
-  assert.match(pythonSource, /merge_cells\("A1:A4"\)/);
-  assert.match(pythonSource, /merge_cells\("C1:E1"\)/);
-  assert.match(pythonSource, /merge_cells\("C2:E2"\)/);
-  assert.match(pythonSource, /merge_cells\("C3:E3"\)/);
-  assert.match(pythonSource, /merge_cells\("B4:E4"\)/);
+  assert.match(pythonSource, /_merge_with_border\(worksheet, "A1:A4", THIN_BORDER\)/);
+  assert.match(pythonSource, /_merge_with_border\(worksheet, "C1:E1", THIN_BORDER\)/);
+  assert.match(pythonSource, /_merge_with_border\(worksheet, "C2:E2", THIN_BORDER\)/);
+  assert.match(pythonSource, /_merge_with_border\(worksheet, "C3:E3", THIN_BORDER\)/);
+  assert.match(pythonSource, /_merge_with_border\(worksheet, "B4:E4", THIN_BORDER\)/);
   assert.match(pythonSource, /merge_cells\("A5:G5"\)/);
   assert.match(pythonSource, /merge_cells\("A6:G6"\)/);
   assert.match(pythonSource, /paperSize = "14"/);
