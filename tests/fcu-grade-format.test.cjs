@@ -513,6 +513,6 @@ test("Edit Components category picker includes parents and every eligible nested
     assert.equal(context.hasGradingAssessments(category, categories, assessments), true, `${id} should appear in the picker`);
   }
   assert.equal(context.hasGradingAssessments(categories.find(item => item.id === "unused"), categories, assessments), false, "a category with only attendance descendants should stay out of the picker");
-  assert.match(source, /orderedCategoryTree\\(detail\\.categories\\)\\.filter\\(category=>categoryHasGradingAssessments/);
-  assert.match(source, /orderedCategoryTree\\(detail\\?\\.categories \\|\\| \\[\\]\\)\\.filter\\(category => categoryHasGradingAssessments/);
+  assert.ok(source.includes("orderedCategoryTree(detail.categories).filter(category=>categoryHasGradingAssessments(category,detail.categories,detail.assessments)"), "the picker renders the full category tree");
+  assert.ok(source.includes("orderedCategoryTree(categories).filter(category => categoryHasGradingAssessments(category, categories, assessments))"), "saved defaults can resolve parent and nested categories");
 });
