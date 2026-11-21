@@ -358,223 +358,6 @@ function downloadXlsx(filename: string, sheetName: string, headers: string[], ro
   URL.revokeObjectURL(url);
 }
 
-function downloadIsoXlsx(
-  filename: string,
-  sheetName: string,
-  headers: string[],
-  rows: unknown[][],
-  logoBlockPng: Uint8Array,
-  header: {
-    organizationName: string;
-    organizationAddress: string;
-    formName: string;
-    formNo: string;
-    effectivity: string;
-    issuingOffice: string;
-    revisionNo: string;
-    eomsTitle: string;
-    affiliationLine1: string;
-    affiliationLine2: string;
-    submittedBy: string;
-    deanName: string;
-  }
-) {
-  const columnCount = Math.max(headers.length, ...rows.map(row => row.length), 2);
-  const lastColumn = excelColumn(columnCount - 1);
-  const rowMap = new Map<number, { height: number; cells: Map<number, string> }>();
-  const merges = [
-    "A1:A4", "C1:E1", "C2:E2", "C3:E3", "B4:E4", "A5:G5", "A6:G6"
-  ];
-  const putCell = (row: number, column: number, value: unknown, style: number) => {
-    const current = rowMap.get(row) ?? { height: 20, cells: new Map<number, string>() };
-    const reference = excelColumn(column) + row;
-    let xml: string;
-    if (typeof value === "number" && Number.isFinite(value)) {
-      xml = '<c r="' + reference + '" s="' + style + '"><v>' + value + '</v></c>';
-    } else if (typeof value === "boolean") {
-      xml = '<c r="' + reference + '" s="' + style + '" t="b"><v>' + (value ? 1 : 0) + '</v></c>';
-    } else if (value === null || value === undefined || value === "") {
-      xml = '<c r="' + reference + '" s="' + style + '"/>';
-    } else {
-      xml = '<c r="' + reference + '" s="' + style + '" t="inlineStr"><is><t xml:space="preserve">' + xmlEscape(value) + '</t></is></c>';
-    }
-    current.cells.set(column, xml);
-    rowMap.set(row, current);
-  };
-  const setRowHeight = (row: number, height: number) => {
-    const current = rowMap.get(row) ?? { height, cells: new Map<number, string>() };
-    current.height = height;
-    rowMap.set(row, current);
-  };
-
-  // Four-row document-control grid: every A1:G4 cell carries a thin border.
-  for (let row = 1; row <= 4; row++) {
-    for (let column = 0; column < 7; column++) putCell(row, column, "", 1);
-    setRowHeight(row, 36);
-  }
-  putCell(1, 0, "", 1);
-  putCell(1, 1, "Form Name:", 2);
-  putCell(1, 2, header.organizationName.toLocaleUpperCase(), 2);
-  putCell(1, 5, "Effectivity:", 2);
-  putCell(1, 6, header.effectivity, 2);
-
-  putCell(2, 1, "Form Name:", 2);
-  putCell(2, 2, header.formName.toLocaleUpperCase(), 3);
-  putCell(2, 5, "Issuing Office:", 2);
-  putCell(2, 6, header.issuingOffice.toLocaleUpperCase(), 2);
-
-  putCell(3, 1, "Form No: " + header.formNo, 2);
-  putCell(3, 2, header.eomsTitle, 2);
-  putCell(3, 5, "Page No.", 2);
-  putCell(3, 6, 1, 3);
-
-  putCell(4, 1, "Revision No. " + header.revisionNo, 2);
-
-  // Accreditation lines sit outside the bordered header grid.
-  for (let column = 0; column < 7; column++) {
-    putCell(5, column, "", 4);
-    putCell(6, column, "", 4);
-  }
-  putCell(5, 0, header.affiliationLine1, 4);
-  putCell(6, 0, header.affiliationLine2, 4);
-  setRowHeight(5, 17);
-  setRowHeight(6, 17);
-  setRowHeight(7, 10);
-
-  // The data table begins on row 8 and uses adaptive widths based on actual values.
-  headers.forEach((value, column) => putCell(8, column, value, 5));
-  setRowHeight(8, 36);
-  rows.forEach((values, index) => {
-    const rowNumber = index + 9;
-    values.forEach((value, column) => putCell(rowNumber, column, value, typeof value === "number" ? 7 : (column === 1 ? 6 : 6)));
-    setRowHeight(rowNumber, 22);
-  });
-
-  const dataEndRow = 8 + rows.length;
-  const signatureLabelRow = dataEndRow + 2;
-  const signatureNameRow = dataEndRow + 3;
-  const signatureRoleRow = dataEndRow + 4;
-  const splitColumn = Math.max(0, Math.floor((columnCount - 1) / 2));
-  const leftStart = "A";
-  const leftEnd = excelColumn(splitColumn);
-  const rightStart = excelColumn(splitColumn + 1);
-  merges.push(
-    leftStart + signatureLabelRow + ":" + leftEnd + signatureLabelRow,
-    rightStart + signatureLabelRow + ":" + lastColumn + signatureLabelRow,
-    leftStart + signatureNameRow + ":" + leftEnd + signatureNameRow,
-    rightStart + signatureNameRow + ":" + lastColumn + signatureNameRow,
-    leftStart + signatureRoleRow + ":" + leftEnd + signatureRoleRow,
-    rightStart + signatureRoleRow + ":" + lastColumn + signatureRoleRow
-  );
-  for (let column = 0; column < columnCount; column++) {
-    putCell(signatureLabelRow, column, "", 9);
-    putCell(signatureNameRow, column, "", 8);
-    putCell(signatureRoleRow, column, "", 9);
-  }
-  putCell(signatureLabelRow, 0, "Submitted by:", 9);
-  putCell(signatureLabelRow, splitColumn + 1, "Noted:", 9);
-  putCell(signatureNameRow, 0, header.submittedBy, 8);
-  putCell(signatureNameRow, splitColumn + 1, header.deanName || " ", 8);
-  putCell(signatureRoleRow, 0, "TEACHER'S SIGNATURE OVER PRINTED NAME", 9);
-  putCell(signatureRoleRow, splitColumn + 1, "DEAN'S SIGNATURE OVER PRINTED NAME", 9);
-  setRowHeight(signatureLabelRow, 19);
-  setRowHeight(signatureNameRow, 28);
-  setRowHeight(signatureRoleRow, 18);
-
-  const worksheetRows = [...rowMap.entries()].sort((a, b) => a[0] - b[0]).map(([rowNumber, row]) => {
-    const cells = [...row.cells.entries()].sort((a, b) => a[0] - b[0]).map(item => item[1]).join("");
-    return '<row r="' + rowNumber + '" ht="' + row.height + '" customHeight="1">' + cells + '</row>';
-  }).join("");
-  const safeSheetName = sheetName.replace(/[\\/?*\\[\\]:]/g, " ").slice(0, 31) || "ISO Grading Sheet";
-  const widths = headers.map((headerValue, column) => {
-    const values = [String(headerValue ?? ""), ...rows.map(row => String(row[column] ?? ""))];
-    const longest = Math.max(0, ...values.map(value => value.length));
-    if (column === 0) return 18;
-    if (column === 1) return Math.min(38, Math.max(28, longest + 2));
-    if (column === 2) return Math.min(24, Math.max(16, longest + 2));
-    return Math.min(26, Math.max(13, longest + 2));
-  });
-  const columnXml = widths.map((width, index) =>
-    '<col min="' + (index + 1) + '" max="' + (index + 1) + '" width="' + width.toFixed(2) + '" customWidth="1"/>'
-  ).join("");
-  const mergeXml = '<mergeCells count="' + merges.length + '">' +
-    merges.map(range => '<mergeCell ref="' + range + '"/>').join("") + '</mergeCells>';
-  const worksheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
-    '<sheetPr><pageSetUpPr fitToPage="1" autoPageBreaks="1"/></sheetPr>' +
-    '<dimension ref="A1:' + lastColumn + signatureRoleRow + '"/>' +
-    '<sheetViews><sheetView showGridLines="1" workbookViewId="0"/></sheetViews>' +
-    '<sheetFormatPr defaultRowHeight="20"/><cols>' + columnXml + '</cols>' +
-    '<sheetData>' + worksheetRows + '</sheetData>' + mergeXml +
-    '<pageMargins left="0.25" right="0.25" top="0.35" bottom="0.35" header="0.15" footer="0.15"/>' +
-    '<pageSetup paperSize="14" orientation="portrait" fitToWidth="1" fitToHeight="0" horizontalDpi="300" verticalDpi="300"/>' +
-    '<drawing r:id="rId1"/></worksheet>';
-  const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<fonts count="5">' +
-      '<font><sz val="10"/><color rgb="FF000000"/><name val="Arial"/><family val="2"/></font>' +
-      '<font><b/><sz val="9"/><color rgb="FF000000"/><name val="Arial"/><family val="2"/></font>' +
-      '<font><b/><sz val="10"/><color rgb="FF000000"/><name val="Arial"/><family val="2"/></font>' +
-      '<font><b/><sz val="11"/><color rgb="FF000000"/><name val="Arial"/><family val="2"/></font>' +
-      '<font><sz val="8"/><color rgb="FF000000"/><name val="Arial"/><family val="2"/></font>' +
-    '</fonts>' +
-    '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
-    '<borders count="3">' +
-      '<border><left/><right/><top/><bottom/><diagonal/></border>' +
-      '<border><left style="thin"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top style="thin"><color rgb="FF000000"/></top><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border>' +
-      '<border><bottom style="thin"><color rgb="FF000000"/></bottom></border>' +
-    '</borders>' +
-    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="10">' +
-      '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
-      '<xf numFmtId="0" fontId="2" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
-      '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>' +
-      '<xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
-      '<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
-      '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
-      '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>' +
-      '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
-      '<xf numFmtId="0" fontId="0" fillId="0" borderId="2" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
-      '<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>' +
-    '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
-  const drawing = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-    '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
-    '<xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>65000</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>65000</xdr:rowOff></xdr:from>' +
-    '<xdr:ext cx="1050000" cy="1550000"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="1" name="University Seal and Name Block"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr>' +
-    '<xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1050000" cy="1550000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>';
-  const files: Array<{ name: string; content: string | Uint8Array }> = [
-    { name: "[Content_Types].xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' },
-    { name: "_rels/.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
-    { name: "xl/workbook.xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="' + xmlEscape(safeSheetName) + '" sheetId="1" r:id="rId1"/></sheets></workbook>' },
-    { name: "xl/_rels/workbook.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' },
-    { name: "xl/styles.xml", content: styles },
-    { name: "xl/worksheets/sheet1.xml", content: worksheet },
-    { name: "xl/worksheets/_rels/sheet1.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>' },
-    { name: "xl/drawings/drawing1.xml", content: drawing },
-    { name: "xl/drawings/_rels/drawing1.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/iso-school-block.png"/></Relationships>' },
-    { name: "xl/media/iso-school-block.png", content: logoBlockPng }
-  ];
-  // Copy the exact ZIP byte range into an ArrayBuffer before creating the Blob.
-  // This keeps the XLSX download binary instead of relying on a typed-array view.
-  const archiveBytes = zipStored(files);
-  const binaryBuffer = archiveBytes.buffer.slice(
-    archiveBytes.byteOffset,
-    archiveBytes.byteOffset + archiveBytes.byteLength
-  ) as ArrayBuffer;
-  const blob = new Blob([binaryBuffer], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  // Browsers may still be consuming the Blob when the click handler returns.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 function categoryDescendantIds(categoryId: string, categories: Category[]) {
   const ids = new Set([categoryId]);
   let changed = true;
@@ -2047,69 +1830,40 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     if (!detail || !ensureIsoHeaderConfigured()) return;
     try {
       const logoBlockPng = await renderIsoExcelLogoBlockPng();
-      const academicAssessments = detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·"));
-      const assessmentHeaders = academicAssessments.map(item => {
-        const category = detail.categories.find(value => value.id === item.categoryId);
-        return (category ? categoryPath(category, detail.categories) + " · " : "") + item.title + " (Max " + item.maxScore + ")";
+      const binary = Array.from(logoBlockPng, byte => String.fromCharCode(byte)).join("");
+      const logoPngBase64 = window.btoa(binary);
+      const response = await fetch("/api/teacher/subjects/" + encodeURIComponent(detail.id) + "/iso-export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          componentNames: gradeSheetComponents.map(item => item.name),
+          logoPngBase64
+        })
       });
-      const headers = [
-        "No.",
-        "Student Name",
-        "Student Number",
-        ...assessmentHeaders,
-        ...gradeSheetComponents.map(item => item.name + " (%)"),
-        "TOTAL GRADE (%)",
-        "FINAL GRADE",
-        "REMARKS"
-      ];
-      const rows: unknown[][] = [];
-      detail.enrollments.forEach((enrollment: any, index: number) => {
-        const scores = academicAssessments.map(item => enrollment.scores.find((score: any) => score.assessmentId === item.id)?.points ?? "");
-        const special = ["INC", "NP", "DROPPED"].includes(enrollment.remarks || "");
-        const components = gradeSheetComponents.map(component =>
-          special ? "" : gradeSheetComponentContribution(detail, enrollment, component) ?? ""
-        );
-        const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent).find(item =>
-          enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent
-        );
-        const totalGrade = special || enrollment.finalPercent === null ? "" : Number(enrollment.finalPercent.toFixed(2));
-        const finalGrade = special ? "" : enrollment.finalGradeOverride || band?.finalGrade || "";
-        rows.push([
-          index + 1,
-          enrollment.studentName || "",
-          enrollment.studentNumber || "",
-          ...scores,
-          ...components,
-          totalGrade,
-          finalGrade,
-          enrollment.remarks || band?.remarks || ""
-        ]);
-      });
-      downloadIsoXlsx(
-        detail.code.replace(/[^a-z0-9-_]+/gi, "-") + "-iso-grading-sheet.xlsx",
-        "ISO Grading Sheet",
-        headers,
-        rows,
-        logoBlockPng,
-        {
-          organizationName: user.school.name,
-          organizationAddress: isoHeaderConfig.organizationAddress,
-          formName: "COLLEGIATE GRADING SHEET",
-          formNo: isoHeaderConfig.formNo,
-          effectivity: isoHeaderConfig.effectivity,
-          issuingOffice: isoHeaderConfig.issuingOffice,
-          revisionNo: isoHeaderConfig.revisionNo,
-          eomsTitle: isoHeaderConfig.eomsTitle + " (" + isoHeaderConfig.isoStandard + ")",
-          affiliationLine1: isoHeaderConfig.affiliationLine1,
-          affiliationLine2: isoHeaderConfig.affiliationLine2,
-          submittedBy: user.fullName,
-          deanName
+      if (!response.ok) {
+        const message = await response.text();
+        let errorMessage = "Unable to prepare the ISO Excel sheet (HTTP " + response.status + ").";
+        try {
+          const parsed = JSON.parse(message);
+          if (typeof parsed.error === "string") errorMessage = parsed.error;
+        } catch {
+          // Keep HTML or deployment-protection responses out of the user-facing error.
         }
-      );
+        throw new Error(errorMessage);
+      }
+      const workbookBlob = await response.blob();
+      const downloadUrl = URL.createObjectURL(workbookBlob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = detail.code.replace(/[^a-z0-9-_]+/gi, "-") + "-iso-grading-sheet.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
       setErr("");
     } catch (error) {
       console.error("ISO Excel export failed:", error);
-      setErr("Unable to prepare the ISO Excel sheet. Please try again.");
+      setErr(error instanceof Error ? error.message : "Unable to prepare the ISO Excel sheet. Please try again.");
     }
   }
   async function exportGrades() {
