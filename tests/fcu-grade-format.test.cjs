@@ -150,7 +150,7 @@ test("generic grading sheet export uses class records, actual assessment scores,
     ],
     gradeBands: [{ minPercent: 75, finalGrade: "2.25", remarks: "PASSED" }]
   };
-  context.generateGeneric("grading.xlsx", "Grading Sheet", detail, "Example University", "123 College Road", "Teacher One", "Dean Two");
+  context.generateGeneric("grading.xlsx", "Grading Sheet", detail, "Example University", "123 College Road", "Teacher One", "Dean Two", [{ name: "Quizzes", percentage: 30 }, { name: "Major Exam", percentage: 50 }]);
   const files = Object.fromEntries(saved.map(file => [file.name, file.content]));
   const sheet = files["xl/worksheets/sheet1.xml"];
   assert.match(sheet, /Example University/);
@@ -163,9 +163,13 @@ test("generic grading sheet export uses class records, actual assessment scores,
   assert.match(sheet, /Academic Year: 2026-2027/);
   assert.match(sheet, /Schedule: Lecture · Monday, 04:00 PM–05:30 PM/);
   assert.match(sheet, /Dean: Dean Two/);
-  assert.match(sheet, /Display Components: EXAM 50\.00% · ACT 40\.00% · ARP 10\.00%/);
+  assert.match(sheet, /Display Components: Quizzes 30\.00% · Major Exam 50\.00%/);
   assert.doesNotMatch(sheet, /\[\{"label":"Lecture"/);
   assert.match(sheet, /NAME OF STUDENTS/);
+  assert.match(sheet, /QUIZZES \(30\.00%\)/);
+  assert.match(sheet, /MAJOR EXAM \(50\.00%\)/);
+  assert.equal((sheet.match(/ATTENDANCE \(%\)/g) || []).length, 1, "attendance remains one calculated percentage column");
+  assert.match(files["xl/styles.xml"], /<fonts count="5">.*?<sz val="9"\/>/s);
   assert.match(sheet, /Quizzes · Quiz 1 \(Max 10 · Item wt Points-based · Course wt 30\.00%\)/);
   assert.match(sheet, /8 \/ 10/);
   assert.match(sheet, /EXCUSED/);
