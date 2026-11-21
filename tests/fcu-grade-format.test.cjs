@@ -90,6 +90,12 @@ test("FCU final-grade export uses the exact configured components and their weig
   assert.ok(files["xl/media/image1.png"]);
   assert.doesNotMatch(sheet, /2023-0001|2023-0002/);
   assert.match(sheet, /<c r="A18"[^>]*>.*?2\./s);
+  assert.match(sheet, /<col min="1" max="1" width="6"/);
+  assert.match(sheet, /<col min="2" max="2" width="32"/);
+  assert.match(sheet, /<col min="3" max="5" width="13"/);
+  assert.match(sheet, /<col min="6" max="6" width="14"/);
+  assert.match(sheet, /<col min="7" max="7" width="11"/);
+  assert.match(sheet, /<col min="8" max="8" width="18"/);
 });
 
 test("FCU final-grade export supports a variable number of components", async () => {
@@ -270,8 +276,15 @@ test("PDF component values are weighted by the configured course allocation", ()
   assert.equal(context.contribution({}, {}, { percentage: 70 }), 63);
   assert.equal(context.contribution({}, {}, { percentage: 40 }), 36);
   assert.match(source, /gradeSheetComponentContribution\(detail,enrollment,component\)/);
-  assert.match(source, /className="generic-print-logos"/);
-  assert.match(source, /grid-template-columns:104px minmax\(0,1fr\)/);
+  const printHeader = source.slice(source.indexOf('<article className="print-grade-sheet'), source.indexOf('<div className="generic-print-doc-control">'));
+  assert.match(source, /<thead><tr><th aria-label="Sequence number"><\/th><th>NAME OF STUDENTS<\/th>/);
+  assert.match(source, /<td>\{index\+1\}\.<\/td><td>\{enrollment\.studentName\.toLocaleUpperCase\(\)\}<\/td>/);
+  assert.doesNotMatch(printHeader, /generic-print-logos/);
+  assert.match(printHeader, /generic-print-logo-slot[\s\S]*?School \/ institution logo[\s\S]*?generic-print-school-heading[\s\S]*?user\.school\.name[\s\S]*?departmentLogoPath[\s\S]*?College \/ department logo/);
+  assert.match(source, /grid-template-columns:76px minmax\(0,1fr\) 76px/);
+  assert.match(source, /max-width:900px;[\s\S]*?margin:0 auto 6px/);
+  assert.match(source, /width:6%; text-align:center/);
+  assert.match(source, /width:32%; text-align:left/);
 });
 
 test("assessment item order is saved and applied consistently in Assessment Items and Record Scores", () => {
