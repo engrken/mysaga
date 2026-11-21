@@ -452,3 +452,34 @@ test("Final Grades exposes a universal ISO export format picker and includes nes
   assert.ok(source.includes("categoryPath(category, detail.categories)"));
   assert.ok(source.includes("while (current && current.id !== root.id"));
 });
+
+test("Edit Components displays each category weight relative to its immediate parent", () => {
+  const start = source.indexOf("function localCategoryWeight(");
+  const end = source.indexOf("\nexport default function Portal", start);
+  assert.ok(start > 0 && end > start, "category weight helpers are present");
+  const compiledWeights = ts.transpileModule(source.slice(start, end), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  const context = {};
+  vm.runInNewContext(compiledWeights + "\nthis.localCategoryWeight = localCategoryWeight; this.categoryWeightLabel = categoryWeightLabel;", context);
+
+  const categories = [
+    { id: "lecture", parentId: null, name: "Lecture", weight: 60, conversionBase: 50, sortOrder: 0 },
+    { id: "major-exams", parentId: "lecture", name: "Major Examinations", weight: 50, conversionBase: 50, sortOrder: 0 },
+    { id: "midterm", parentId: "major-exams", name: "Midterm", weight: 20, conversionBase: 50, sortOrder: 0 },
+    { id: "finals", parentId: "major-exams", name: "Finals", weight: 30, conversionBase: 50, sortOrder: 1 }
+  ];
+
+  assert.equal(context.localCategoryWeight(categories[0]), 60);
+  assert.equal(context.localCategoryWeight(categories[1]), 50);
+  assert.equal(context.localCategoryWeight(categories[2]), 20);
+  assert.equal(context.localCategoryWeight(categories[3]), 30);
+  assert.equal(context.categoryWeightLabel(categories[0], categories), "60.00% of course");
+  assert.equal(context.categoryWeightLabel(categories[1], categories), "50.00% within Lecture");
+  assert.equal(context.categoryWeightLabel(categories[2], categories), "20.00% within Major Examinations");
+  assert.equal(context.categoryWeightLabel(categories[3], categories), "30.00% within Major Examinations");
+
+  assert.match(source, /percentage: Number\(localCategoryWeight\(category\)\.toFixed\(2\)\)/);
+  assert.match(source, /localCategoryWeight\(category\)\.toFixed\(2\)%/);
+  assert.doesNotMatch(source.slice(source.indexOf("Add category or subcategory from Grading Setup")), /effectiveCategoryWeight/);
+});
