@@ -10,7 +10,7 @@ const schema = z.object({
   schoolAddress: z.string().trim().max(300).optional(),
   departmentName: z.string().trim().max(160).optional(),
   deanName: z.string().trim().max(120).optional(),
-  defaultGradeSheetComponents: z.array(z.object({ name: z.string().trim().min(1).max(40), percentage: z.number().min(0).max(100) })).length(3).optional()
+  defaultGradeSheetComponents: z.array(z.object({ name: z.string().trim().min(1).max(40), percentage: z.number().min(0).max(100) })).min(1).max(30).optional()
 });
 
 export async function PATCH(request: Request) {
@@ -18,6 +18,7 @@ export async function PATCH(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Enter a valid full name and Faculty ID." }, { status: 400 });
+  if (parsed.data.defaultGradeSheetComponents && new Set(parsed.data.defaultGradeSheetComponents.map(item => item.name.toLocaleLowerCase())).size !== parsed.data.defaultGradeSheetComponents.length) return NextResponse.json({ error: "Default grading categories must be unique." }, { status: 400 });
 
   if ((parsed.data.facultyId !== undefined || parsed.data.schoolAddress !== undefined || parsed.data.departmentName !== undefined || parsed.data.deanName !== undefined || parsed.data.defaultGradeSheetComponents !== undefined) && user.role !== "TEACHER") {
     return NextResponse.json({ error: "Only faculty accounts can edit faculty and school letterhead details." }, { status: 403 });
