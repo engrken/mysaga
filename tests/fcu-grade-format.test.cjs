@@ -300,11 +300,12 @@ test("PDF component values are weighted by the configured course allocation", ()
   const titlePosition = printHeader.indexOf('className="generic-print-title"');
   const termPosition = printHeader.indexOf('className="generic-print-term-year"');
   assert.ok(schoolNamePosition < departmentPosition && departmentPosition < addressPosition && addressPosition < blankPosition && blankPosition < titlePosition && titlePosition < termPosition, "center header follows the required school, college, address, blank, title, term/year order");
-  assert.ok(source.includes("grid-template-columns:minmax(58px,1fr) minmax(0,max-content) minmax(58px,1fr)"));
+  assert.ok(source.includes("grid-template-columns:58px minmax(0,max-content) 58px"));
   assert.ok(source.includes("grid-template-rows:auto auto auto 1.2em auto auto"));
-  assert.ok(source.includes("generic-print-school-logo { grid-column:1; grid-row:1 / span 6; justify-self:end"));
-  assert.ok(source.includes("generic-print-department-logo { grid-column:3; grid-row:1 / span 6; justify-self:start"));
-  assert.ok(source.includes("generic-print-logo-slot { display:flex; align-items:center; align-self:stretch; min-width:58px; width:58px;"));
+  assert.ok(source.includes("justify-content:center; column-gap:10px; row-gap:2px; width:fit-content; max-width:100%; margin:0 auto; text-align:center"), "the logo and text columns form one compact centered header unit");
+  assert.ok(source.includes("generic-print-school-logo { grid-column:1; grid-row:1 / span 6; justify-self:center"));
+  assert.ok(source.includes("generic-print-department-logo { grid-column:3; grid-row:1 / span 6; justify-self:center"));
+  assert.ok(source.includes("generic-print-logo-slot { display:flex; align-items:center; justify-content:center; align-self:stretch; min-width:58px; width:58px;"));
   assert.ok(source.includes("generic-print-department { grid-column:2; grid-row:2"));
   assert.ok(source.includes("generic-print-address { grid-column:2; grid-row:3"));
   assert.ok(source.includes("generic-print-header-blank { grid-column:2; grid-row:4"));
