@@ -2162,9 +2162,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         @media print {
           .generic-print-sheet { display:block!important; width:100%!important; color:#000!important; background:#fff!important; font-family:Arial,Helvetica,sans-serif!important; }
           .generic-print-sheet { font-size:9pt; }
-          .generic-print-sheet>header { display:grid; grid-template-columns:88px minmax(0,1fr) 88px; align-items:center; gap:12px; width:100%; max-width:900px; box-sizing:border-box; text-align:center; border:0; padding:0 8px 8px; margin:0 auto 8px; }
-          .generic-print-logo-slot { display:flex; align-items:center; justify-content:center; justify-self:center; width:88px; min-width:88px; min-height:68px; }
-          .generic-print-logo { display:block; width:58px; height:58px; object-fit:contain; margin:0 auto; }
+          .generic-print-sheet>header { display:grid; grid-template-columns:54px minmax(0,1fr) 54px; align-items:center; justify-content:center; gap:5px; width:100%; max-width:680px; box-sizing:border-box; text-align:center; border:0; padding:0 4px 8px; margin:0 auto 8px; }
+          .generic-print-logo-slot { display:flex; align-items:center; justify-content:center; justify-self:center; width:54px; min-width:54px; min-height:56px; }
+          .generic-print-logo { display:block; width:50px; height:50px; object-fit:contain; margin:0 auto; }
           .generic-print-school-heading { min-width:0; text-align:center; }
           .generic-print-sheet>header h1 { margin:0; font-size:14pt; font-weight:700; }
           .generic-print-sheet>header p { margin:2px 0 4px; font-size:8.5pt; min-height:10px; line-height:1.2; }
