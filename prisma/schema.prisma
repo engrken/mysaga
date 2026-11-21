@@ -301,13 +301,14 @@ model Assessment {
   dueDate                DateTime?
   scheduleOverrideReason String?
   attendanceType         String?
+  sortOrder              Int           @default(0)
   createdAt              DateTime      @default(now())
   subject                Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   category               GradeCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   scores                 Score[]
   activity               ClassActivity?
 
-  @@index([subjectId, categoryId])
+  @@index([subjectId, categoryId, sortOrder])
 }
 
 model Score {
