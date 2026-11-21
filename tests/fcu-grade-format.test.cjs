@@ -48,6 +48,28 @@ const student = (name, equivalents, finalPercent = 95, remarks = "", studentNumb
   studentName: name, studentNumber, equivalents, finalPercent, finalGradeOverride: null, remarks
 });
 
+test("all hand-built OOXML worksheet rows sort cells by ascending column reference", () => {
+  const sortStart = source.indexOf("function sortWorksheetRowCells(");
+  const sortEnd = source.indexOf("function crc32(", sortStart);
+  assert.ok(sortStart >= 0 && sortEnd > sortStart, "shared OOXML cell sorter is present");
+  const compiledSorter = ts.transpileModule(source.slice(sortStart, sortEnd), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  const context = {};
+  vm.runInNewContext(compiledSorter + ";this.sortWorksheetRowCells = sortWorksheetRowCells;", context);
+
+  const scrambled = [
+    '<c r="D12" t="inlineStr"><is><t>D</t></is></c>',
+    '<c r="A12" t="inlineStr"><is><t>A</t></is></c>',
+    '<c r="C12" t="inlineStr"><is><t>C</t></is></c>',
+    '<c r="B12" t="inlineStr"><is><t>B</t></is></c>'
+  ].join("");
+  const sorted = context.sortWorksheetRowCells(scrambled);
+  assert.deepEqual(Array.from(sorted.matchAll(/<c r="([A-Z]+[0-9]+)"/g), match => match[1]), ["A12", "B12", "C12", "D12"]);
+  assert.ok(source.includes("sortWorksheetRowCells(row.map("), "the simple worksheet XML builder uses the shared sorter");
+  assert.ok(source.includes("sortWorksheetRowCells(values.map("), "the styled worksheet XML builder uses the shared sorter");
+});
+
 test("OOXML ZIP writer encodes XML as UTF-8 and writes valid uncompressed ZIP records", () => {
   const start = source.indexOf("function crc32(");
   const end = source.indexOf("\nfunction downloadXlsx(", start);
@@ -181,6 +203,18 @@ test("Generic PDF export is offered only once inside the export dropdown", () =>
   assert.match(source, /<strong>Save \/ Print Generic PDF<\/strong>/, "the Generic dropdown retains its PDF option");
   assert.match(source, /<strong>Download Generic Excel Sheet<\/strong>/, "the Generic dropdown retains its Excel option");
   assert.doesNotMatch(source, /<button className="btn btn-outline-primary" onClick=\{\(\) => printFinalGradesPdf\("generic"\)\}>Save \/ Print Generic PDF<\/button>/, "the duplicate standalone PDF button is removed");
+});
+
+test("ISO Excel export uses dynamic class metadata and omits student-number columns", () => {
+  const route = fs.readFileSync("src/app/api/teacher/subjects/[subjectId]/iso-export/route.ts", "utf8");
+  assert.match(route, /const headers = \[\s*"NO\.",\s*"NAME OF STUDENTS",\s*\.\.\.assessmentHeaders/);
+  assert.doesNotMatch(route, /"Student Number"/);
+  assert.doesNotMatch(route, /enrollment\.studentNumber/);
+  assert.match(route, /courseCode: subject\.code/);
+  assert.match(route, /courseTitle: subject\.title/);
+  assert.match(route, /id: subject\.id/);
+  assert.match(route, /semester: subject\.term/);
+  assert.match(route, /academicYear: subject\.academicYear/);
 });
 
 test("ISO Excel export uses the authenticated Python openpyxl generator", () => {

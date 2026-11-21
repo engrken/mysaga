@@ -31,6 +31,8 @@ SIGNING_CONTEXT = b"SAGA-ISO-EXPORT-v1\n"
 THIN_SIDE = Side(style="thin", color="FF000000")
 THIN_BORDER = Border(left=THIN_SIDE, right=THIN_SIDE, top=THIN_SIDE, bottom=THIN_SIDE)
 BOTTOM_BORDER = Border(bottom=THIN_SIDE)
+MEDIUM_SIDE = Side(style="medium", color="FF000000")
+METADATA_BOTTOM_BORDER = Border(bottom=MEDIUM_SIDE)
 NO_BORDER = Border()
 
 
@@ -38,6 +40,23 @@ def _safe_text(value: object, fallback: str = "") -> str:
     text = str(value if value is not None else fallback)
     # Avoid invalid XML control characters in worksheet strings.
     return re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F]", "", text)
+
+
+def _short_assessment_header(value: object) -> str:
+    """Remove category paths and compact an activity title with its max points."""
+    heading = _safe_text(value).strip()
+    if not heading:
+        return ""
+    if "·" in heading:
+        heading = heading.split("·", 1)[1].strip()
+    maximum = re.search(r"\s*\(Max\s+([^)]+)\)\s*$", heading, re.IGNORECASE)
+    if not maximum:
+        return heading
+    points = maximum.group(1).strip()
+    activity = heading[:maximum.start()].strip()
+    # Assessment names such as "Midterm Exam" are conventionally displayed as "Midterm".
+    activity = re.sub(r"\s+Exam(?:ination)?s?\s*$", "", activity, flags=re.IGNORECASE).strip()
+    return f"{activity} ({points})" if activity else f"({points})"
 
 
 def _set_literal(cell, value: object) -> None:
@@ -111,7 +130,7 @@ def build_iso_workbook(payload: dict) -> bytes:
     worksheet = workbook.active
     worksheet.title = re.sub(r"[\\/*?:\[\]]", " ", _safe_text(payload.get("sheetName", "ISO Grading Sheet")))[:31] or "ISO Grading Sheet"
     worksheet.sheet_view.showGridLines = True
-    worksheet.freeze_panes = "A9"
+    worksheet.freeze_panes = "A12"
     worksheet.sheet_properties.pageSetUpPr.fitToPage = True
     worksheet.page_setup.orientation = "portrait"
     worksheet.page_setup.paperSize = "14"  # Folio paper code: Long bond, 8.5 x 13 inches.
@@ -123,7 +142,7 @@ def build_iso_workbook(payload: dict) -> bytes:
     worksheet.page_margins.bottom = 0.35
     worksheet.page_margins.header = 0.15
     worksheet.page_margins.footer = 0.15
-    worksheet.print_title_rows = "8:8"
+    worksheet.print_title_rows = "11:11"
 
     worksheet.sheet_format.defaultRowHeight = 20
     for row_number in range(1, 5):
@@ -181,7 +200,7 @@ def build_iso_workbook(payload: dict) -> bytes:
         worksheet[coordinate].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     worksheet.row_dimensions[5].height = 17
     worksheet.row_dimensions[6].height = 17
-    worksheet.row_dimensions[7].height = 9
+    worksheet.row_dimensions[7].height = 22
 
     _add_logo(worksheet, _safe_text(payload.get("logoPngBase64", "")))
     if not payload.get("logoPngBase64"):
@@ -189,21 +208,56 @@ def build_iso_workbook(payload: dict) -> bytes:
         worksheet["A1"].font = Font(name="Arial", size=8, bold=True, color="FF000000")
 
     column_count = max(7, len(headers), max((len(row) for row in rows), default=0))
-    normalized_headers = list(headers) + [""] * (column_count - len(headers))
+    last_column_letter = __import__("openpyxl").utils.get_column_letter(column_count)
+    normalized_headers = [_short_assessment_header(value) for value in headers]
+    normalized_headers.extend([""] * (column_count - len(normalized_headers)))
     header_fill = PatternFill(fill_type="solid", fgColor="FFEFEFEF")
     table_font = Font(name="Arial", size=8, bold=True, color="FF000000")
     body_font = Font(name="Arial", size=9, color="FF000000")
 
+    # Class metadata is supplied by the authenticated subject route for every export.
+    # Accept both the explicit class shape and subject-style field names for compatibility.
+    class_metadata = payload.get("class") or payload.get("subject") or {}
+    if not isinstance(class_metadata, dict):
+        class_metadata = {}
+    course_code = _safe_text(class_metadata.get("courseCode", class_metadata.get("code", "")))
+    course_title = _safe_text(class_metadata.get("courseTitle", class_metadata.get("title", "")))
+    class_id = _safe_text(class_metadata.get("id", ""))
+    semester = _safe_text(class_metadata.get("semester", class_metadata.get("term", "")))
+    academic_year = _safe_text(class_metadata.get("academicYear", ""))
+
+    # Rows 7–8 carry the active class details; row 8 has a continuous medium underline.
+    metadata_ranges = (
+        ("A7:B7", "A7", "Course No.: " + course_code),
+        ("C7:" + last_column_letter + "7", "C7", "Descriptive Title: " + course_title),
+        ("A8:B8", "A8", "Class ID: " + class_id),
+        ("C8:D8", "C8", "Semester: " + semester),
+        ("E8:" + last_column_letter + "8", "E8", "Academic Year: " + academic_year),
+    )
+    for cell_range, _anchor, _value in metadata_ranges:
+        border = METADATA_BOTTOM_BORDER if cell_range.endswith("8") else None
+        _merge_with_border(worksheet, cell_range, border)
+    for _cell_range, anchor, value in metadata_ranges:
+        _set_literal(worksheet[anchor], value)
+        worksheet[anchor].font = Font(name="Arial", size=9, bold=True, color="FF000000")
+        worksheet[anchor].alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    worksheet.row_dimensions[7].height = 22
+    worksheet.row_dimensions[8].height = 24
+
+    # Keep rows 9–10 open as breathing room below the class details.
+    worksheet.row_dimensions[9].height = 8
+    worksheet.row_dimensions[10].height = 8
+
     for column_number, value in enumerate(normalized_headers, start=1):
-        cell = worksheet.cell(8, column_number)
+        cell = worksheet.cell(11, column_number)
         _set_literal(cell, value)
         cell.border = THIN_BORDER
         cell.fill = header_fill
         cell.font = table_font
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    worksheet.row_dimensions[8].height = 34
+    worksheet.row_dimensions[11].height = 30
 
-    for row_offset, row_values in enumerate(rows, start=9):
+    for row_offset, row_values in enumerate(rows, start=12):
         worksheet.row_dimensions[row_offset].height = 22
         for column_number in range(1, column_count + 1):
             value = row_values[column_number - 1] if column_number <= len(row_values) else ""
@@ -220,31 +274,27 @@ def build_iso_workbook(payload: dict) -> bytes:
                 ):
                     cell.number_format = "0.00"
 
-    # Adaptive widths: names, IDs, dynamic assessment columns, and grade columns.
+    # Compact, role-based widths remain predictable for every subject's dynamic columns.
     for index in range(column_count):
-        heading = _safe_text(normalized_headers[index])
-        longest = max(
-            [len(heading)]
-            + [len(_safe_text(row[index] if index < len(row) else "")) for row in rows]
-        )
+        heading = _safe_text(normalized_headers[index]).upper()
         if index == 0:
-            width = 18  # Shares column A with the four-row university identity block.
+            width = 6
         elif index == 1:
-            width = min(40, max(30, longest + 2))
-        elif index == 2:
-            width = min(22, max(17, longest + 2))
-        elif "REMARK" in heading.upper():
-            width = min(28, max(18, longest + 2))
-        elif "FINAL GRADE" in heading.upper():
-            width = min(18, max(13, longest + 2))
-        elif "TOTAL GRADE" in heading.upper() or "(%)" in heading.upper():
-            width = min(19, max(14, longest + 2))
+            width = 32
+        elif "TOTAL GRADE" in heading:
+            width = 14
+        elif "FINAL GRADE" in heading:
+            width = 12
+        elif "REMARK" in heading:
+            width = 12
+        elif "(%)" in heading:
+            width = 12
         else:
-            width = min(25, max(13, longest + 2))
+            width = 10
         worksheet.column_dimensions[__import__("openpyxl").utils.get_column_letter(index + 1)].width = width
 
     # Signature block: merged left/right areas and a thin bottom rule for signing.
-    data_end_row = 8 + len(rows)
+    data_end_row = 11 + len(rows)
     signature_label_row = data_end_row + 2
     signature_name_row = data_end_row + 3
     signature_role_row = data_end_row + 4

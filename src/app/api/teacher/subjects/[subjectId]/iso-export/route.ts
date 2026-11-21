@@ -260,9 +260,8 @@ export async function POST(request: Request, context: Context) {
       item.title + " (Max " + item.maxScore + ")";
   });
   const headers = [
-    "No.",
-    "Student Name",
-    "Student Number",
+    "NO.",
+    "NAME OF STUDENTS",
     ...assessmentHeaders,
     ...parsed.data.componentNames.map(name => name + " (%)"),
     "TOTAL GRADE (%)",
@@ -298,7 +297,6 @@ export async function POST(request: Request, context: Context) {
     return [
       index + 1,
       enrollment.studentName || "",
-      enrollment.studentNumber || "",
       ...scores,
       ...components,
       totalGrade,
@@ -321,6 +319,13 @@ export async function POST(request: Request, context: Context) {
     filename,
     sheetName: "ISO Grading Sheet",
     header: configuredHeader.header,
+    class: {
+      courseCode: subject.code,
+      courseTitle: subject.title,
+      id: subject.id,
+      semester: subject.term,
+      academicYear: subject.academicYear
+    },
     headers,
     rows,
     logoPngBase64: parsed.data.logoPngBase64

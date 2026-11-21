@@ -207,6 +207,18 @@ function excelColumn(index: number) {
   while (value) { value--; column = String.fromCharCode(65 + value % 26) + column; value = Math.floor(value / 26); }
   return column;
 }
+function sortWorksheetRowCells(xmlCells: string) {
+  const cells = xmlCells.match(/<c\b[^>]*>[\s\S]*?<\/c>/g) ?? [];
+  const columnIndex = (cell: string) => {
+    const letters = /\br="([A-Z]+)\d+"/.exec(cell)?.[1];
+    if (!letters) throw new Error("A worksheet cell is missing a valid column reference.");
+    let index = 0;
+    for (const character of letters) index = index * 26 + character.charCodeAt(0) - 64;
+    return index;
+  };
+  return cells.sort((left, right) => columnIndex(left) - columnIndex(right)).join("");
+}
+
 function crc32(bytes: Uint8Array) {
   let crc = 0xffffffff;
   for (const byte of bytes) {
@@ -315,13 +327,13 @@ function downloadXlsx(filename: string, sheetName: string, headers: string[], ro
   const spacerRows = headerPng ? Array.from({ length: 10 }, () => [] as unknown[]) : [];
   const allRows = [...spacerRows, headers, ...rows];
   const worksheetRows = allRows.map((row, rowIndex) => {
-    const cells = row.map((value, columnIndex) => {
+    const cells = sortWorksheetRowCells(row.map((value, columnIndex) => {
       const reference = excelColumn(columnIndex) + (rowIndex + 1);
       if (typeof value === "number" && Number.isFinite(value)) return '<c r="' + reference + '"><v>' + value + '</v></c>';
       if (typeof value === "boolean") return '<c r="' + reference + '" t="b"><v>' + (value ? 1 : 0) + '</v></c>';
       const text = xmlEscape(value);
       return '<c r="' + reference + '" t="inlineStr"><is><t xml:space="preserve">' + text + '</t></is></c>';
-    }).join("");
+    }).join(""));
     return '<row r="' + (rowIndex + 1) + '">' + cells + '</row>';
   }).join("");
   const safeSheetName = sheetName.replace(/[\\/?*\\[\\]:]/g, " ").slice(0, 31) || "Export";
@@ -693,7 +705,7 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
 
   const xmlRows = cells.map((values, rowIndex) => {
     const rowNumber = rowIndex + 1;
-    const xmlCells = values.map((cell, colIndex) => {
+    const xmlCells = sortWorksheetRowCells(values.map((cell, colIndex) => {
       const reference = excelColumn(colIndex) + rowNumber;
       if (typeof cell.value === "number" && Number.isFinite(cell.value)) {
         return '<c r="' + reference + '" s="' + cell.style + '" t="n"><v>' + cell.value + '</v></c>';
@@ -705,7 +717,7 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
           '</is></c>';
       }
       return '<c r="' + reference + '" s="' + cell.style + '" t="inlineStr"><is><t xml:space="preserve">' + xmlEscape(cell.value) + '</t></is></c>';
-    }).join("");
+    }).join(""));
     const height = rowIndex < 9 ? ' ht="15.5" customHeight="1"'
       : rowIndex === 14 ? ' ht="32" customHeight="1"'
       : rowIndex >= 16 && rowIndex < 16 + detail.enrollments.length ? ' ht="20" customHeight="1"'
