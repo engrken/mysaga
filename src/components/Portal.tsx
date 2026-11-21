@@ -31,7 +31,7 @@ type WorkbookChange = { subjectId: string; enrollmentId: string; assessmentId: s
 type AttendanceMark = { subjectId: string; enrollmentId: string; assessmentId: string; remark: "PRESENT" | "LATE" | "ABSENT" | "EXCUSED" | null };
 type Subject = { id: string; classId: string | null; code: string; title: string; term: string; academicYear: string; schedule: string | null; courseYear: string | null; gradeSheetComponents?: string | null; isPublished: boolean; gradeStatus: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; _count?: { enrollments: number } };
 type Category = { id: string; parentId: string | null; name: string; weight: number; conversionBase: number; sortOrder: number };
-type Assessment = { id: string; categoryId: string; title: string; maxScore: number; weight: number | null; dueDate: string | null; scheduleOverrideReason?: string | null; attendanceType?: "FACE_TO_FACE" | "ONLINE" | null };
+type Assessment = { id: string; categoryId: string; title: string; maxScore: number; weight: number | null; sortOrder?: number; dueDate: string | null; scheduleOverrideReason?: string | null; attendanceType?: "FACE_TO_FACE" | "ONLINE" | null };
 type Enrollment = { id: string; studentName: string; studentNumber: string | null; studentUserId: string | null; remarks: string | null; finalGradeOverride?: string | null; gradeChangeCount?: number; gradeChangeHistory?: Array<{ id:string; previousFinalGrade:string|null; previousRemarks:string|null; newFinalGrade:string|null; newRemarks:string|null; reason:string; createdAt:string; actor:{fullName:string} }>; scores: Array<{ assessmentId: string; points: number | null; remark: string | null }>; finalPercent: number | null };
 type GradeBand = { id: string; minPercent: number; finalGrade: string; remarks: string };
 type GradeSheetComponent = { name: string; percentage: number };
@@ -280,6 +280,10 @@ function gradeSheetComponentPercent(detail: Detail, enrollment: Enrollment, comp
   }
   return totalWeight > 0 ? Number((weighted / totalWeight).toFixed(2)) : null;
 }
+function gradeSheetComponentContribution(detail: Detail, enrollment: Enrollment, component: GradeSheetComponent) {
+  const componentPercent = gradeSheetComponentPercent(detail, enrollment, component);
+  return componentPercent === null ? null : Number((componentPercent * component.percentage / 100).toFixed(2));
+}
 
 function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Detail, schoolName: string, schoolAddress: string, teacherName: string, deanName: string, components: GradeSheetComponent[] = [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }], assessmentOrder?: Assessment[]) {
   const academicAssessments = assessmentOrder ?? detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·"));
@@ -465,7 +469,7 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
   ] }, style: 2 }]);
   row([{ col: 0, value: "-----------------------------------------------------------------------------------------------------------------------------------------------", style: 6 }]);
   row([
-    { col: 0, value: "NO.", style: 4 },
+    { col: 0, value: "", style: 4 },
     { col: 1, value: "NAME OF STUDENTS", style: 4 },
     ...componentColumns.map(item => ({
       col: item.col,
@@ -494,7 +498,7 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     });
     const gradeString = special ? "" : enrollment.finalGradeOverride || band?.finalGrade || "";
     row([
-      { col: 0, value: enrollment.studentNumber || String(index + 1), style: 6 },
+      { col: 0, value: String(index + 1) + ".", style: 6 },
       { col: 1, value: enrollment.studentName.toLocaleUpperCase(), style: 7 },
       ...componentValues,
       { col: totalCol, value: special || enrollment.finalPercent === null ? "" : Number(enrollment.finalPercent.toFixed(2)), style: 5 },
@@ -1182,9 +1186,34 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       setDetail(current => current ? { ...current, categories: nextCategories } : current);
     }, "Category order saved. Record Scores now follows this arrangement.");
   }
+  async function moveAssessmentItem(categoryId: string, assessmentId: string, direction: -1 | 1) {
+    if (!detail || detail.gradeStatus === "VERIFIED") return;
+    const siblings = detail.assessments.filter(item => item.categoryId === categoryId).slice()
+      .sort((a,b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    const from = siblings.findIndex(item => item.id === assessmentId);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= siblings.length) return;
+    const reordered = siblings.slice();
+    [reordered[from], reordered[to]] = [reordered[to], reordered[from]];
+    const orderById = new Map(reordered.map((item,index) => [item.id,index]));
+    const nextAssessments = detail.assessments.map(item => orderById.has(item.id) ? { ...item, sortOrder: orderById.get(item.id)! } : item);
+    await run(async () => {
+      await api("/api/teacher/subjects/" + detail.id, {
+        method: "PATCH",
+        body: JSON.stringify({ assessmentItems: nextAssessments.map(item => ({
+          id: item.id, categoryId: item.categoryId, title: item.title, maxScore: Number(item.maxScore),
+          weight: item.weight == null ? null : Number(item.weight),
+          dueDate: item.dueDate ? item.dueDate.slice(0,10) : null,
+          scheduleOverrideReason: item.scheduleOverrideReason || null,
+          attendanceType: item.attendanceType || null, sortOrder: item.sortOrder ?? 0
+        })) })
+      });
+      setDetail(current => current ? { ...current, assessments: nextAssessments } : current);
+    }, "Assessment order saved. Record Scores now follows this order.");
+  }
   async function saveAssessmentItems() {
     if (!detail) return;
-    await run(async () => { await api(`/api/teacher/subjects/${detail.id}`, { method: "PATCH", body: JSON.stringify({ assessmentItems: detail.assessments.map(item => ({ id: item.id, categoryId: item.categoryId, title: item.title, maxScore: Number(item.maxScore), weight: item.weight == null ? null : Number(item.weight), dueDate: item.dueDate ? item.dueDate.slice(0,10) : null, scheduleOverrideReason: item.scheduleOverrideReason || null, attendanceType: item.attendanceType || null })) }) }); }, "Assessment setup saved.");
+    await run(async () => { await api(`/api/teacher/subjects/${detail.id}`, { method: "PATCH", body: JSON.stringify({ assessmentItems: detail.assessments.map(item => ({ id: item.id, categoryId: item.categoryId, title: item.title, maxScore: Number(item.maxScore), weight: item.weight == null ? null : Number(item.weight), dueDate: item.dueDate ? item.dueDate.slice(0,10) : null, scheduleOverrideReason: item.scheduleOverrideReason || null, attendanceType: item.attendanceType || null, sortOrder: item.sortOrder ?? 0 })) }) }); }, "Assessment setup saved.");
   }
   async function removeAssessment(assessmentId: string) {
     if (!detail || !window.confirm("Remove this assessment item and delete its scores and item remarks for every student? This cannot be undone.")) return;
@@ -1596,10 +1625,10 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     if (!detail) return [] as Array<{ category: Category; items: Assessment[] }>;
     return recordCategories.map(category => ({
       category,
-      items: detail.assessments.filter(item => item.categoryId === category.id)
+      items: detail.assessments.filter(item => item.categoryId === category.id).slice().sort((a,b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
     })).filter(group => group.items.length > 0);
   }, [detail, recordCategories]);
-  const scorebookItems = useMemo(() => detail?.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·")) ?? [], [detail]);
+  const scorebookItems = useMemo(() => detail?.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·")).slice().sort((a,b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)) ?? [], [detail]);
   const scorebookCategories = useMemo(() => recordCategories.filter(category => scorebookItems.some(item => item.categoryId === category.id)), [recordCategories, scorebookItems]);
   const scorebookGroups = useMemo(() => {
     if (!detail) return [] as Array<{ parent: Category; subcategories: Category[]; items: Assessment[] }>;
@@ -1894,10 +1923,10 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
             </div>}
             {detail.assessments.length ? <div className="assessment-category-groups">{assessmentItemGroups.map(({category,items})=>{const expanded=assessmentCategoryOverrides[category.id]??items.length<=12;return <section className="assessment-category-group" key={category.id}>
               <button type="button" className="assessment-category-toggle" aria-expanded={expanded} onClick={()=>setAssessmentCategoryOverrides(current=>({...current,[category.id]:!expanded}))}><span className="assessment-category-name">{categoryPath(category,detail.categories)}</span><span className="assessment-category-count">{items.length} {items.length===1?"item":"items"}</span><span className="assessment-category-action">{expanded?"Hide items":"Show items"}</span></button>
-              {expanded&&<div className="assessment-list">{items.map(item=>{const attendanceItem=item.title.toLocaleLowerCase().startsWith("attendance ·");return <article className="assessment-list-row" key={item.id}>
+              {expanded&&<div className="assessment-list">{items.map((item,itemIndex)=>{const attendanceItem=item.title.toLocaleLowerCase().startsWith("attendance ·");return <article className="assessment-list-row" key={item.id}>
                 <div><input className="form-control" aria-label="Assessment title" value={item.title} onChange={e=>setDetail(current=>current?{...current,assessments:current.assessments.map(value=>value.id===item.id?{...value,title:e.target.value}:value)}:current)} onBlur={saveAssessmentItems}/><label className="item-category-label">Category<select className="form-select form-select-sm item-category-select" value={item.categoryId} onChange={e=>setDetail(current=>current?{...current,assessments:current.assessments.map(value=>value.id===item.id?{...value,categoryId:e.target.value}:value)}:current)} onBlur={saveAssessmentItems}>{recordCategories.map(value=><option key={value.id} value={value.id}>{categoryPath(value,detail.categories)}</option>)}</select></label></div>
                 {attendanceItem ? <><div className="attendance-day-note"><b>Class day · not point-based</b><small>{item.scheduleOverrideReason ? `Schedule override: ${item.scheduleOverrideReason}` : "Matches the saved class schedule"}</small></div><label>Date<input className="form-control" aria-label="Attendance class date" type="date" value={item.dueDate?.slice(0,10) ?? ""} onChange={e=>setDetail(current=>current?{...current,assessments:current.assessments.map(value=>value.id===item.id?{...value,dueDate:e.target.value||null}:value)}:current)} onBlur={saveAssessmentItems}/></label><label>Off-schedule reason (if needed)<input className="form-control" aria-label="Attendance schedule override reason" placeholder="e.g. Make-up class" value={item.scheduleOverrideReason ?? ""} onChange={e=>setDetail(current=>current?{...current,assessments:current.assessments.map(value=>value.id===item.id?{...value,scheduleOverrideReason:e.target.value}:value)}:current)} onBlur={saveAssessmentItems}/></label></> : <><label>Perfect score<input className="form-control" aria-label="Maximum points" type="number" min="0.01" step="0.01" value={item.maxScore} onChange={e=>setDetail(current=>current?{...current,assessments:current.assessments.map(value=>value.id===item.id?{...value,maxScore:Number(e.target.value)}:value)}:current)} onBlur={saveAssessmentItems}/></label><label>Item weight (%)<input className="form-control" aria-label="Item weight percentage" type="number" min="0" max="100" step="0.5" placeholder="Auto by points" value={item.weight ?? ""} onChange={e=>setDetail(current=>current?{...current,assessments:current.assessments.map(value=>value.id===item.id?{...value,weight:e.target.value===""?null:Number(e.target.value)}:value)}:current)} onBlur={saveAssessmentItems}/></label><label>Date<input className="form-control" aria-label="Assessment date" type="date" value={item.dueDate?.slice(0,10) ?? ""} onChange={e=>setDetail(current=>current?{...current,assessments:current.assessments.map(value=>value.id===item.id?{...value,dueDate:e.target.value||null}:value)}:current)} onBlur={saveAssessmentItems}/></label></>}
-                <button className="btn btn-link btn-sm text-danger" onClick={()=>removeAssessment(item.id)}>Remove</button></article>})}</div>}
+                <div className="d-flex align-items-center gap-1"><button type="button" className="btn btn-outline-secondary btn-sm py-0" aria-label={"Move " + item.title + " up"} title="Move up" disabled={busy || detail.gradeStatus === "VERIFIED" || itemIndex === 0} onClick={()=>void moveAssessmentItem(category.id,item.id,-1)}>↑</button><button type="button" className="btn btn-outline-secondary btn-sm py-0" aria-label={"Move " + item.title + " down"} title="Move down" disabled={busy || detail.gradeStatus === "VERIFIED" || itemIndex === items.length-1} onClick={()=>void moveAssessmentItem(category.id,item.id,1)}>↓</button><button className="btn btn-link btn-sm text-danger" onClick={()=>removeAssessment(item.id)}>Remove</button></div></article>})}</div>}
             </section>})}</div> : <div className="inline-empty">No assessment items yet. Add a Quiz 1, Assignment 1, Lab Exercise 1, or exam.</div>}
           </section>}
           {classSection === "attendance" && <section id="class-section-attendance" className="surface gradebook-card attendance-workspace">
@@ -2133,8 +2162,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         @media print {
           .generic-print-sheet { display:block!important; width:100%!important; color:#000!important; background:#fff!important; font-family:Arial,Helvetica,sans-serif!important; }
           .generic-print-sheet { font-size:9pt; }
-          .generic-print-sheet>header { position:relative; display:grid; grid-template-columns:64px minmax(0,1fr) 64px; align-items:center; gap:16px; text-align:center; border:0; padding:0 6px 8px; margin:0 0 6px; }
-          .generic-print-logo { display:block; width:60px; height:60px; object-fit:contain; justify-self:center; }
+          .generic-print-sheet>header { position:relative; display:grid; grid-template-columns:104px minmax(0,1fr); align-items:center; gap:12px; text-align:center; border:0; padding:0 6px 8px; margin:0 0 6px; }
+          .generic-print-logos { display:flex; align-items:center; justify-content:center; gap:4px; min-width:0; }
+          .generic-print-logo { display:block; width:48px; height:48px; object-fit:contain; flex:0 1 48px; }
           .generic-print-sheet>header h1 { margin:0; font-size:14pt; font-weight:700; }
           .generic-print-sheet>header p { margin:2px 0 4px; font-size:8.5pt; min-height:10px; line-height:1.2; }
           .generic-print-sheet>header .generic-print-department { margin:0 0 5px; font-size:9pt; font-weight:600; min-height:0; }
@@ -2166,9 +2196,11 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         }`}</style>}
       {printMode === "grades" && detail && <article className="print-grade-sheet generic-print-sheet">
         <header>
-          {schoolLogoPath ? <img className="generic-print-logo" src={`/api/media?pathname=${encodeURIComponent(schoolLogoPath)}`} alt="School / institution logo"/> : <span/>}
+          <div className="generic-print-logos">
+            {schoolLogoPath && <img className="generic-print-logo" src={"/api/media?pathname=" + encodeURIComponent(schoolLogoPath)} alt="School / institution logo"/>}
+            {departmentLogoPath && <img className="generic-print-logo" src={"/api/media?pathname=" + encodeURIComponent(departmentLogoPath)} alt="College / department logo"/>}
+          </div>
           <div><h1>{user.school.name}</h1><p>{user.school.address || "School address not set"}</p><p className="generic-print-department">{user.school.departmentName || ""}</p><strong>GRADING SHEETS</strong></div>
-          {departmentLogoPath ? <img className="generic-print-logo" src={`/api/media?pathname=${encodeURIComponent(departmentLogoPath)}`} alt="College / department logo"/> : <span/>}
         </header>
         <div className="generic-print-doc-control">
           <div className="doc-control-row"><span><b>Form Name:</b> GRADING SHEETS</span><span><b>Effectivity:</b> —</span><span><b>Form No.:</b> —</span></div>
@@ -2188,7 +2220,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <tbody>{detail.enrollments.map((enrollment,index)=>{
             const band = detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>enrollment.finalPercent!==null&&enrollment.finalPercent>=item.minPercent);
             const special = ["INC","NP","DROPPED"].includes(enrollment.remarks || "");
-            return <tr key={enrollment.id}><td>{enrollment.studentNumber || index+1}</td><td>{enrollment.studentName.toLocaleUpperCase()}</td>{gradeSheetComponents.map((component,componentIndex)=>{const percent=gradeSheetComponentPercent(detail,enrollment,component);return <td key={componentIndex}>{percent===null?"":percent.toFixed(2)+"%"}</td>;})}<td>{special||enrollment.finalPercent===null?"":enrollment.finalPercent.toFixed(2)+"%"}</td><td>{special?"":enrollment.finalGradeOverride||band?.finalGrade||""}</td><td>{enrollment.remarks||band?.remarks||""}</td></tr>;
+            return <tr key={enrollment.id}><td>{enrollment.studentNumber || index+1}</td><td>{enrollment.studentName.toLocaleUpperCase()}</td>{gradeSheetComponents.map((component,componentIndex)=>{const contribution=gradeSheetComponentContribution(detail,enrollment,component);return <td key={componentIndex}>{contribution===null?"":contribution.toFixed(2)}</td>;})}<td>{special||enrollment.finalPercent===null?"":enrollment.finalPercent.toFixed(2)+"%"}</td><td>{special?"":enrollment.finalGradeOverride||band?.finalGrade||""}</td><td>{enrollment.remarks||band?.remarks||""}</td></tr>;
           })}</tbody>
         </table>
         <p className="grade-sheet-calculation-note">Component labels and percentages are presentation settings only. Official grades continue to use the class grading categories and configured calculation rules. Component scores are shown when a matching class category exists.</p>
