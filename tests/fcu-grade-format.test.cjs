@@ -281,8 +281,9 @@ test("PDF component values are weighted by the configured course allocation", ()
   assert.match(source, /<td>\{index\+1\}\.<\/td><td>\{enrollment\.studentName\.toLocaleUpperCase\(\)\}<\/td>/);
   assert.match(printHeader, /generic-print-logo-slot[\s\S]*?School \/ institution logo[\s\S]*?generic-print-school-heading[\s\S]*?user\.school\.name[\s\S]*?departmentLogoPath[\s\S]*?College \/ department logo/);
   assert.match(source, /grid-template-columns:54px minmax\(0,1fr\) 54px/);
-  assert.match(source, /generic-print-school-name/);
+  assert.match(source, /generic-print-header-row/);
   assert.match(source, /generic-print-address/);
+  assert.match(source, /generic-print-department/);
   assert.match(source, /generic-print-title/);
   assert.match(source, /justify-content:center; justify-self:center/);
   assert.match(source, /text-align:center/);
