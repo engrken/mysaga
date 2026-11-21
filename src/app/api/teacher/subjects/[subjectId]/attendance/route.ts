@@ -96,9 +96,9 @@ export async function POST(request: Request, context: Context) {
       assessments: {
         where: { OR: [
           { title: { startsWith: "Attendance ·" }, dueDate: meetingDate },
-          { categoryId, weight: { not: null } }
+          { categoryId }
         ] },
-        select: { id: true, categoryId: true, weight: true, title: true, dueDate: true }
+        select: { id: true, categoryId: true, weight: true, title: true, dueDate: true, sortOrder: true }
       },
       enrollments: { select: { id: true } }
     }
@@ -126,7 +126,7 @@ export async function POST(request: Request, context: Context) {
 
   const assessment = await prisma.$transaction(async tx => {
     const created = await tx.assessment.create({
-      data: { subjectId, categoryId, title: `Attendance · ${date}`, maxScore: 1, weight: null, dueDate: meetingDate, scheduleOverrideReason: reason, attendanceType }
+      data: { subjectId, categoryId, title: `Attendance · ${date}`, maxScore: 1, weight: null, dueDate: meetingDate, scheduleOverrideReason: reason, attendanceType, sortOrder: Math.max(-1, ...subject.assessments.filter(item => item.categoryId === categoryId).map(item => item.sortOrder)) + 1 }
     });
     if (subject.enrollments.length) {
       await tx.score.createMany({

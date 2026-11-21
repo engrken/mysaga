@@ -8,7 +8,7 @@ import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 
 type Context = { params: Promise<{ subjectId: string }> };
 async function ownedSubject(subjectId: string, teacherId: string, schoolId: string) {
-  return prisma.subject.findFirst({ where: { id: subjectId, teacherId, schoolId }, include: { categories: { orderBy: { sortOrder: "asc" } }, gradeBands: { orderBy: { sortOrder: "asc" } }, assessments: { orderBy: { createdAt: "asc" } }, enrollments: { orderBy: { studentName: "asc" }, include: { scores: { select: { assessmentId: true, points: true, remark: true } }, _count: { select: { gradeChangeHistory: true } } } } } });
+  return prisma.subject.findFirst({ where: { id: subjectId, teacherId, schoolId }, include: { categories: { orderBy: { sortOrder: "asc" } }, gradeBands: { orderBy: { sortOrder: "asc" } }, assessments: { orderBy: [{ categoryId: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }] }, enrollments: { orderBy: { studentName: "asc" }, include: { scores: { select: { assessmentId: true, points: true, remark: true } }, _count: { select: { gradeChangeHistory: true } } } } } });
 }
 async function ownedSubjectForMutation(subjectId: string, teacherId: string, schoolId: string) {
   return prisma.subject.findFirst({
@@ -16,7 +16,7 @@ async function ownedSubjectForMutation(subjectId: string, teacherId: string, sch
     include: {
       categories: { orderBy: { sortOrder: "asc" } },
       gradeBands: { orderBy: { sortOrder: "asc" } },
-      assessments: { orderBy: { createdAt: "asc" }, include: { activity: { select: { id: true } } } },
+      assessments: { orderBy: [{ categoryId: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }], include: { activity: { select: { id: true } } } },
       enrollments: { select: {
         id: true, studentName: true, studentNumber: true, remarks: true, finalGradeOverride: true,
         scores: { select: { assessmentId: true, points: true, remark: true } }
@@ -67,7 +67,7 @@ function mixesAssessmentWeights(items: ReadonlyArray<{ weight?: number | null }>
 }
 
 const assessmentSchema = z.object({ categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable().optional(), dueDate: assessmentDateSchema.optional(), scheduleOverrideReason: z.string().trim().max(120).optional(), attendanceType: z.enum(["FACE_TO_FACE", "ONLINE"]).nullable().optional() });
-const assessmentUpdatesSchema = z.object({ assessmentItems: z.array(z.object({ id: z.string(), categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable(), dueDate: assessmentDateSchema.nullable().optional(), scheduleOverrideReason: z.string().trim().max(120).nullable().optional(), attendanceType: z.enum(["FACE_TO_FACE", "ONLINE"]).nullable().optional() })).min(1).max(200) });
+const assessmentUpdatesSchema = z.object({ assessmentItems: z.array(z.object({ id: z.string(), categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable(), dueDate: assessmentDateSchema.nullable().optional(), scheduleOverrideReason: z.string().trim().max(120).nullable().optional(), attendanceType: z.enum(["FACE_TO_FACE", "ONLINE"]).nullable().optional(), sortOrder: z.number().int().min(0).max(1000).optional() })).min(1).max(200) });
 const remarkSchema = z.object({ enrollmentId: z.string(), remark: z.enum(["INC", "NP", "DROPPED"]).nullable() });
 const gradeChangeSchema = z.object({ gradeChange: z.object({ enrollmentId: z.string(), finalGrade: z.string().trim().min(1).max(12), remarks: z.string().trim().max(40), reason: z.string().trim().min(10).max(500) }) });
 const copyGradingSchema = z.object({ copyGradingFromSubjectId: z.string() });
@@ -389,7 +389,8 @@ export async function PATCH(request: Request, context: Context) {
         item.maxScore !== previous.maxScore || (item.weight ?? null) !== (previous.weight ?? null) ||
         (item.dueDate?.slice(0, 10) || null) !== (previous.dueDate?.toISOString().slice(0, 10) || null) ||
         (item.scheduleOverrideReason || null) !== (previous.scheduleOverrideReason || null) ||
-        (item.attendanceType || null) !== (previous.attendanceType || null);
+        (item.attendanceType || null) !== (previous.attendanceType || null) ||
+        (item.sortOrder !== undefined && item.sortOrder !== previous.sortOrder);
     });
     if (changed.some(item => {
       const previous = existingById.get(item.id)!;
@@ -404,7 +405,8 @@ export async function PATCH(request: Request, context: Context) {
             categoryId: item.categoryId, title: item.title, maxScore: item.maxScore, weight: item.weight,
             dueDate: existingById.get(item.id)?.activity ? undefined : item.dueDate ? new Date(item.dueDate) : null,
             scheduleOverrideReason: item.scheduleOverrideReason || null,
-            attendanceType: item.attendanceType || null
+            attendanceType: item.attendanceType || null,
+            sortOrder: item.sortOrder ?? existingById.get(item.id)!.sortOrder
           }
         })),
         prisma.auditEvent.create({ data: { actorId: teacher.id, action: `updated ${changed.length} assessment item(s)`, entity: "subject", entityId: subjectId } })
@@ -621,7 +623,7 @@ export async function POST(request: Request, context: Context) {
     return NextResponse.json({ error: "Match this category’s item weighting. Use weights for every assessment or leave all item weights blank." }, { status: 400 });
   }
   const assessment = await prisma.$transaction(async tx => {
-    const created = await tx.assessment.create({ data: { ...parsed.data, weight: parsed.data.weight ?? null, subjectId, dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null, scheduleOverrideReason: parsed.data.scheduleOverrideReason || null, attendanceType: parsed.data.attendanceType || null } });
+    const created = await tx.assessment.create({ data: { ...parsed.data, weight: parsed.data.weight ?? null, subjectId, sortOrder: Math.max(-1, ...subject.assessments.filter(item => item.categoryId === parsed.data.categoryId).map(item => item.sortOrder)) + 1, dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null, scheduleOverrideReason: parsed.data.scheduleOverrideReason || null, attendanceType: parsed.data.attendanceType || null } });
     if (isAttendance && subject.enrollments.length) await tx.score.createMany({ data: subject.enrollments.map(enrollment => ({ enrollmentId: enrollment.id, assessmentId: created.id, points: null, remark: "PRESENT" })) });
     return created;
   });

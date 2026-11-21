@@ -67,7 +67,7 @@ test("FCU final-grade export uses the exact configured components and their weig
   assert.match(sheet, /<pageSetup paperSize="14" orientation="portrait" fitToWidth="1"/);
   assert.match(sheet, /showGridLines="0" zoomScale="90"/);
   assert.match(sheet, /<selection pane="bottomLeft" activeCell="A17"/);
-  assert.match(sheet, /<c r="A15"[^>]*>.*?NO\./s);
+  assert.match(sheet, /<c r="A15"[^>]*><is><t xml:space="preserve"><\/t><\/is><\/c>/);
   assert.match(sheet, /<c r="B15"[^>]*>.*?NAME OF STUDENTS/s);
   assert.match(sheet, /<c r="C15"[^>]*>.*?EXAM\. 50%/s);
   assert.match(sheet, /<c r="D15"[^>]*>.*?ACT\. 40%/s);
@@ -75,7 +75,7 @@ test("FCU final-grade export uses the exact configured components and their weig
   assert.match(sheet, /<c r="F15"[^>]*>.*?TOTAL GRADE/s);
   assert.match(sheet, /<c r="G15"[^>]*>.*?FINAL GRADE/s);
   assert.match(sheet, /<c r="H15"[^>]*>.*?REMARKS/s);
-  assert.match(sheet, /<c r="A17"[^>]*>.*?2023-0001/s);
+  assert.match(sheet, /<c r="A17"[^>]*>.*?1\./s);
   assert.match(sheet, /<c r="B17"[^>]*>.*?EXAMPLE STUDENT/s);
   assert.match(sheet, /<c r="C17"[^>]*><v>40<\/v>/);
   assert.match(sheet, /<c r="D17"[^>]*><v>36<\/v>/);
@@ -88,6 +88,8 @@ test("FCU final-grade export uses the exact configured components and their weig
   assert.match(styles, /<sz val="9"\/>/);
   assert.ok(files["xl/drawings/drawing1.xml"]);
   assert.ok(files["xl/media/image1.png"]);
+  assert.doesNotMatch(sheet, /2023-0001|2023-0002/);
+  assert.match(sheet, /<c r="A18"[^>]*>.*?2\./s);
 });
 
 test("FCU final-grade export supports a variable number of components", async () => {
@@ -177,8 +179,8 @@ test("generic grading sheet export uses class records, actual assessment scores,
   assert.doesNotMatch(sheet, /\[\{"label":"Lecture"/);
   assert.match(sheet, /NO\./);
   assert.match(sheet, /NAME OF STUDENTS/);
-  assert.match(sheet, /<c r="A17"[^>]*>.*?1/s);
-  assert.match(sheet, /<c r="B17"[^>]*>.*?Ana Reyes/s);
+  assert.match(sheet, /<c r="A17"[^>]*>.*?1\./s);
+  assert.match(sheet, /<c r="B17"[^>]*>.*?EXAMPLE STUDENT/s);
   assert.match(sheet, /QUIZZES \(30\.00%\)/);
   assert.match(sheet, /MAJOR EXAM \(50\.00%\)/);
   assert.equal((sheet.match(/ATTENDANCE \(%\)/g) || []).length, 1, "attendance remains one calculated percentage column");
@@ -254,4 +256,40 @@ test("category ordering is hierarchical, persistent, and exposed from Assessment
   const subjectRoute = fs.readFileSync("src/app/api/teacher/subjects/[subjectId]/route.ts", "utf8");
   assert.match(subjectRoute, /sortOrder: z\.number\(\)\.int\(\)\.min\(0\)\.max\(1000\)\.optional\(\)/);
   assert.match(subjectRoute, /sortOrder: category\.sortOrder \?\? existing\.sortOrder/);
+});
+
+test("PDF component values are weighted by the configured course allocation", () => {
+  const start = source.indexOf("function gradeSheetComponentContribution(");
+  const end = source.indexOf("\nfunction downloadGradeSheetXlsx(", start);
+  assert.ok(start > 0 && end > start, "weighted component helper is present");
+  const compiledContribution = ts.transpileModule(source.slice(start, end), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  const context = { gradeSheetComponentPercent: () => 90 };
+  vm.runInNewContext(compiledContribution + "\nthis.contribution = gradeSheetComponentContribution;", context);
+  assert.equal(context.contribution({}, {}, { percentage: 70 }), 63);
+  assert.equal(context.contribution({}, {}, { percentage: 40 }), 36);
+  assert.match(source, /gradeSheetComponentContribution\(detail,enrollment,component\)/);
+  assert.match(source, /className="generic-print-logos"/);
+  assert.match(source, /grid-template-columns:104px minmax\(0,1fr\)/);
+});
+
+test("assessment item order is saved and applied consistently in Assessment Items and Record Scores", () => {
+  assert.match(source, /async function moveAssessmentItem/);
+  assert.match(source, /scorebookItems = useMemo\(\(\) => detail\?\.assessments\.filter\([\s\S]*?sort\(\(a,b\) => \(a\.sortOrder \?\? 0\) - \(b\.sortOrder \?\? 0\)\)/);
+  assert.match(source, /sortOrder: item\.sortOrder \?\? 0/);
+  assert.match(source, /items\.map\(\(item,itemIndex\)/);
+  assert.match(source, /moveAssessmentItem\(category\.id,item\.id,-1\)/);
+  const route = fs.readFileSync("src/app/api/teacher/subjects/[subjectId]/route.ts", "utf8");
+  assert.match(route, /sortOrder: z\.number\(\)\.int\(\)\.min\(0\)\.max\(1000\)\.optional\(\)/);
+  assert.match(route, /item\.sortOrder !== undefined && item\.sortOrder !== previous\.sortOrder/);
+  assert.match(route, /sortOrder: item\.sortOrder \?\? existingById\.get\(item\.id\)!\.sortOrder/);
+  const schema = fs.readFileSync("prisma/schema.prisma", "utf8");
+  const modelStart = schema.indexOf("model Assessment {");
+  const modelEnd = schema.indexOf("\nmodel Score", modelStart);
+  assert.match(schema.slice(modelStart, modelEnd), /sortOrder\s+Int\s+@default\(0\)/);
+  const migration = fs.readFileSync("prisma/migrations/20261121000200_add_assessment_sort_order/migration.sql", "utf8");
+  assert.match(migration, /ROW_NUMBER\(\) OVER/);
+  assert.match(migration, /PARTITION BY "subjectId", "categoryId"/);
+  assert.match(migration, /ORDER BY "createdAt" ASC, "id" ASC/);
 });
