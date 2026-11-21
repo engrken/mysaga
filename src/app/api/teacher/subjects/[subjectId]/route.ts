@@ -55,7 +55,7 @@ export async function GET(_request: Request, context: Context) {
   return NextResponse.json({ subject: { ...subject, enrollments: details } });
 }
 
-const categoryValuesSchema = z.array(z.object({ id: z.string(), parentId: z.string().nullable().optional(), name: z.string().trim().min(1).max(80), weight: z.number().min(0).max(100), conversionBase: z.number().min(1).max(100) })).max(40);
+const categoryValuesSchema = z.array(z.object({ id: z.string(), parentId: z.string().nullable().optional(), name: z.string().trim().min(1).max(80), weight: z.number().min(0).max(100), conversionBase: z.number().min(1).max(100), sortOrder: z.number().int().min(0).max(1000).optional() })).max(40);
 const categorySchema = z.object({ categories: categoryValuesSchema.min(1) });
 const newCategorySchema = z.object({ name: z.string().trim().min(1).max(80), parentId: z.string().nullable().optional(), weight: z.number().min(0).max(100).optional(), conversionBase: z.number().min(1).max(100).optional() });
 const rosterSchema = z.object({ students: z.array(z.object({ studentName: z.string().trim().min(2).max(120), studentNumber: z.string().trim().max(40).optional() })).min(1).max(100) });
@@ -463,13 +463,13 @@ export async function PATCH(request: Request, context: Context) {
     const changed = values.filter(category => {
       const old = subject.categories.find(item => item.id === category.id)!;
       return (category.parentId ?? null) !== (old.parentId ?? null) || category.name !== old.name ||
-        category.weight !== old.weight || category.conversionBase !== old.conversionBase;
+        category.weight !== old.weight || category.conversionBase !== old.conversionBase || (category.sortOrder !== undefined && category.sortOrder !== old.sortOrder);
     });
     if (changed.length) {
       await prisma.$transaction([
         ...changed.map(category => prisma.gradeCategory.update({
           where: { id: category.id },
-          data: { parentId: category.parentId ?? null, name: category.name, weight: category.weight, conversionBase: category.conversionBase }
+          data: { parentId: category.parentId ?? null, name: category.name, weight: category.weight, conversionBase: category.conversionBase, sortOrder: category.sortOrder ?? existing.sortOrder }
         })),
         prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated grading weights", entity: "subject", entityId: subjectId } })
       ]);
