@@ -276,18 +276,21 @@ test("PDF component values are weighted by the configured course allocation", ()
   assert.equal(context.contribution({}, {}, { percentage: 70 }), 63);
   assert.equal(context.contribution({}, {}, { percentage: 40 }), 36);
   assert.match(source, /gradeSheetComponentContribution\(detail,enrollment,component\)/);
-  const printHeader = source.slice(source.indexOf('<article className="print-grade-sheet'), source.indexOf('<div className="generic-print-doc-control">'));
+  const printHeader = source.slice(source.indexOf('<article className="print-grade-sheet'), source.indexOf('<div className="generic-print-course-details">'));
   assert.match(source, /<thead><tr><th aria-label="Sequence number"><\/th><th>NAME OF STUDENTS<\/th>/);
   assert.match(source, /<td>\{index\+1\}\.<\/td><td>\{enrollment\.studentName\.toLocaleUpperCase\(\)\}<\/td>/);
-  assert.doesNotMatch(printHeader, /generic-print-logos/);
-  const printTable = source.slice(source.indexOf('<table className="print-grade-table generic-print-grade-table">'), source.indexOf('<p className="grade-sheet-calculation-note">'));
-  assert.doesNotMatch(printTable, /NO\.|studentNumber/);
-  assert.match(printTable, /<td>\{index\+1\}\./);
   assert.match(printHeader, /generic-print-logo-slot[\s\S]*?School \/ institution logo[\s\S]*?generic-print-school-heading[\s\S]*?user\.school\.name[\s\S]*?departmentLogoPath[\s\S]*?College \/ department logo/);
-  assert.match(source, /grid-template-columns:76px minmax\(0,1fr\) 76px/);
-  assert.match(source, /max-width:900px;[\s\S]*?margin:0 auto 6px/);
-  assert.match(source, /width:6%; text-align:center/);
-  assert.match(source, /width:32%; text-align:left/);
+  assert.match(source, /grid-template-columns:88px minmax\(0,1fr\) 88px/);
+  assert.match(source, /justify-content:center; justify-self:center/);
+  assert.match(source, /text-align:center/);
+  assert.doesNotMatch(source, /generic-print-doc-control|generic-print-membership|grade-sheet-calculation-note|Institutional membership \/ accreditation|Form Name:/);
+  const courseDetails = source.slice(source.indexOf('<div className="generic-print-course-details">'), source.indexOf('<table className="print-grade-table generic-print-grade-table">'));
+  assert.match(courseDetails, /generic-print-course-details-row-primary[\s\S]*?Course No\.[\s\S]*?detail\.code[\s\S]*?Descriptive Title[\s\S]*?detail\.title/);
+  assert.match(courseDetails, /generic-print-course-details-row-secondary[\s\S]*?Class ID[\s\S]*?Semester[\s\S]*?Academic Year/);
+  assert.doesNotMatch(courseDetails, /Course &amp; Year/);
+  assert.match(source, /generic-print-course-details \{ display:flex; flex-direction:column/);
+  assert.match(source, /generic-print-course-details>div \{ display:flex; align-items:baseline/);
+  assert.match(source, /border:0/);
 });
 
 test("assessment item order is saved and applied consistently in Assessment Items and Record Scores", () => {
