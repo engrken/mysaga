@@ -306,7 +306,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
   };
   addRow([{ col: 0, value: schoolName, style: 1 }]);
   addRow([{ col: 0, value: "School Address: " + (schoolAddress || "School address not set"), style: 2 }]);
-  addRow([{ col: 0, value: "GRADING SHEET", style: 3 }]);
+  addRow([{ col: 0, value: sheetName.toLocaleUpperCase(), style: 3 }]);
   addRow([]);
   addRow([{ col: 0, value: "Course Number: " + detail.code, style: 4 }]);
   addRow([{ col: 0, value: "Descriptive Title: " + detail.title, style: 4 }]);
