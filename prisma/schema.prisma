@@ -49,6 +49,7 @@ model School {
   address               String?
   departmentName        String?
   deanName              String?
+  isoHeaderConfig       String?
   privacyController     String?
   privacyContactEmail   String?
   privacyPolicyUrl      String?
