@@ -101,7 +101,7 @@ test("Generic PDF export is offered only once inside the export dropdown", () =>
   assert.doesNotMatch(source, /<button className="btn btn-outline-primary" onClick=\{\(\) => printFinalGradesPdf\("generic"\)\}>Save \/ Print Generic PDF<\/button>/, "the duplicate standalone PDF button is removed");
 });
 
-test("ISO Excel export follows the FCU editable A1:G4 header grid and Folio page setup", () => {
+test("ISO Excel export follows the FCU editable A1:G4 header grid, Folio setup, and safe binary download", async () => {
   const start = source.indexOf("function downloadIsoXlsx(");
   const end = source.indexOf("\nfunction categoryDescendantIds(", start);
   assert.ok(start > 0 && end > start, "dedicated ISO XLSX writer is present");
@@ -109,11 +109,28 @@ test("ISO Excel export follows the FCU editable A1:G4 header grid and Folio page
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText;
   let saved;
+  let createdBlob;
+  let appendedLink;
+  let clicked = false;
+  let removedLink;
+  let revokeCallback;
+  let revokeDelay;
+  let revokeCalled = false;
   const context = {
     Uint8Array, Number, String, Math, Blob,
-    URL: { createObjectURL: () => "blob:iso", revokeObjectURL() {} },
-    document: { createElement: () => ({ click() {} }) },
-    zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
+    URL: {
+      createObjectURL: blob => { createdBlob = blob; return "blob:iso"; },
+      revokeObjectURL: url => { assert.equal(url, "blob:iso"); revokeCalled = true; }
+    },
+    document: {
+      body: {
+        appendChild: link => { appendedLink = link; },
+        removeChild: link => { removedLink = link; }
+      },
+      createElement: () => ({ click() { clicked = true; } })
+    },
+    setTimeout: (callback, delay) => { revokeCallback = callback; revokeDelay = delay; return 1; },
+    zipStored: files => { saved = files; return Uint8Array.from([0x50, 0x4b, 0x03, 0x04, 0, 0]); },
     excelColumn: columns,
     xmlEscape: escape
   };
@@ -142,6 +159,18 @@ test("ISO Excel export follows the FCU editable A1:G4 header grid and Folio page
   const files = Object.fromEntries(saved.map(file => [file.name, file.content]));
   const sheet = files["xl/worksheets/sheet1.xml"];
   const styles = files["xl/styles.xml"];
+  assert.ok(createdBlob instanceof Blob, "the downloaded archive is passed to Blob as binary data");
+  assert.equal(createdBlob.type, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  assert.deepEqual([...new Uint8Array(await createdBlob.arrayBuffer())], [0x50, 0x4b, 0x03, 0x04, 0, 0]);
+  assert.equal(appendedLink.href, "blob:iso");
+  assert.equal(appendedLink.download, "iso.xlsx");
+  assert.equal(removedLink, appendedLink, "the temporary anchor is removed after clicking");
+  assert.equal(clicked, true, "the download link is clicked");
+  assert.equal(typeof revokeCallback, "function", "Blob URL cleanup is deferred");
+  assert.equal(revokeDelay, 1000, "Blob URL stays alive briefly for the browser download");
+  assert.equal(revokeCalled, false, "Blob URL is not revoked synchronously");
+  revokeCallback();
+  assert.equal(revokeCalled, true, "Blob URL is revoked after the download handoff");
   assert.ok(files["xl/media/iso-school-block.png"], "the university seal/name image is embedded in the A-column block");
   assert.match(sheet, /mergeCell ref="A1:A4"/);
   assert.match(sheet, /mergeCell ref="C1:E1"/);
@@ -150,6 +179,22 @@ test("ISO Excel export follows the FCU editable A1:G4 header grid and Folio page
   assert.match(sheet, /mergeCell ref="B4:E4"/);
   assert.match(sheet, /mergeCell ref="A5:G5"/);
   assert.match(sheet, /mergeCell ref="A6:G6"/);
+  // Every coordinate in A1:G4 has an explicit cell style with all four thin borders,
+  // including the interior cells covered by merged ranges.
+  for (let row = 1; row <= 4; row++) {
+    for (const column of ["A", "B", "C", "D", "E", "F", "G"]) {
+      const cell = sheet.match(new RegExp('<c r="' + column + row + '" s="(\\d+)"'));
+      assert.ok(cell, column + row + " is explicitly written to the worksheet");
+      assert.ok([1, 2, 3].includes(Number(cell[1])), column + row + " uses a bordered cell style");
+    }
+  }
+  // Accreditation cells are written separately with the borderless style 4.
+  for (const row of [5, 6]) {
+    for (const column of ["A", "B", "C", "D", "E", "F", "G"]) {
+      assert.match(sheet, new RegExp('<c r="' + column + row + '" s="4"'));
+    }
+  }
+  assert.match(styles, /<xf numFmtId="0" fontId="4" fillId="0" borderId="0"/);
   assert.match(sheet, /Form Name:/);
   assert.match(sheet, /FILAMER CHRISTIAN UNIVERSITY, INC\./);
   assert.match(sheet, /COLLEGIATE GRADING SHEET/);
