@@ -412,10 +412,10 @@ test("ISO header configuration is isolated per school and FCU receives its suppl
 
  
 test("Final Grades exposes separate Generic and ISO Excel exports and includes nested category components", () => {
-  assert.match(source, /Download Generic Excel Sheet/);
-  assert.match(source, /Download ISO Excel Sheet/);
-  assert.match(source, /function exportIsoGradesExcel\\(\\)/);
-  assert.match(source, /Add category or subcategory from Grading Setup/);
-  assert.match(source, /categoryPath\\(category, detail\\.categories\\)/);
+  assert.ok(source.includes("Download Generic Excel Sheet"));
+  assert.ok(source.includes("Download ISO Excel Sheet"));
+  assert.ok(source.includes("function exportIsoGradesExcel()"));
+  assert.ok(source.includes("Add category or subcategory from Grading Setup"));
+  assert.ok(source.includes("categoryPath(category, detail.categories)"));
   assert.ok(source.includes("while (current && current.id !== root.id"));
 });
