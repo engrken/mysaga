@@ -623,7 +623,7 @@ export async function POST(request: Request, context: Context) {
     return NextResponse.json({ error: "Match this category’s item weighting. Use weights for every assessment or leave all item weights blank." }, { status: 400 });
   }
   const assessment = await prisma.$transaction(async tx => {
-    const created = await tx.assessment.create({ data: { ...parsed.data, weight: parsed.data.weight ?? null, subjectId, sortOrder: subject.assessments.filter(item => item.categoryId === parsed.data.categoryId).length, dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null, scheduleOverrideReason: parsed.data.scheduleOverrideReason || null, attendanceType: parsed.data.attendanceType || null } });
+    const created = await tx.assessment.create({ data: { ...parsed.data, weight: parsed.data.weight ?? null, subjectId, sortOrder: Math.max(-1, ...subject.assessments.filter(item => item.categoryId === parsed.data.categoryId).map(item => item.sortOrder)) + 1, dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null, scheduleOverrideReason: parsed.data.scheduleOverrideReason || null, attendanceType: parsed.data.attendanceType || null } });
     if (isAttendance && subject.enrollments.length) await tx.score.createMany({ data: subject.enrollments.map(enrollment => ({ enrollmentId: enrollment.id, assessmentId: created.id, points: null, remark: "PRESENT" })) });
     return created;
   });
