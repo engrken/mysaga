@@ -582,14 +582,14 @@ test("Edit Components category picker includes parents and every eligible nested
 
 test("printable Collegiate sheet shows each root group's weighted course contribution across classes", () => {
   const helperStart = source.indexOf("function categoryDescendantIds(");
-  const helperEnd = source.indexOf("\\nfunction downloadGradeSheetXlsx(", helperStart);
+  const helperEnd = source.indexOf("\nfunction downloadGradeSheetXlsx(", helperStart);
   assert.ok(helperStart > 0 && helperEnd > helperStart, "print component helpers are present");
   const compiledHelpers = ts.transpileModule(source.slice(helperStart, helperEnd), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText;
   const gradeSource = fs.readFileSync("src/lib/grades.ts", "utf8")
     .replace('import { attendanceDays, consecutiveLateAbsences } from "./attendance";', "")
-    .replace(/^export\\s+/gm, "");
+    .replace(/^export\s+/gm, "");
   const compiledGrades = ts.transpileModule(gradeSource, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText;
