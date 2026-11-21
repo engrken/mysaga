@@ -223,3 +223,32 @@ test("generic grading sheet supports a class with no assessment items without in
   assert.match(sheet, /<col min="2" max="2"/);
   assert.match(sheet, /orientation="landscape"/);
 });
+
+test("category ordering is hierarchical, persistent, and exposed from Assessment Items", () => {
+  const orderStart = source.indexOf("function orderedCategoryTree(");
+  const orderEnd = source.indexOf("function categoryPath(", orderStart);
+  assert.ok(orderStart > 0 && orderEnd > orderStart, "category ordering helper is present");
+  const orderedSource = ts.transpileModule(source.slice(orderStart, orderEnd), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  const context = {};
+  vm.runInNewContext(orderedSource + "\nthis.orderCategories = orderedCategoryTree;", context);
+  const categories = [
+    { id: "sub-b", parentId: "root-a", sortOrder: 1 },
+    { id: "root-b", parentId: null, sortOrder: 0 },
+    { id: "sub-a", parentId: "root-a", sortOrder: 0 },
+    { id: "root-a", parentId: null, sortOrder: 1 },
+    { id: "root-a-leaf", parentId: "sub-a", sortOrder: 0 }
+  ];
+  assert.deepEqual(
+    context.orderCategories(categories).map(item => item.id),
+    ["root-b", "root-a", "sub-a", "root-a-leaf", "sub-b"]
+  );
+  assert.match(source, /async function moveAssessmentCategory/);
+  assert.match(source, /Category order in Record Scores/);
+  assert.match(source, /onClick=\{\(\) => void moveAssessmentCategory/);
+  assert.match(source, /Export Excel<\/button>/);
+  const subjectRoute = fs.readFileSync("src/app/api/teacher/subjects/[subjectId]/route.ts", "utf8");
+  assert.match(subjectRoute, /sortOrder: z\.number\(\)\.int\(\)\.min\(0\)\.max\(1000\)\.optional\(\)/);
+  assert.match(subjectRoute, /sortOrder: category\.sortOrder \?\? existing\.sortOrder/);
+});
