@@ -352,30 +352,58 @@ def build_iso_workbook(payload: dict) -> bytes:
     worksheet.column_dimensions[get_column_letter(metadata_label_column)].width = 18
     worksheet.column_dimensions[get_column_letter(metadata_value_column)].width = 22
 
-    # Signature block: merged left/right areas and a thin bottom rule for signing.
+    # Signature block: labels, three blank signing rows, then centered printed names and captions.
     data_end_row = 11 + len(rows)
     signature_label_row = data_end_row + 2
-    signature_name_row = data_end_row + 3
-    signature_role_row = data_end_row + 4
+    signature_space_rows = range(signature_label_row + 1, signature_label_row + 4)
+    signature_rule_row = signature_label_row + 3
+    signature_name_row = signature_label_row + 4
+    signature_role_row = signature_label_row + 5
     left_end = max(1, column_count // 2)
     right_start = left_end + 1
     last_column = get_column_letter(column_count)
     left_end_letter = get_column_letter(left_end)
     right_start_letter = get_column_letter(right_start)
 
-    left_label_range = "A{0}:{1}{0}".format(signature_label_row, left_end_letter)
-    right_label_range = "{0}{1}:{2}{1}".format(right_start_letter, signature_label_row, last_column)
-    left_name_range = "A{0}:{1}{0}".format(signature_name_row, left_end_letter)
-    right_name_range = "{0}{1}:{2}{1}".format(right_start_letter, signature_name_row, last_column)
-    left_role_range = "A{0}:{1}{0}".format(signature_role_row, left_end_letter)
-    right_role_range = "{0}{1}:{2}{1}".format(right_start_letter, signature_role_row, last_column)
+    def signature_range(row_number: int, start_column: str, end_column: str) -> str:
+        return "{0}{1}:{2}{1}".format(start_column, row_number, end_column)
 
-    _merge_with_border(worksheet, left_label_range)
-    _merge_with_border(worksheet, right_label_range)
-    _merge_with_border(worksheet, left_name_range, BOTTOM_BORDER)
-    _merge_with_border(worksheet, right_name_range, BOTTOM_BORDER)
-    _merge_with_border(worksheet, left_role_range)
-    _merge_with_border(worksheet, right_role_range)
+    _merge_with_border(
+        worksheet,
+        signature_range(signature_label_row, "A", left_end_letter),
+    )
+    _merge_with_border(
+        worksheet,
+        signature_range(signature_label_row, right_start_letter, last_column),
+    )
+    for row_number in signature_space_rows:
+        border = BOTTOM_BORDER if row_number == signature_rule_row else None
+        _merge_with_border(
+            worksheet,
+            signature_range(row_number, "A", left_end_letter),
+            border,
+        )
+        _merge_with_border(
+            worksheet,
+            signature_range(row_number, right_start_letter, last_column),
+            border,
+        )
+    _merge_with_border(
+        worksheet,
+        signature_range(signature_name_row, "A", left_end_letter),
+    )
+    _merge_with_border(
+        worksheet,
+        signature_range(signature_name_row, right_start_letter, last_column),
+    )
+    _merge_with_border(
+        worksheet,
+        signature_range(signature_role_row, "A", left_end_letter),
+    )
+    _merge_with_border(
+        worksheet,
+        signature_range(signature_role_row, right_start_letter, last_column),
+    )
 
     _set_literal(worksheet.cell(signature_label_row, 1), "Submitted by:")
     _set_literal(worksheet.cell(signature_label_row, right_start), "Noted:")
@@ -383,12 +411,14 @@ def build_iso_workbook(payload: dict) -> bytes:
     dean_name = _normalize_signature_name(class_metadata.get("deanName") or clean_header["deanName"])
     _set_literal(worksheet.cell(signature_name_row, 1), teacher_name)
     _set_literal(worksheet.cell(signature_name_row, right_start), dean_name)
-    _set_literal(worksheet.cell(signature_role_row, 1), "TEACHER'S SIGNATURE OVER PRINTED NAME")
-    _set_literal(worksheet.cell(signature_role_row, right_start), "DEAN'S SIGNATURE OVER PRINTED NAME")
+    _set_literal(worksheet.cell(signature_role_row, 1), "SIGNATURE OVER PRINTED NAME / DATE")
+    _set_literal(worksheet.cell(signature_role_row, right_start), "SIGNATURE OVER PRINTED NAME / DATE")
 
-    for row_number in (signature_label_row, signature_name_row, signature_role_row):
-        worksheet.row_dimensions[row_number].height = 20
-    worksheet.row_dimensions[signature_name_row].height = 27
+    worksheet.row_dimensions[signature_label_row].height = 20
+    for row_number in signature_space_rows:
+        worksheet.row_dimensions[row_number].height = 22
+    worksheet.row_dimensions[signature_name_row].height = 24
+    worksheet.row_dimensions[signature_role_row].height = 22
     for coordinate in (
         worksheet.cell(signature_label_row, 1).coordinate,
         worksheet.cell(signature_label_row, right_start).coordinate,
@@ -398,14 +428,10 @@ def build_iso_workbook(payload: dict) -> bytes:
     for coordinate in (
         worksheet.cell(signature_name_row, 1).coordinate,
         worksheet.cell(signature_name_row, right_start).coordinate,
-    ):
-        worksheet[coordinate].font = Font(name="Arial", size=9)
-        worksheet[coordinate].alignment = Alignment(horizontal="center", vertical="center")
-    for coordinate in (
         worksheet.cell(signature_role_row, 1).coordinate,
         worksheet.cell(signature_role_row, right_start).coordinate,
     ):
-        worksheet[coordinate].font = Font(name="Arial", size=8)
+        worksheet[coordinate].font = Font(name="Arial", size=10, bold=True)
         worksheet[coordinate].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     worksheet.print_area = "A1:{0}{1}".format(last_column, signature_role_row)

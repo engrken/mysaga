@@ -279,6 +279,12 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(pythonSource, /cell\.number_format = "0\.00%"/);
   assert.match(pythonSource, /Percentage columns are passed as fractions/);
   assert.match(pythonSource, /def _normalize_signature_name/);
+  assert.match(pythonSource, /signature_space_rows = range\(signature_label_row \+ 1, signature_label_row \+ 4\)/);
+  assert.match(pythonSource, /signature_name_row = signature_label_row \+ 4/);
+  assert.match(pythonSource, /signature_role_row = signature_label_row \+ 5/);
+  assert.match(pythonSource, /"SIGNATURE OVER PRINTED NAME \/ DATE"/);
+  assert.match(pythonSource, /Font\(name="Arial", size=10, bold=True\)/);
+  assert.match(pythonSource, /Alignment\(horizontal="center", vertical="center", wrap_text=True\)/);
   assert.match(pythonSource, /merge_cells\("A5:\{0\}5"\.format\(last_column_letter\)\)/);
   assert.match(pythonSource, /merge_cells\("A6:\{0\}6"\.format\(last_column_letter\)\)/);
   assert.match(pythonSource, /paperSize = "14"/);
@@ -513,7 +519,17 @@ test("Record Scores Excel export mirrors the full grouped scorebook and saved si
   assert.match(sheet, /<c r="J18"[^>]*>.*?PASSED/s);
   assert.match(sheet, /TEACHER ONE/);
   assert.match(sheet, /DEAN TWO/);
-  assert.match(sheet, /SIGNATURE OVER PRINTED NAME \/ DATE/);
+  assert.match(sheet, /<c r="A21"[^>]*>.*?Submitted by:/s);
+  assert.match(sheet, /<c r="F21"[^>]*>.*?Noted:/s);
+  for (let rowNumber = 21; rowNumber <= 26; rowNumber++) {
+    assert.ok(sheet.includes('<mergeCell ref="A' + rowNumber + ':E' + rowNumber + '"/>'));
+    assert.ok(sheet.includes('<mergeCell ref="F' + rowNumber + ':J' + rowNumber + '"/>'));
+  }
+  for (const cell of ["A25", "F25", "A26", "F26"]) {
+    assert.match(sheet, new RegExp('<c r="' + cell + '" s="17"'));
+  }
+  assert.match(sheet, /<c r="A26"[^>]*>.*?SIGNATURE OVER PRINTED NAME \/ DATE/s);
+  assert.match(sheet, /<c r="F26"[^>]*>.*?SIGNATURE OVER PRINTED NAME \/ DATE/s);
   assert.doesNotMatch(sheet, /Teacher&apos;s Signature over Printed Name|Dean&apos;s Signature over Printed Name/);
   assert.match(sheet, /orientation="landscape" fitToWidth="1"/);
   assert.match(sheet, /<pane ySplit="17" topLeftCell="A18"/);
@@ -619,12 +635,23 @@ test("Record Scores export dynamically merges institutional, metadata, category,
   assert.match(sheet, /<c r="T14"[^>]*>.*?TOTAL GRADE \(%\)/s);
   assert.match(sheet, /<c r="U14"[^>]*>.*?FINAL GRADE/s);
   assert.match(sheet, /<c r="V14"[^>]*>.*?REMARKS/s);
-  assert.match(sheet, /<mergeCell ref="A19:K19"\/>/);
-  assert.match(sheet, /<mergeCell ref="L19:V19"\/>/);
-  assert.match(sheet, /<mergeCell ref="A20:K20"\/>/);
-  assert.match(sheet, /<mergeCell ref="L20:V20"\/>/);
-  assert.match(sheet, /<mergeCell ref="A21:K21"\/>/);
-  assert.match(sheet, /<mergeCell ref="L21:V21"\/>/);
+  for (let rowNumber = 19; rowNumber <= 24; rowNumber++) {
+    assert.ok(sheet.includes('<mergeCell ref="A' + rowNumber + ':K' + rowNumber + '"/>'));
+    assert.ok(sheet.includes('<mergeCell ref="L' + rowNumber + ':V' + rowNumber + '"/>'));
+  }
+  for (const rowNumber of [20, 21, 22]) {
+    const rowXml = sheet.match(new RegExp('<row r="' + rowNumber + '".*?<\\/row>'))?.[0] ?? "";
+    assert.ok(rowXml, 'signature spacer row ' + rowNumber + ' exists');
+    assert.doesNotMatch(rowXml, /<t[^>]*>[^<]+<\\/t>/, 'signature spacer row ' + rowNumber + ' is blank');
+  }
+  for (const cell of ["A23", "L23", "A24", "L24"]) {
+    assert.match(sheet, new RegExp('<c r="' + cell + '" s="17"'));
+  }
+  assert.match(sheet, /<c r="A23"[^>]*>.*?TEACHER EXAMPLE/s);
+  assert.match(sheet, /<c r="L23"[^>]*>.*?DEAN EXAMPLE/s);
+  assert.match(sheet, /<c r="A24"[^>]*>.*?SIGNATURE OVER PRINTED NAME \\/ DATE/s);
+  assert.match(sheet, /<c r="L24"[^>]*>.*?SIGNATURE OVER PRINTED NAME \\/ DATE/s);
+  assert.match(sheet, /<cellXfs count="18">/);
   assert.match(sheet, /Submitted by:/);
   assert.match(sheet, /Noted:/);
   assert.match(sheet, /TEACHER EXAMPLE/);

@@ -716,8 +716,8 @@ function downloadGradeSheetXlsx(
 
   addRow([]);
   const signatureLabelRow = rows.length + 1;
-  const signatureNameRow = signatureLabelRow + 1;
-  const signatureRoleRow = signatureLabelRow + 2;
+  const signatureNameRow = signatureLabelRow + 4;
+  const signatureRoleRow = signatureLabelRow + 5;
   const leftEndColumn = Math.max(1, Math.floor(columnCount / 2));
   const rightStartColumn = leftEndColumn + 1;
   const leftEnd = excelColumn(leftEndColumn - 1);
@@ -726,15 +726,18 @@ function downloadGradeSheetXlsx(
     { col: 0, value: "Submitted by:", style: 8 },
     { col: rightStartColumn - 1, value: "Noted:", style: 8 }
   ]);
+  addRow([]);
+  addRow([]);
+  addRow([]);
   addRow([
-    { col: 0, value: "____ " + teacherName.trim().toLocaleUpperCase() + " ____", style: 9 },
-    { col: rightStartColumn - 1, value: "____ " + deanName.trim().toLocaleUpperCase() + " ____", style: 9 }
+    { col: 0, value: teacherName.trim().toLocaleUpperCase(), style: 17 },
+    { col: rightStartColumn - 1, value: deanName.trim().toLocaleUpperCase(), style: 17 }
   ]);
   addRow([
-    { col: 0, value: "SIGNATURE OVER PRINTED NAME / DATE", style: 10 },
-    { col: rightStartColumn - 1, value: "SIGNATURE OVER PRINTED NAME / DATE", style: 10 }
+    { col: 0, value: "SIGNATURE OVER PRINTED NAME / DATE", style: 17 },
+    { col: rightStartColumn - 1, value: "SIGNATURE OVER PRINTED NAME / DATE", style: 17 }
   ]);
-  for (const rowNumber of [signatureLabelRow, signatureNameRow, signatureRoleRow]) {
+  for (let rowNumber = signatureLabelRow; rowNumber <= signatureRoleRow; rowNumber++) {
     mergedRanges.push("A" + rowNumber + ":" + leftEnd + rowNumber, rightStart + rowNumber + ":" + last + rowNumber);
   }
 
@@ -751,7 +754,7 @@ function downloadGradeSheetXlsx(
       : rowNumber === 16 ? 38
       : rowNumber === 17 ? 22
       : rowNumber > maxScoreRow && rowNumber <= maxScoreRow + detail.enrollments.length ? 22
-      : rowNumber === signatureNameRow ? 28 : 20;
+      : rowNumber === signatureNameRow ? 28 : rowNumber === signatureRoleRow ? 24 : 20;
     return '<row r="' + rowNumber + '" ht="' + rowHeight + '" customHeight="1">' + xmlCells + '</row>';
   }).join("");
 
@@ -790,7 +793,7 @@ function downloadGradeSheetXlsx(
     '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF0F8"/><bgColor indexed="64"/></patternFill></fill></fills>' +
     '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD4DCE7"/></left><right style="thin"><color rgb="FFD4DCE7"/></right><top style="thin"><color rgb="FFD4DCE7"/></top><bottom style="thin"><color rgb="FFD4DCE7"/></bottom><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="17">' +
+    '<cellXfs count="18">' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
     '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment horizontal="center" vertical="center"/></xf>' +
@@ -808,6 +811,7 @@ function downloadGradeSheetXlsx(
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>' +
     '<xf numFmtId="0" fontId="0" fillId="2" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
     '<xf numFmtId="0" fontId="7" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="7" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
     '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
   const files = [
     { name: "[Content_Types].xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
