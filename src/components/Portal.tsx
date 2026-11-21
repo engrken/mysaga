@@ -540,11 +540,11 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
 
   const signatureRanges = [
     "A" + signatureRow + ":" + excelColumn(split) + signatureRow,
-    excelColumn(split + 2) + signatureRow + ":" + last + signatureRow,
+    excelColumn(split + 1) + signatureRow + ":" + last + signatureRow,
     "A" + (signatureRow + 2) + ":" + excelColumn(split) + (signatureRow + 2),
-    excelColumn(split + 2) + (signatureRow + 2) + ":" + last + (signatureRow + 2),
+    excelColumn(split + 1) + (signatureRow + 2) + ":" + last + (signatureRow + 2),
     "A" + (signatureRow + 3) + ":" + excelColumn(split) + (signatureRow + 3),
-    excelColumn(split + 2) + (signatureRow + 3) + ":" + last + (signatureRow + 3)
+    excelColumn(split + 1) + (signatureRow + 3) + ":" + last + (signatureRow + 3)
   ];
   const merges = ["A1:" + last + "9", "A11:" + last + "11", "A12:" + last + "12", "A13:" + last + "13", "A14:" + last + "14", ...signatureRanges];
   const mergeXml = merges.map(range => '<mergeCell ref="' + range + '"/>').join("");
@@ -655,6 +655,16 @@ function attendanceSummary(enrollment: Enrollment, assessments: Assessment[], sc
 }
 
 function leafCategories(categories: Category[]) { return categories.filter(category => !categories.some(item => item.parentId === category.id)); }
+function orderedCategoryTree(categories: Category[]) {
+  const ordered: Category[] = [];
+  const append = (parentId: string | null) => {
+    categories.filter(category => (category.parentId ?? null) === parentId)
+      .slice().sort((a, b) => a.sortOrder - b.sortOrder)
+      .forEach(category => { ordered.push(category); append(category.id); });
+  };
+  append(null);
+  return ordered;
+}
 function categoryPath(category: Category, categories: Category[]) {
   const names = [category.name]; let parent = categories.find(item => item.id === category.parentId);
   while (parent) { names.unshift(parent.name); parent = categories.find(item => item.id === parent?.parentId); }
@@ -1147,6 +1157,29 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     if (!detail || !window.confirm("Remove this empty category?")) return;
     await run(async () => { await api(`/api/teacher/subjects/${detail.id}`, { method: "PATCH", body: JSON.stringify({ deleteCategoryId: categoryId }) }); setDetail(current => current ? { ...current, categories: current.categories.filter(category => category.id !== categoryId) } : current); }, "Empty grading category removed.");
   }
+  async function moveAssessmentCategory(categoryId: string, direction: -1 | 1) {
+    if (!detail || detail.gradeStatus === "VERIFIED") return;
+    const category = detail.categories.find(item => item.id === categoryId);
+    if (!category) return;
+    const siblings = detail.categories.filter(item => (item.parentId ?? null) === (category.parentId ?? null)).slice().sort((a,b) => a.sortOrder-b.sortOrder);
+    const from = siblings.findIndex(item => item.id === categoryId);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= siblings.length) return;
+    const reordered = siblings.slice();
+    [reordered[from], reordered[to]] = [reordered[to], reordered[from]];
+    const orderById = new Map(reordered.map((item,index) => [item.id,index]));
+    const nextCategories = orderedCategoryTree(detail.categories.map(item => orderById.has(item.id) ? { ...item, sortOrder: orderById.get(item.id)! } : item));
+    await run(async () => {
+      await api(`/api/teacher/subjects/${detail.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ categories: nextCategories.map(item => ({
+          id: item.id, parentId: item.parentId, name: item.name, weight: item.weight,
+          conversionBase: item.conversionBase, sortOrder: item.sortOrder
+        })) })
+      });
+      setDetail(current => current ? { ...current, categories: nextCategories } : current);
+    }, "Category order saved. Record Scores now follows this arrangement.");
+  }
   async function saveAssessmentItems() {
     if (!detail) return;
     await run(async () => { await api(`/api/teacher/subjects/${detail.id}`, { method: "PATCH", body: JSON.stringify({ assessmentItems: detail.assessments.map(item => ({ id: item.id, categoryId: item.categoryId, title: item.title, maxScore: Number(item.maxScore), weight: item.weight == null ? null : Number(item.weight), dueDate: item.dueDate ? item.dueDate.slice(0,10) : null, scheduleOverrideReason: item.scheduleOverrideReason || null, attendanceType: item.attendanceType || null })) }) }); }, "Assessment setup saved.");
@@ -1390,9 +1423,21 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   }
   function exportGrades() {
     if (!detail) return;
+    void downloadFcuGradeXlsx(
+      `${detail.code.replace(/[^a-z0-9-_]+/gi, "-")}-final-grades.xlsx`,
+      "Final Grades",
+      detail,
+      detail.categories,
+      user.fullName,
+      deanName.trim(),
+      gradeSheetComponents
+    );
+  }
+  function exportRecordScoresExcel() {
+    if (!detail) return;
     downloadGradeSheetXlsx(
-      `${detail.code.replace(/[^a-z0-9-_]+/gi, "-")}-grading-sheet.xlsx`,
-      "Grading Sheet",
+      `${detail.code.replace(/[^a-z0-9-_]+/gi, "-")}-record-scores.xlsx`,
+      "Record Scores",
       detail,
       user.school.name,
       user.school.address || "",
@@ -1533,7 +1578,17 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   useEffect(() => { setRosterPage(1); }, [activeId, classStudentFilter]);
   useEffect(() => { setAssessmentCategoryOverrides({}); }, [activeId]);
   useEffect(() => { if (rosterPage > rosterPageCount) setRosterPage(rosterPageCount); }, [rosterPage, rosterPageCount]);
-  const recordCategories = useMemo(() => detail ? leafCategories(detail.categories) : [], [detail]);
+  const recordCategories = useMemo(() => detail ? leafCategories(orderedCategoryTree(detail.categories)) : [], [detail?.categories]);
+  const assessmentCategoryOrderRows = useMemo(() => {
+    if (!detail) return [] as Array<{ category: Category; depth: number; index: number; count: number }>;
+    const rows: Array<{ category: Category; depth: number; index: number; count: number }> = [];
+    const append = (parentId: string | null, depth: number) => {
+      const siblings = detail.categories.filter(category => (category.parentId ?? null) === parentId).slice().sort((a,b) => a.sortOrder-b.sortOrder);
+      siblings.forEach((category,index) => { rows.push({ category, depth, index, count: siblings.length }); append(category.id, depth + 1); });
+    };
+    append(null,0);
+    return rows;
+  }, [detail?.categories]);
   const assessmentItemGroups = useMemo(() => {
     if (!detail) return [] as Array<{ category: Category; items: Assessment[] }>;
     return recordCategories.map(category => ({
@@ -1848,7 +1903,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
             {(()=>{const alerted=filteredEnrollments.map(enrollment=>({enrollment,summary:attendanceSummary(enrollment,detail.assessments)})).filter(item=>item.summary.alertLevel!=="none" || item.summary.droppingWarning);const critical=alerted.filter(item=>item.summary.alertLevel==="critical").length;const early=alerted.filter(item=>item.summary.alertLevel==="early").length;return <section className="attendance-alert-panel" aria-label="Attendance monitoring overview"><div className="attendance-alert-header"><div><span className="attendance-alert-eyebrow">ATTENDANCE OVERVIEW</span><b>Monitoring alerts</b><small>Early warning starts at {EARLY_ABSENCE_PERCENT}% absent. High risk starts at {HIGH_RISK_ABSENCE_PERCENT}%. Excused days are excluded.</small></div><div className="attendance-alert-summary"><span className="attendance-alert-total"><b>{alerted.length}</b><small>{alerted.length===1?"student flagged":"students flagged"}</small></span><span className="attendance-alert-count early"><i></i>{early} early</span><span className="attendance-alert-count critical"><i></i>{critical} high risk</span></div></div>{alerted.length?<div className="attendance-alert-list">{alerted.map(({enrollment,summary})=><article key={enrollment.id} className={`attendance-alert-item ${summary.alertLevel}`}><div className="attendance-alert-person"><b>{enrollment.studentName}</b>{summary.alertLevel !== "none" && <span className={`attendance-alert-badge ${summary.alertLevel}`}>{summary.alertLevel==="critical"?"High risk":"Early warning"}</span>}</div><div className="attendance-alert-detail"><span>{summary.effectiveAbsent} absences of {summary.counted} counted days</span><b>{summary.absencePercent?.toFixed(1)}%</b></div><AbsenceDateList dates={summary.absenceDates}/>{summary.droppingWarning && <DroppingWarning streak={summary.droppingWarning}/>}<div className="attendance-alert-meter" role="presentation"><span style={{width:`${Math.min(100,summary.absencePercent??0)}%`}} /></div></article>)}</div>:<div className="attendance-alert-clear"><span aria-hidden="true">✓</span><div><b>No attendance alerts</b><small>No students in the current roster filter meet an attendance alert threshold.</small></div></div>}</section>})()}{attendanceDays.length ? <div className="table-scroll"><table className="table grade-table ecr-table attendance-table"><thead><tr><th>STUDENT</th><th>SUMMARY</th>{attendanceDays.map(item=><th key={item.id}>{item.dueDate ? new Date(item.dueDate).toLocaleDateString() : item.title}<small>{item.attendanceType === "ONLINE" ? "Online" : item.attendanceType === "FACE_TO_FACE" ? "Face-to-Face" : "Type not set"} · {item.scheduleOverrideReason ? `Make-up class: ${item.scheduleOverrideReason}` : "Scheduled class day"}</small></th>)}</tr></thead><tbody>{filteredEnrollments.map(enrollment=>{const summary=attendanceSummary(enrollment,detail.assessments);return <tr key={enrollment.id}><td><b>{enrollment.studentName}</b></td><td className="attendance-summary"><b>Attendance · {summary.percent===null?"—":summary.percent.toFixed(1)+"%"}</b><small>P {summary.present} · A {summary.effectiveAbsent} · L {summary.late - summary.lateAbsences} · E {summary.excused}</small>{summary.lateAbsences > 0 && <small>{summary.lateAbsences} equivalent absence(s) from late marks</small>}{summary.atRisk&&<span className="absence-risk-badge">DANGER OF FAILING · {summary.absencePercent?.toFixed(1)}% ABSENT</span>}</td>{attendanceDays.map(item=>{const score=scoresByEnrollment.get(enrollment.id)?.get(item.id);const converted=summary.converted.has(item.id);const value=score?.remark==="LATE"?(converted?"LATE_AS_ABSENT":"LATE"):score?.remark==="EXCUSED"?"EXCUSED":score?.remark==="ABSENT"?"ABSENT":score?.remark==="PRESENT"||score?.points!=null?"PRESENT":"";return <td key={item.id}><select className="form-select form-select-sm attendance-mark" aria-label={`${enrollment.studentName} ${item.title}`} value={value} onChange={event=>saveAttendanceMark(enrollment.id,item.id,(event.target.value||null) as AttendanceMark["remark"])} disabled={detail.gradeStatus==="VERIFIED"}><option value="">Not marked</option><option value="PRESENT">Present</option>{converted && <option value="LATE_AS_ABSENT" disabled>{CONVERTED_LATE_LABEL}</option>}<option value="LATE">Late</option><option value="ABSENT">Absent</option><option value="EXCUSED">Excused</option></select>{converted && <small className="d-block text-danger">Three consecutive lates</small>}</td>})}</tr>})}</tbody></table></div> : <div className="inline-empty">No attendance sessions yet. Add a day that matches this class schedule to start recording attendance.</div>}
             <div className="scorebook-legend"><span><b>Danger indicator</b> appears when absences exceed 20% of non-excused class days.</span><span>Every third consecutive Late is counted as Absent.</span><span>To change a class schedule, edit the subject details before recording sessions.</span></div>
           </section>}
-          {classSection === "record" && <section id="class-section-record" className="surface gradebook-card scorebook-section" ref={scorebookRegionRef}><div className="section-heading"><div><span className="eyebrow">ELECTRONIC CLASS RECORD</span><h2>Record scores</h2><p className="muted">Enter scores by student and assessment. Each category includes an Equivalent (%) column showing the earned share of its parent Lecture or Laboratory allocation (for example, 93% × 25% = 23.25%). The final course grade also applies the top-level Lecture/Laboratory weights. Changes save when you leave a field. Pending work is not treated as zero.</p></div><div className="scorebook-toolbar"><span className="gradebook-count">{filteredEnrollments.length} of {detail.enrollments.length} students · {detail.assessments.length} items</span><label className="scorebook-contribution-toggle"><input type="checkbox" className="form-check-input" checked={showWeightBreakdown} onChange={event=>setShowWeightBreakdown(event.target.checked)} />Detailed breakdown row</label><button className="btn btn-outline-primary btn-sm" onClick={()=>downloadScoreCsv(true)} disabled={!scorebookAssessments.length}>Download template</button><button className="btn btn-outline-primary btn-sm" onClick={()=>{setBulkScoresOpen(true);setBulkErrors([]);setBulkRowsPreview([]);setBulkOperations([])}} disabled={!scorebookAssessments.length||detail.gradeStatus==="VERIFIED"}>Import scores</button><button className="btn btn-outline-secondary btn-sm" onClick={()=>downloadScoreCsv(false)} disabled={!scorebookAssessments.length}>Export scores</button></div></div>
+          {classSection === "record" && <section id="class-section-record" className="surface gradebook-card scorebook-section" ref={scorebookRegionRef}><div className="section-heading"><div><span className="eyebrow">ELECTRONIC CLASS RECORD</span><h2>Record scores</h2><p className="muted">Enter scores by student and assessment. Each category includes an Equivalent (%) column showing the earned share of its parent Lecture or Laboratory allocation (for example, 93% × 25% = 23.25%). The final course grade also applies the top-level Lecture/Laboratory weights. Changes save when you leave a field. Pending work is not treated as zero.</p></div><div className="scorebook-toolbar"><span className="gradebook-count">{filteredEnrollments.length} of {detail.enrollments.length} students · {detail.assessments.length} items</span><label className="scorebook-contribution-toggle"><input type="checkbox" className="form-check-input" checked={showWeightBreakdown} onChange={event=>setShowWeightBreakdown(event.target.checked)} />Detailed breakdown row</label><button className="btn btn-outline-primary btn-sm" onClick={()=>downloadScoreCsv(true)} disabled={!scorebookAssessments.length}>Download template</button><button className="btn btn-outline-primary btn-sm" onClick={()=>{setBulkScoresOpen(true);setBulkErrors([]);setBulkRowsPreview([]);setBulkOperations([])}} disabled={!scorebookAssessments.length||detail.gradeStatus==="VERIFIED"}>Import scores</button><button className="btn btn-outline-primary btn-sm" onClick={exportRecordScoresExcel} disabled={!scorebookAssessments.length}>Export Excel</button><button className="btn btn-outline-secondary btn-sm" onClick={()=>downloadScoreCsv(false)} disabled={!scorebookAssessments.length}>Export CSV</button></div></div>
             {workbookSaveState !== "idle" && <div className={`small mb-2 ${workbookSaveState === "error" ? "text-danger" : "text-secondary"}`} role="status" aria-live="polite">
               {workbookSaveState === "queued" ? "Workbook changes queued…" : workbookSaveState === "saving" ? "Saving workbook…" : workbookSaveState === "saved" ? "✓ Workbook saved" : "Workbook not saved."}
               {workbookSaveState === "error" && <button type="button" className="btn btn-link btn-sm" onClick={() => { workbookFailedRef.current = false; void flushWorkbookScores(); }}>Retry saving</button>}
