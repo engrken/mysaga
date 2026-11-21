@@ -418,9 +418,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail: Detail, categories: Category[], teacherName: string) {
-  // The FCU template contains one complete header image, not independent text cells.
-  // Use the same artwork in Print and Excel; no external IMAGE() formula required.
+async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail: Detail, categories: Category[], teacherName: string, deanName: string, components: GradeSheetComponent[]) {
   let logoPng: Uint8Array | null = null;
   try {
     const headerResponse = await fetch("/fcu-grading-header.png");
@@ -431,27 +429,23 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     console.error("FCU grade-sheet header unavailable:", error);
     return;
   }
-  // Keep the FCU grading-sheet header consistent across every export.
-  // The three assessment columns occupy the original E:H component area;
-  // their score values still come from matching configured grading categories.
-  const assessmentHeaders = ["MAJOR EXAM", "ATTENDANCE", "ASSESSMENT"];
-  const gradeSlots = 4;
-  const componentRanges = assessmentHeaders.map((name, index) => ({
-    name,
-    category: categories.find(category => category.name.trim().toLocaleUpperCase() === name),
-    start: 4 + Math.floor(index * gradeSlots / assessmentHeaders.length),
-    end: 3 + Math.floor((index + 1) * gradeSlots / assessmentHeaders.length)
+
+  const componentColumns = components.map((component, index) => ({
+    component,
+    category: categories.find(category => !category.parentId && category.name.trim().toLocaleLowerCase() === component.name.trim().toLocaleLowerCase()),
+    col: index + 2
   }));
-  const columnCount = gradeSlots + 7;
+  const totalCol = 2 + componentColumns.length;
+  const columnCount = totalCol + 3;
   const last = excelColumn(columnCount - 1);
-  const totalCol = columnCount - 3;
   const cells: Array<Array<{ value: unknown; style: number }>> = [];
   const row = (values: Array<{ col: number; value: unknown; style?: number }>) => {
-    const result = Array.from({ length: columnCount }, () => ({ value: "", style: 0 } as {value: unknown; style: number}));
+    const result = Array.from({ length: columnCount }, () => ({ value: "", style: 0 } as { value: unknown; style: number }));
     for (const item of values) result[item.col] = { value: item.value, style: item.style ?? 1 };
     cells.push(result);
   };
-  for (let i = 0; i < 9; i++) row([]); // A1:K9: official university header image
+
+  for (let i = 0; i < 9; i++) row([]);
   row([]);
   row([{ col: 0, value: { runs: [
     { text: "Course No.  " },
@@ -459,7 +453,7 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     { text: "    Descriptive Title  " },
     { text: "   " + detail.title + "                                      ", underline: true }
   ] }, style: 2 }]);
-  row([{ col: 0, value: "_______________________________________________   ", style: 2 }]);
+  row([{ col: 0, value: "____________________________________________________________________________________________", style: 2 }]);
   row([{ col: 0, value: { runs: [
     { text: "Class I.D.  " },
     { text: "  " + (detail.classId || "—") + "    ", underline: true },
@@ -470,115 +464,140 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
   ] }, style: 2 }]);
   row([{ col: 0, value: "-----------------------------------------------------------------------------------------------------------------------------------------------", style: 6 }]);
   row([
-    { col: 0, value: "NAME OF STUDENTS", style: 4 },
-    ...componentRanges.map(range => ({ col: range.start, value: ": " + range.name + " :", style: 4 })),
-    { col: totalCol, value: ": TG :", style: 4 },
-    { col: totalCol + 1, value: ": FG :", style: 4 },
-    { col: totalCol + 2, value: ": REMARKS :", style: 4 }
+    { col: 0, value: "NO.", style: 4 },
+    { col: 1, value: "NAME OF STUDENTS", style: 4 },
+    ...componentColumns.map(item => ({
+      col: item.col,
+      value: item.component.name.toLocaleUpperCase() + ". " + (Number(item.component.percentage.toFixed(2))).toString() + "%",
+      style: 4
+    })),
+    { col: totalCol, value: "TOTAL GRADE", style: 4 },
+    { col: totalCol + 1, value: "FINAL GRADE", style: 4 },
+    { col: totalCol + 2, value: "REMARKS", style: 4 }
   ]);
   row([{ col: 0, value: "-----------------------------------------------------------------------------------------------------------------------------------------------", style: 6 }]);
+
   for (const [index, enrollment] of detail.enrollments.entries()) {
     const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
-    const suppress = ["INC", "DROPPED"].includes(enrollment.remarks || "");
-    const componentValues = componentRanges.map(range => {
-      const percent = range.category
-        ? weightedCategoryPercent(enrollment, range.category, detail.categories, detail.assessments)
+    const special = ["INC", "NP", "DROPPED"].includes(enrollment.remarks || "");
+    const componentValues = componentColumns.map(item => {
+      const rawPercent = item.category
+        ? weightedCategoryPercent(enrollment, item.category, categories, detail.assessments)
         : null;
-      return { col: range.start, value: suppress || percent === null || !range.category ? "" : Number((percent * effectiveCategoryWeight(range.category, detail.categories) / 100).toFixed(2)), style: 5 };
+      const contribution = rawPercent === null ? null : rawPercent * item.component.percentage / 100;
+      return {
+        col: item.col,
+        value: special || contribution === null ? "" : Number(contribution.toFixed(2)),
+        style: 5
+      };
     });
-    const gradeString = suppress ? "" : enrollment.finalGradeOverride || band?.finalGrade || "";
-    const gradeNumber = gradeString && /^[0-9]+(?:\.[0-9]+)?$/.test(gradeString) ? Number(gradeString) : gradeString;
+    const gradeString = special ? "" : enrollment.finalGradeOverride || band?.finalGrade || "";
     row([
-      { col: 0, value: (index + 1) + ". " + enrollment.studentName.toLocaleUpperCase(), style: 5 },
+      { col: 0, value: enrollment.studentNumber || String(index + 1), style: 6 },
+      { col: 1, value: enrollment.studentName.toLocaleUpperCase(), style: 6 },
       ...componentValues,
-      { col: totalCol, value: suppress || enrollment.finalPercent === null ? "" : Number(enrollment.finalPercent.toFixed(2)), style: 5 },
-      { col: totalCol + 1, value: gradeNumber, style: 5 },
-      { col: totalCol + 2, value: (enrollment.remarks || band?.remarks) ? ":   " + (enrollment.remarks || band?.remarks) + "   :" : "", style: 6 }
+      { col: totalCol, value: special || enrollment.finalPercent === null ? "" : Number(enrollment.finalPercent.toFixed(2)), style: 5 },
+      { col: totalCol + 1, value: gradeString, style: 6 },
+      { col: totalCol + 2, value: enrollment.remarks || band?.remarks || "", style: 6 }
     ]);
   }
-  // The official workbook places two signature columns below the grading list.
+
   row([]);
-  row([{ col: 0, value: "Submitted by:                                                                         Noted:", style: 2 }]);
+  const signatureRow = cells.length + 1;
+  const split = Math.max(1, Math.floor((columnCount - 1) / 2));
+  row([{ col: 0, value: "Submitted by:", style: 2 }, { col: split + 1, value: "Noted:", style: 2 }]);
   row([]);
-  row([{ col: 0, value: { runs: [
-    { text: "              " + teacherName.toLocaleUpperCase() + "              ", underline: true },
-    { text: "                           ________________________________", underline: true }
-  ] }, style: 2 }]);
-  row([{ col: 0, value: "TEACHER'S SIGNATURE OVER PRINTED NAME                         DEAN'S SIGNATURE OVER PRINTED NAME", style: 2 }]);
+  row([
+    { col: 0, value: { runs: [{ text: teacherName.toLocaleUpperCase(), underline: true }] }, style: 2 },
+    { col: split + 1, value: { runs: [{ text: (deanName || "____________________________").toLocaleUpperCase(), underline: true }] }, style: 2 }
+  ]);
+  row([
+    { col: 0, value: "TEACHER'S SIGNATURE OVER PRINTED NAME", style: 2 },
+    { col: split + 1, value: "DEAN'S SIGNATURE OVER PRINTED NAME", style: 2 }
+  ]);
+
   const xmlRows = cells.map((values, rowIndex) => {
     const rowNumber = rowIndex + 1;
     const xmlCells = values.map((cell, colIndex) => {
-      const reference = `${excelColumn(colIndex)}${rowNumber}`;
-      if (typeof cell.value === "number" && Number.isFinite(cell.value)) return `<c r="${reference}" s="${cell.style}"><v>${cell.value}</v></c>`;
+      const reference = excelColumn(colIndex) + rowNumber;
+      if (typeof cell.value === "number" && Number.isFinite(cell.value)) {
+        return '<c r="' + reference + '" s="' + cell.style + '" t="n"><v>' + cell.value + '</v></c>';
+      }
       if (cell.value && typeof cell.value === "object" && "runs" in cell.value) {
         const runs = (cell.value as { runs: Array<{ text: string; underline?: boolean }> }).runs;
-        return `<c r="${reference}" s="${cell.style}" t="inlineStr"><is>${runs.map(run => `<r><rPr><rFont val="Arial"/><sz val="11"/>${run.underline ? '<u/>' : ''}</rPr><t xml:space="preserve">${xmlEscape(run.text)}</t></r>`).join("")}</is></c>`;
+        return '<c r="' + reference + '" s="' + cell.style + '" t="inlineStr"><is>' +
+          runs.map(run => '<r><rPr><rFont val="Arial"/><sz val="9"/>' + (run.underline ? '<u/>' : '') + '</rPr><t xml:space="preserve">' + xmlEscape(run.text) + '</t></r>').join("") +
+          '</is></c>';
       }
-      const text = xmlEscape(cell.value);
-      return `<c r="${reference}" s="${cell.style}" t="inlineStr"><is><t xml:space="preserve">${text}</t></is></c>`;
+      return '<c r="' + reference + '" s="' + cell.style + '" t="inlineStr"><is><t xml:space="preserve">' + xmlEscape(cell.value) + '</t></is></c>';
     }).join("");
-    const height = rowIndex < 9 ? ' ht="15.5" customHeight="1"' : rowIndex === 13 ? ' ht="10.95" customHeight="1"' : rowIndex === 15 ? ' ht="10.05" customHeight="1"' : rowIndex >= 16 && rowIndex < 16 + detail.enrollments.length ? ' ht="13.8" customHeight="1"' : ' ht="15" customHeight="1"';
-    return `<row r="${rowNumber}"${height}>${xmlCells}</row>`;
+    const height = rowIndex < 9 ? ' ht="15.5" customHeight="1"'
+      : rowIndex === 14 ? ' ht="32" customHeight="1"'
+      : rowIndex >= 16 && rowIndex < 16 + detail.enrollments.length ? ' ht="20" customHeight="1"'
+      : ' ht="18" customHeight="1"';
+    return '<row r="' + rowNumber + '"' + height + '>' + xmlCells + '</row>';
   }).join("");
-  const merges = [
-    "A1:" + last + "9", "A11:" + last + "11", "A12:" + last + "12", "A13:" + last + "13",
-    "A14:" + last + "14", "A15:D15", "A16:" + last + "16",
-    ...detail.enrollments.map((_, index) => "A" + (index + 17) + ":D" + (index + 17)),
-    ...componentRanges.flatMap(range => range.start === range.end ? [] : [
-      excelColumn(range.start) + "15:" + excelColumn(range.end) + "15",
-      ...detail.enrollments.map((_, index) => excelColumn(range.start) + (index + 17) + ":" + excelColumn(range.end) + (index + 17))
-    ]),
-    ...[detail.enrollments.length + 18, detail.enrollments.length + 20, detail.enrollments.length + 21].map(index => "A" + index + ":" + last + index)
+
+  const signatureRanges = [
+    "A" + signatureRow + ":" + excelColumn(split) + signatureRow,
+    excelColumn(split + 2) + signatureRow + ":" + last + signatureRow,
+    "A" + (signatureRow + 2) + ":" + excelColumn(split) + (signatureRow + 2),
+    excelColumn(split + 2) + (signatureRow + 2) + ":" + last + (signatureRow + 2),
+    "A" + (signatureRow + 3) + ":" + excelColumn(split) + (signatureRow + 3),
+    excelColumn(split + 2) + (signatureRow + 3) + ":" + last + (signatureRow + 3)
   ];
+  const merges = ["A1:" + last + "9", "A11:" + last + "11", "A12:" + last + "12", "A13:" + last + "13", "A14:" + last + "14", ...signatureRanges];
   const mergeXml = merges.map(range => '<mergeCell ref="' + range + '"/>').join("");
-  const widths = '<cols><col min="1" max="1" width="8.44" customWidth="1"/>' +
-    '<col min="2" max="2" width="8" customWidth="1"/><col min="3" max="3" width="8.22" customWidth="1"/>' +
-    '<col min="4" max="4" width="9.55" customWidth="1"/>' +
-    '<col min="5" max="' + totalCol + '" width="9" customWidth="1"/>' +
-    '<col min="' + (totalCol + 1) + '" max="' + (totalCol + 2) + '" width="8.3" customWidth="1"/>' +
-    '<col min="' + (totalCol + 3) + '" max="' + columnCount + '" width="13" customWidth="1"/></cols>';
+  const widths = '<cols>' +
+    '<col min="1" max="1" width="14" customWidth="1"/>' +
+    '<col min="2" max="2" width="32" customWidth="1"/>' +
+    (componentColumns.length ? '<col min="3" max="' + (totalCol) + '" width="15" customWidth="1"/>' : '') +
+    '<col min="' + (totalCol + 1) + '" max="' + (totalCol + 1) + '" width="15" customWidth="1"/>' +
+    '<col min="' + (totalCol + 2) + '" max="' + (totalCol + 2) + '" width="13" customWidth="1"/>' +
+    '<col min="' + (totalCol + 3) + '" max="' + (totalCol + 3) + '" width="18" customWidth="1"/>' +
+    '</cols>';
   const worksheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
     '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" zoomScale="90" workbookViewId="0"><pane ySplit="16" topLeftCell="A17" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A17" sqref="A17"/></sheetView></sheetViews>' +
-    '<sheetFormatPr defaultRowHeight="15"/>' + widths + '<sheetData>' + xmlRows + '</sheetData>' +
+    '<sheetFormatPr defaultRowHeight="18"/>' + widths + '<sheetData>' + xmlRows + '</sheetData>' +
     '<mergeCells count="' + merges.length + '">' + mergeXml + '</mergeCells>' +
     '<printOptions horizontalCentered="1"/><pageMargins left="0.275" right="0.20" top="0.39" bottom="0.24" header="0.20" footer="0.20"/>' +
     '<pageSetup paperSize="14" orientation="portrait" fitToWidth="1" fitToHeight="0"/>' +
     '<drawing r:id="rId1"/></worksheet>';
   const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<numFmts count="1"><numFmt numFmtId="164" formatCode="&quot;:   &quot;0.00&quot;  :&quot;"/></numFmts>' +
-    '<fonts count="3"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font><font><b/><sz val="15"/><name val="Arial"/></font></fonts>' +
-    '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
-    '<borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border>' +
-    '<border><left style="dotted"/><right style="dotted"/><top/><bottom style="dotted"/><diagonal/></border>' +
-    '<border><left/><right/><top style="dashed"/><bottom style="dashed"/><diagonal/></border></borders>' +
+    '<numFmts count="1"><numFmt numFmtId="164" formatCode="0.00&quot;%&quot;"/></numFmts>' +
+    '<fonts count="5"><font><sz val="9"/><name val="Arial"/></font><font><b/><sz val="9"/><name val="Arial"/></font><font><sz val="8.5"/><name val="Arial"/><color rgb="FF5B6573"/></font><font><b/><sz val="14"/><name val="Arial"/></font><font><b/><sz val="9"/><name val="Arial"/></font></fonts>' +
+    '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF0F8"/><bgColor indexed="64"/></patternFill></fill></fills>' +
+    '<borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="dotted"/><right style="dotted"/><top/><bottom style="dotted"/><diagonal/></border><border><left/><right/><top style="dashed"/><bottom style="dashed"/><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="7"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
-    '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
+    '<cellXfs count="7">' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+    '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
     '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
-    '<xf numFmtId="0" fontId="1" fillId="0" borderId="2" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
+    '<xf numFmtId="0" fontId="4" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
     '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
-    '<xf numFmtId="0" fontId="0" fillId="0" borderId="2" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
     '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
   const safeSheetName = sheetName.replace(/[\\/?*\[\]:]/g, " ").slice(0, 31) || "FCU Grades";
   const files = [
-    { name: "[Content_Types].xml", content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${logoPng ? '<Default Extension="png" ContentType="image/png"/><Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' : ""}<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>` },
+    { name: "[Content_Types].xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
     { name: "_rels/.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
-    { name: "xl/workbook.xml", content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xmlEscape(safeSheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>` },
+    { name: "xl/workbook.xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="' + xmlEscape(safeSheetName) + '" sheetId="1" r:id="rId1"/></sheets></workbook>' },
     { name: "xl/_rels/workbook.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' },
     { name: "xl/worksheets/sheet1.xml", content: worksheet },
     { name: "xl/styles.xml", content: styles },
-    ...(logoPng ? [
-      { name: "xl/worksheets/_rels/sheet1.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>' },
-      { name: "xl/drawings/drawing1.xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="7040000" cy="1755000"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="1" name="Official FCU ISO grading header"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>' },
-      { name: "xl/drawings/_rels/drawing1.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/></Relationships>' },
-      { name: "xl/media/image1.png", content: logoPng }
-    ] : [])
+    { name: "xl/worksheets/_rels/sheet1.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>' },
+    { name: "xl/drawings/drawing1.xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="7040000" cy="1755000"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="1" name="Official FCU grading header"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>' },
+    { name: "xl/drawings/_rels/drawing1.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/></Relationships>' },
+    { name: "xl/media/image1.png", content: logoPng }
   ];
   const url = URL.createObjectURL(new Blob([zipStored(files) as BlobPart], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-  const link = document.createElement("a"); link.href = url; link.download = filename; link.click();
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function categoryPercent(enrollment: Enrollment, category: Category, assessments: Assessment[], categories: Category[]) {
