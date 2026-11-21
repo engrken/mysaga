@@ -417,5 +417,5 @@ test("Final Grades exposes separate Generic and ISO Excel exports and includes n
   assert.match(source, /function exportIsoGradesExcel\\(\\)/);
   assert.match(source, /Add category or subcategory from Grading Setup/);
   assert.match(source, /categoryPath\\(category, detail\\.categories\\)/);
-  assert.match(source, /while \\(current && current\\.id !== root\\.id/);
+  assert.ok(source.includes("while (current && current.id !== root.id"));
 });
