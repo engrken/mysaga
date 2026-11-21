@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate status; fi && prisma generate && npm run test:department-logo && npm run test:grades && npm run test:classes && npm run test:simulation && npm run test:scorebook-layout && npm run test:tenant && npm run test:teacher-signup && npm run test:identity && npm run test:invites && npm run test:release && npm run test:theme && npm run test:demo && next build",
+    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate deploy; fi && prisma generate && npm run test:department-logo && npm run test:grades && npm run test:classes && npm run test:simulation && npm run test:scorebook-layout && npm run test:tenant && npm run test:teacher-signup && npm run test:identity && npm run test:invites && npm run test:release && npm run test:theme && npm run test:demo && next build",
     "test:grades": "node --test tests/grades.test.cjs tests/assessment-setup.test.cjs",
     "test:classes": "node --test tests/class-navigation.test.cjs",
     "postinstall": "prisma generate",
