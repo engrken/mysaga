@@ -733,6 +733,18 @@ function categoryPath(category: Category, categories: Category[]) {
   while (parent) { names.unshift(parent.name); parent = categories.find(item => item.id === parent?.parentId); }
   return names.join(" / ");
 }
+function rootCategory(category: Category, categories: Category[]) {
+  let root = category;
+  const visited = new Set([category.id]);
+  while (root.parentId) {
+    if (visited.has(root.parentId)) break;
+    visited.add(root.parentId);
+    const parent = categories.find(item => item.id === root.parentId);
+    if (!parent) break;
+    root = parent;
+  }
+  return root;
+}
 function localCategoryWeight(category: Category) {
   return category.weight;
 }
