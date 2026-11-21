@@ -502,8 +502,8 @@ test("Record Scores Excel export mirrors the full grouped scorebook and saved si
   assert.match(sheet, /<c r="H16"[^>]*>.*?90\.00%/s);
   assert.match(sheet, /<c r="I16"[^>]*>.*?2\.00/s);
   assert.match(sheet, /<c r="J16"[^>]*>.*?PASSED/s);
-  assert.match(sheet, /Teacher One/);
-  assert.match(sheet, /Dean Two/);
+  assert.match(sheet, /TEACHER ONE/);
+  assert.match(sheet, /DEAN TWO/);
   assert.match(sheet, /SIGNATURE OVER PRINTED NAME \/ DATE/);
   assert.doesNotMatch(sheet, /Teacher&apos;s Signature over Printed Name|Dean&apos;s Signature over Printed Name/);
   assert.match(sheet, /orientation="landscape" fitToWidth="1"/);
