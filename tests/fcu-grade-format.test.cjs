@@ -281,9 +281,8 @@ test("PDF component values are weighted by the configured course allocation", ()
   assert.match(source, /<td>\{index\+1\}\.<\/td><td>\{enrollment\.studentName\.toLocaleUpperCase\(\)\}<\/td>/);
   assert.doesNotMatch(printHeader, /generic-print-logos/);
   const printTable = source.slice(source.indexOf('<table className="print-grade-table generic-print-grade-table">'), source.indexOf('<p className="grade-sheet-calculation-note">'));
-  assert.doesNotMatch(printTable, /NO\\.|studentNumber/);
-  assert.match(printTable, /<td>\\{index\\+1\\}\\./);
-  assert.match(printTable, /generic-print-logo-slot[\\s\\S]*?School \\/ institution logo[\\s\\S]*?generic-print-school-heading[\\s\\S]*?user\\.school\\.name[\\s\\S]*?departmentLogoPath[\\s\\S]*?College \\/ department logo/);
+  assert.doesNotMatch(printTable, /NO\.|studentNumber/);
+  assert.match(printTable, /<td>\{index\+1\}\./);
   assert.match(printHeader, /generic-print-logo-slot[\s\S]*?School \/ institution logo[\s\S]*?generic-print-school-heading[\s\S]*?user\.school\.name[\s\S]*?departmentLogoPath[\s\S]*?College \/ department logo/);
   assert.match(source, /grid-template-columns:76px minmax\(0,1fr\) 76px/);
   assert.match(source, /max-width:900px;[\s\S]*?margin:0 auto 6px/);
