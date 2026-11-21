@@ -32,6 +32,7 @@ async function generate(categories, enrollments, components) {
     Uint8Array, Number, String, Math, Set, console, Blob, TextEncoder,
     URL: { createObjectURL: () => "blob:test", revokeObjectURL() {} },
     document: { createElement: () => ({ click() {} }) },
+    window: { setTimeout() {} },
     setTimeout() {},
     zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
     excelColumn: columns,
@@ -209,7 +210,7 @@ test("FCU final-grade export uses the exact configured components and their weig
 test("Generic PDF export is offered only once inside the export dropdown", () => {
   assert.match(source, /<strong>Save \/ Print Generic PDF<\/strong>/, "the Generic dropdown retains its PDF option");
   assert.match(source, /"Download Generic Excel Sheet"/, "the Generic dropdown retains its idle Excel option label");
-  assert.match(source, /"Generating Excel file…"/, "the Generic dropdown exposes its loading label");
+  assert.match(source, /Generating Excel file…/, "the Generic dropdown exposes its loading label");
   assert.doesNotMatch(source, /<button className="btn btn-outline-primary" onClick=\{\(\) => printFinalGradesPdf\("generic"\)\}>Save \/ Print Generic PDF<\/button>/, "the duplicate standalone PDF button is removed");
 });
 
@@ -419,6 +420,7 @@ test("Record Scores Excel export mirrors the full grouped scorebook and saved si
     Uint8Array, Number, String, Math, Blob, TextEncoder,
     URL: { createObjectURL: () => "blob:test", revokeObjectURL() {} },
     document: { createElement: () => ({ click() {} }) },
+    window: { setTimeout() {} },
     setTimeout() {},
     zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
     excelColumn: columns,
@@ -522,6 +524,7 @@ test("generic grading sheet supports a class with no assessment items without in
     Uint8Array, Number, String, Math, Blob, TextEncoder,
     URL: { createObjectURL: () => "blob:test", revokeObjectURL() {} },
     document: { createElement: () => ({ click() {} }) },
+    window: { setTimeout() {} },
     setTimeout() {},
     zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
     excelColumn: columns, sortWorksheetRowCells: value => value, xmlEscape: escape, categoryPath: category => category.name,
