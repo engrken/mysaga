@@ -409,3 +409,13 @@ test("ISO header configuration is isolated per school and FCU receives its suppl
   assert.equal(savedOtherSchool.formName, "INSTITUTIONAL RECORD SHEET");
   assert.equal(savedOtherSchool.formNo, "AC-REG-001");
 });
+
+ 
+test("Final Grades exposes separate Generic and ISO Excel exports and includes nested category components", () => {
+  assert.match(source, /Download Generic Excel Sheet/);
+  assert.match(source, /Download ISO Excel Sheet/);
+  assert.match(source, /function exportIsoGradesExcel\\(\\)/);
+  assert.match(source, /Add category or subcategory from Grading Setup/);
+  assert.match(source, /categoryPath\\(category, detail\\.categories\\)/);
+  assert.match(source, /while \\(current && current\\.id !== root\\.id/);
+});
