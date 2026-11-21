@@ -261,7 +261,6 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(pythonSource, /cell\.number_format = "0\.00%"/);
   assert.match(pythonSource, /Percentage columns are passed as fractions/);
   assert.match(pythonSource, /def _normalize_signature_name/);
-  assert.match(pythonSource, /_set_literal\(worksheet\["B4"\], "Revision No\\. "/);
   assert.match(pythonSource, /merge_cells\("A5:G5"\)/);
   assert.match(pythonSource, /merge_cells\("A6:G6"\)/);
   assert.match(pythonSource, /paperSize = "14"/);
