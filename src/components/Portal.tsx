@@ -2174,14 +2174,14 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           .generic-print-sheet { display:block!important; width:100%!important; color:#000!important; background:#fff!important; font-family:Arial,Helvetica,sans-serif!important; }
           .generic-print-sheet { font-size:9pt; }
           .generic-print-sheet>header { display:flex; flex-direction:column; align-items:stretch; gap:2px; width:100%; max-width:100%; box-sizing:border-box; text-align:center; border:0; padding:0 4px 8px; margin:0 auto 8px; }
-          .generic-print-header-layout { display:grid; grid-template-columns:64px minmax(0,1fr) 64px; grid-template-rows:auto auto auto 1.2em auto auto; align-items:center; column-gap:6px; row-gap:2px; width:100%; text-align:center; }
-          .generic-print-logo-slot { display:flex; align-items:center; justify-content:center; align-self:stretch; min-width:0; }
+          .generic-print-header-layout { display:grid; grid-template-columns:minmax(58px,1fr) minmax(0,max-content) minmax(58px,1fr); grid-template-rows:auto auto auto 1.2em auto auto; align-items:center; column-gap:6px; row-gap:2px; width:100%; text-align:center; }
+          .generic-print-logo-slot { display:flex; align-items:center; align-self:stretch; min-width:58px; width:58px; }
           .generic-print-logo-slot img { display:block; max-width:58px; max-height:104px; width:auto; height:auto; object-fit:contain; margin:0 auto; }
           .generic-print-logo-placeholder { display:block; width:54px; height:54px; box-sizing:border-box; border:1px dashed #777; }
           .generic-print-school-placeholder { border-radius:50%; }
           .generic-print-department-placeholder { border-radius:5px; }
-          .generic-print-school-logo { grid-column:1; grid-row:1 / span 6; }
-          .generic-print-department-logo { grid-column:3; grid-row:1 / span 6; }
+          .generic-print-school-logo { grid-column:1; grid-row:1 / span 6; justify-self:end; }
+          .generic-print-department-logo { grid-column:3; grid-row:1 / span 6; justify-self:start; }
           .generic-print-school-name { grid-column:2; grid-row:1; min-width:0; margin:0; font-size:14pt; font-weight:700; line-height:1.15; text-align:center; text-transform:uppercase; }
           .generic-print-department { grid-column:2; grid-row:2; min-width:0; min-height:1.2em; margin:0; font-size:9pt; font-weight:700; line-height:1.2; text-align:center; text-transform:uppercase; overflow-wrap:anywhere; }
           .generic-print-address { grid-column:2; grid-row:3; min-width:0; min-height:1.2em; margin:0; font-size:8.5pt; line-height:1.2; text-align:center; }
