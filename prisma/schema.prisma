@@ -47,6 +47,7 @@ model School {
   logoPath              String?
   departmentLogoPath    String?
   address               String?
+  departmentName        String?
   deanName              String?
   privacyController     String?
   privacyContactEmail   String?
