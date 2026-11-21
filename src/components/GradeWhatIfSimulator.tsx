@@ -80,14 +80,14 @@ export default function GradeWhatIfSimulator({ grade, onClose, inline = false }:
       <div className="grade-simulator-body">
         <div className="grade-simulator-notice"><strong>Simulation only.</strong> Try hypothetical scores to explore possible outcomes. Nothing entered here is saved or sent to your teacher. Actual grades, verification, and official school records remain unchanged.</div>
         <div className="grade-simulator-metrics">
-          <div><small>Current course contribution</small><strong>{displayPercent(grade.percent ?? baseline.totalPercent)}</strong><span>Teacher-entered results</span></div>
-          <div className="grade-simulator-metric-projected"><small>What-if contribution</small><strong>{errors ? "Check inputs" : displayPercent(projected.totalPercent)}</strong>
+          <div><small>Current TOTAL GRADE</small><strong>{displayPercent(grade.percent ?? baseline.totalPercent)}</strong><span>Teacher-entered results</span></div>
+          <div className="grade-simulator-metric-projected"><small>What-if TOTAL GRADE</small><strong>{errors ? "Check inputs" : displayPercent(projected.totalPercent)}</strong>
             <span>{!errors && delta !== null ? `${delta > 0 ? "+" : ""}${delta.toFixed(2)} percentage points` : "Based on hypothetical entries"}</span></div>
-          <div><small>Hypothetical equivalent</small><strong>{errors ? "—" : projected.equivalent.finalGrade ?? "—"}</strong><span>{errors ? "Correct out-of-range scores" : projected.equivalent.remarks}</span></div>
+          <div><small>Hypothetical FINAL GRADE</small><strong>{errors ? "—" : projected.equivalent.finalGrade ?? "—"}</strong><span>{errors ? "Correct out-of-range scores" : projected.equivalent.remarks}</span></div>
         </div>
         <div className="grade-simulator-controls">
           <div className="grade-simulator-target">
-            <label htmlFor="simulated-grade-target">Target course percentage</label>
+            <label htmlFor="simulated-grade-target">Target TOTAL GRADE</label>
             <div className="input-group input-group-sm"><input id="simulated-grade-target" className="form-control" type="number" min="0" max="100" step="0.01" value={target} onChange={event => setTarget(event.target.value)}/><span className="input-group-text">%</span></div>
           </div>
           <div className="grade-simulator-target-result" aria-live="polite">
