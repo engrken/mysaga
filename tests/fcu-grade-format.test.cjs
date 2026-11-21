@@ -386,7 +386,7 @@ test("assessment item order is saved and applied consistently in Assessment Item
 
 test("ISO header configuration is isolated per school and FCU receives its supplied preset", () => {
   const start = source.indexOf("type IsoHeaderConfig =");
-  const end = source.indexOf("\ntype WorkbookChange", start);
+  const end = source.indexOf("\ntype Detail =", start);
   assert.ok(start >= 0 && end > start, "ISO header defaults and parser are present");
   const compiled = ts.transpileModule(source.slice(start, end), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
