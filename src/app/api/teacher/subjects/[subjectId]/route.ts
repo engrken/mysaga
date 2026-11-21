@@ -467,10 +467,13 @@ export async function PATCH(request: Request, context: Context) {
     });
     if (changed.length) {
       await prisma.$transaction([
-        ...changed.map(category => prisma.gradeCategory.update({
-          where: { id: category.id },
-          data: { parentId: category.parentId ?? null, name: category.name, weight: category.weight, conversionBase: category.conversionBase, sortOrder: category.sortOrder ?? existing.sortOrder }
-        })),
+        ...changed.map(category => {
+          const existing = subject.categories.find(item => item.id === category.id)!;
+          return prisma.gradeCategory.update({
+            where: { id: category.id },
+            data: { parentId: category.parentId ?? null, name: category.name, weight: category.weight, conversionBase: category.conversionBase, sortOrder: category.sortOrder ?? existing.sortOrder }
+          });
+        }),
         prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated grading weights", entity: "subject", entityId: subjectId } })
       ]);
     }
