@@ -26,10 +26,6 @@ async function generate(categories, enrollments, components) {
     URL: { createObjectURL: () => "blob:test", revokeObjectURL() {} },
     document: { createElement: () => ({ click() {} }) },
     setTimeout() {},
-    fetch: async path => {
-      assert.equal(path, "/fcu-grading-header.png");
-      return { ok: true, arrayBuffer: async () => Uint8Array.from([137, 80, 78, 71]).buffer };
-    },
     zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
     excelColumn: columns,
     xmlEscape: escape,
@@ -43,7 +39,7 @@ async function generate(categories, enrollments, components) {
     assessments: [],
     gradeBands: [{ minPercent: 75, finalGrade: "2.00", remarks: "PASSED" }]
   };
-  await context.generateGradeFile("demo.xlsx", "FCU Grading Sheet", detail, categories, "Faculty Example", "Dean Example", components);
+  await context.generateGradeFile("demo.xlsx", "FCU Grading Sheet", detail, categories, "Faculty Example", "Dean Example", components, Uint8Array.from([137, 80, 78, 71]));
   assert.ok(saved, "xlsx files created");
   return Object.fromEntries(saved.map(file => [file.name, file.content]));
 }
@@ -96,6 +92,32 @@ test("FCU final-grade export uses the exact configured components and their weig
   assert.match(sheet, /<col min="6" max="6" width="14"/);
   assert.match(sheet, /<col min="7" max="7" width="11"/);
   assert.match(sheet, /<col min="8" max="8" width="18"/);
+});
+
+test("ISO Excel export embeds the same document header as the ISO PDF", () => {
+  const start = source.indexOf("function downloadXlsx(");
+  const end = source.indexOf("\nfunction categoryPercent(", start);
+  assert.ok(start > 0 && end > start, "header-capable XLSX writer is present");
+  const compiledWriter = ts.transpileModule(source.slice(start, end), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  let saved;
+  const context = {
+    Uint8Array, Number, String, Math, Blob, TextEncoder,
+    URL: { createObjectURL: () => "blob:test", revokeObjectURL() {} },
+    document: { createElement: () => ({ click() {} }) },
+    zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
+    excelColumn: columns,
+    xmlEscape: escape
+  };
+  vm.runInNewContext(compiledWriter + "\nthis.writeWorkbook = downloadXlsx;", context);
+  context.writeWorkbook("iso.xlsx", "ISO Grading Sheet", ["No.", "Student Name"], [[1, "Example Student"]], Uint8Array.from([137, 80, 78, 71]), 0.25);
+  const files = Object.fromEntries(saved.map(file => [file.name, file.content]));
+  assert.ok(files["xl/media/header.png"]);
+  assert.match(files["xl/worksheets/sheet1.xml"], /<mergeCell ref="A1:B9"\/>/);
+  assert.match(files["xl/worksheets/sheet1.xml"], /<drawing r:id="rId1"\/>/);
+  assert.match(files["xl/drawings/drawing1.xml"], /<a:blip r:embed="rId1"\/>/);
+  assert.match(files["xl/worksheets/sheet1.xml"], /<row r="11">.*?No\./s);
 });
 
 test("FCU final-grade export supports a variable number of components", async () => {
@@ -316,7 +338,7 @@ test("PDF component values are weighted by the configured course allocation", ()
   assert.ok(source.includes('useEffect(() => { setDepartmentName(user.school.departmentName || ""); }, [user.school.departmentName]);'));
   assert.ok(source.includes('function printFinalGradesPdf(format: "generic" | "iso" = "generic")'));
   assert.ok(source.includes("College / Department name is missing."));
-  assert.ok(source.includes('onClick={() => printFinalGradesPdf("generic")}'));
+  assert.ok(source.includes('printFinalGradesPdf("generic"); event.currentTarget.closest("details")'));
   assert.ok(source.includes('printFinalGradesPdf("iso"); event.currentTarget.closest("details")'));
   assert.match(source, /generic-print-address/);
   assert.match(source, /generic-print-department/);
@@ -416,6 +438,11 @@ test("Final Grades exposes a universal ISO export format picker and includes nes
   assert.ok(source.includes("Export / Save ISO Grading Sheet"));
   assert.ok(source.includes("Save / Print ISO PDF"));
   assert.ok(source.includes("Download ISO Excel Sheet"));
+  assert.ok(source.includes("renderGenericGradeHeaderPng"));
+  assert.ok(source.includes("renderIsoGradeHeaderPng"));
+  assert.ok(source.includes("loadGradeHeaderLogo(schoolLogoPath)"));
+  assert.ok(source.includes("function ensureIsoHeaderConfigured()"));
+  assert.ok(source.includes("ISO grading-sheet export is unavailable until the ISO document header is completed."));
   assert.ok(source.includes("function exportIsoGradesExcel()"));
   assert.ok(source.includes("Add category or subcategory from Grading Setup"));
   assert.ok(source.includes("categoryPath(category, detail.categories)"));
