@@ -289,7 +289,7 @@ test("PDF component values are weighted by the configured course allocation", ()
   assert.match(courseDetails, /generic-print-course-details-row-secondary[\s\S]*?Class ID[\s\S]*?Semester[\s\S]*?Academic Year/);
   assert.doesNotMatch(courseDetails, /Course &amp; Year/);
   assert.match(source, /generic-print-course-details \{ display:flex; flex-direction:column/);
-  assert.match(source, /generic-print-course-details>div \{ display:flex; align-items:baseline/);
+  assert.match(source, /generic-print-course-details-row>div \{ display:flex; align-items:baseline/);
   assert.match(source, /border:0/);
 });
 
