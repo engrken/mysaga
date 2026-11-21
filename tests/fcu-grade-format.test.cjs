@@ -127,6 +127,48 @@ test("ISO Excel export embeds the same document header as the ISO PDF", () => {
   assert.match(files["xl/worksheets/sheet1.xml"], /<row r="11">.*?No\./s);
 });
 
+test("Attendance component calculates its own session percentage and weighted contribution", () => {
+  const start = source.indexOf("function categoryDescendantIds(");
+  const end = source.indexOf("\nfunction downloadGradeSheetXlsx(", start);
+  assert.ok(start > 0 && end > start, "attendance component calculation helpers are present");
+  const compiled = ts.transpileModule(source.slice(start, end), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  const context = {
+    Set, Number, Math,
+    categoryPath: category => category.name,
+    calculateCategoryPercent: ({ assessments }) => {
+      const counted = assessments.filter(item => item.scores[0]?.remark !== "EXCUSED" && (item.scores[0]?.remark || item.scores[0]?.points != null));
+      if (!counted.length) return null;
+      const earned = counted.filter(item => ["PRESENT", "LATE"].includes(item.scores[0].remark) || (item.scores[0].points ?? 0) > 0);
+      return Number((earned.length / counted.length * 100).toFixed(2));
+    }
+  };
+  vm.runInNewContext(compiled + "\nthis.componentPercent = gradeSheetComponentPercent; this.componentContribution = gradeSheetComponentContribution;", context);
+  const detail = {
+    categories: [
+      { id: "attendance", parentId: null, name: "Attendance", weight: 20, conversionBase: 100 },
+      { id: "sessions", parentId: "attendance", name: "Sessions", weight: 100, conversionBase: 100 },
+      { id: "other-attendance", parentId: null, name: "Attendance Lab", weight: 10, conversionBase: 100 }
+    ],
+    assessments: [
+      { id: "present", categoryId: "sessions", title: "Attendance · Present day", maxScore: 1, weight: null },
+      { id: "absent", categoryId: "sessions", title: "Attendance · Absent day", maxScore: 1, weight: null },
+      { id: "excused", categoryId: "sessions", title: "Attendance · Excused day", maxScore: 1, weight: null },
+      { id: "other", categoryId: "other-attendance", title: "Attendance · Other class", maxScore: 1, weight: null }
+    ]
+  };
+  const enrollment = { scores: [
+    { assessmentId: "present", points: null, remark: "PRESENT" },
+    { assessmentId: "absent", points: null, remark: "ABSENT" },
+    { assessmentId: "excused", points: null, remark: "EXCUSED" },
+    { assessmentId: "other", points: null, remark: "PRESENT" }
+  ] };
+  const component = { name: "Attendance", percentage: 20 };
+  assert.equal(context.componentPercent(detail, enrollment, component), 50, "only sessions within the selected Attendance category are included");
+  assert.equal(context.componentContribution(detail, enrollment, component), 10, "the attendance percentage is multiplied by the configured component weight");
+});
+
 test("FCU final-grade export calculates Attendance as a weighted component", async () => {
   const components = [{ name: "Attendance", percentage: 20 }];
   const categories = [{ id: "ATT", parentId: null, name: "Attendance", weight: 20 }];
