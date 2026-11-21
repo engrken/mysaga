@@ -106,12 +106,12 @@ export async function PATCH(request: Request, context: Context) {
       saveGradeSheetComponents: z.array(z.object({
         name: z.string().trim().min(1).max(40),
         percentage: z.number().min(0).max(100)
-      })).length(3)
+      })).min(1).max(30)
     }).safeParse(input);
-    if (!parsed.success) return NextResponse.json({ error: "Define exactly 3 valid grading components." }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: "Select between 1 and 30 valid grading components." }, { status: 400 });
     const components = parsed.data.saveGradeSheetComponents;
     const total = components.reduce((sum, item) => sum + item.percentage, 0);
-    if (Math.abs(total - 100) > 0.01 || new Set(components.map(item => item.name.toLocaleLowerCase())).size !== components.length) return NextResponse.json({ error: "Component names must be unique and percentages must total exactly 100%." }, { status: 400 });
+    if (new Set(components.map(item => item.name.toLocaleLowerCase())).size !== components.length) return NextResponse.json({ error: "Component categories must be unique." }, { status: 400 });
     await prisma.subject.update({ where: { id: subjectId }, data: { gradeSheetComponents: JSON.stringify(components) } });
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated grading sheet display components", entity: "subject", entityId: subjectId } });
     return NextResponse.json({ ok: true, gradeSheetComponents: components });
