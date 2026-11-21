@@ -220,38 +220,95 @@ function zipStored(files: Array<{ name: string; content: string | Uint8Array }>)
   const localParts: Uint8Array[] = [];
   const centralParts: Uint8Array[] = [];
   let offset = 0;
+  const ZIP_STORE = 0;
+  const UTF8_FLAG = 0x0800;
   const write16 = (view: DataView, position: number, value: number) => view.setUint16(position, value, true);
   const write32 = (view: DataView, position: number, value: number) => view.setUint32(position, value, true);
+
+  if (files.length > 0xffff) throw new Error("This workbook contains too many ZIP entries.");
+
   for (const file of files) {
+    // ZIP entry names and all XML strings are encoded as UTF-8 bytes before
+    // calculating lengths/CRC values or writing either ZIP directory record.
     const name = encoder.encode(file.name);
-    const data = typeof file.content === "string" ? encoder.encode(file.content) : file.content;
+    const data = typeof file.content === "string"
+      ? encoder.encode(file.content)
+      : new Uint8Array(file.content.buffer, file.content.byteOffset, file.content.byteLength);
+    if (name.length > 0xffff) throw new Error("A workbook ZIP entry name is too long.");
+    if (data.length > 0xffffffff || offset > 0xffffffff) {
+      throw new Error("This workbook exceeds the ZIP32 size limit.");
+    }
+
     const crc = crc32(data);
+
+    // Local file header (30 bytes + UTF-8 filename + raw, uncompressed data).
     const local = new Uint8Array(30 + name.length);
     const localView = new DataView(local.buffer);
-    write32(localView, 0, 0x04034b50); write16(localView, 4, 20); write16(localView, 6, 0x0800);
-    write16(localView, 8, 0); write32(localView, 14, crc); write32(localView, 18, data.length); write32(localView, 22, data.length);
-    write16(localView, 26, name.length); local.set(name, 30);
+    write32(localView, 0, 0x04034b50);
+    write16(localView, 4, 20); // version needed: ZIP 2.0
+    write16(localView, 6, UTF8_FLAG);
+    write16(localView, 8, ZIP_STORE); // compression method: STORE (no compression)
+    write16(localView, 10, 0); // DOS modification time
+    write16(localView, 12, 0); // DOS modification date
+    write32(localView, 14, crc);
+    write32(localView, 18, data.length); // compressed size = uncompressed size in STORE mode
+    write32(localView, 22, data.length);
+    write16(localView, 26, name.length);
+    write16(localView, 28, 0); // no extra field
+    local.set(name, 30);
     localParts.push(local, data);
 
+    // Central directory file header (46 bytes + UTF-8 filename).
     const central = new Uint8Array(46 + name.length);
     const centralView = new DataView(central.buffer);
-    write32(centralView, 0, 0x02014b50); write16(centralView, 4, 20); write16(centralView, 6, 20); write16(centralView, 8, 0x0800);
-    write16(centralView, 10, 0); write32(centralView, 16, crc); write32(centralView, 20, data.length); write32(centralView, 24, data.length);
-    write16(centralView, 28, name.length); write32(centralView, 42, offset); central.set(name, 46);
+    write32(centralView, 0, 0x02014b50);
+    write16(centralView, 4, 20); // version made by: ZIP 2.0
+    write16(centralView, 6, 20); // version needed: ZIP 2.0
+    write16(centralView, 8, UTF8_FLAG);
+    write16(centralView, 10, ZIP_STORE);
+    write16(centralView, 12, 0); // DOS modification time
+    write16(centralView, 14, 0); // DOS modification date
+    write32(centralView, 16, crc);
+    write32(centralView, 20, data.length);
+    write32(centralView, 24, data.length);
+    write16(centralView, 28, name.length);
+    write16(centralView, 30, 0); // no extra field
+    write16(centralView, 32, 0); // no file comment
+    write16(centralView, 34, 0); // disk number start
+    write16(centralView, 36, 0); // internal file attributes
+    write32(centralView, 38, 0); // external file attributes
+    write32(centralView, 42, offset); // offset of the matching local file header
+    central.set(name, 46);
     centralParts.push(central);
+
     offset += local.length + data.length;
+    if (offset > 0xffffffff) throw new Error("This workbook exceeds the ZIP32 size limit.");
   }
+
   const centralSize = centralParts.reduce((total, part) => total + part.length, 0);
+  if (centralSize > 0xffffffff) throw new Error("This workbook ZIP directory is too large.");
+
+  // End of central directory (single disk, no archive comment).
   const end = new Uint8Array(22);
   const endView = new DataView(end.buffer);
-  write32(endView, 0, 0x06054b50); write16(endView, 8, files.length); write16(endView, 10, files.length);
-  write32(endView, 12, centralSize); write32(endView, 16, offset);
-  const size = offset + centralSize + end.length;
-  const archive = new Uint8Array(size);
+  write32(endView, 0, 0x06054b50);
+  write16(endView, 4, 0);
+  write16(endView, 6, 0);
+  write16(endView, 8, files.length);
+  write16(endView, 10, files.length);
+  write32(endView, 12, centralSize);
+  write32(endView, 16, offset);
+  write16(endView, 20, 0);
+
+  const archive = new Uint8Array(offset + centralSize + end.length);
   let cursor = 0;
-  for (const part of [...localParts, ...centralParts, end]) { archive.set(part, cursor); cursor += part.length; }
+  for (const part of [...localParts, ...centralParts, end]) {
+    archive.set(part, cursor);
+    cursor += part.length;
+  }
   return archive;
 }
+
 function downloadXlsx(filename: string, sheetName: string, headers: string[], rows: unknown[][], headerPng?: Uint8Array, headerAspectRatio = 0.25) {
   const columnCount = Math.max(headers.length, ...rows.map(row => row.length), 1);
   const lastColumn = excelColumn(columnCount - 1);
