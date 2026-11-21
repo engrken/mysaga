@@ -47,6 +47,88 @@ async function generate(categories, enrollments, components) {
 const student = (name, equivalents, finalPercent = 95, remarks = "", studentNumber = "2023-0001") => ({
   studentName: name, studentNumber, equivalents, finalPercent, finalGradeOverride: null, remarks
 });
+
+test("OOXML ZIP writer encodes XML as UTF-8 and writes valid uncompressed ZIP records", () => {
+  const start = source.indexOf("function crc32(");
+  const end = source.indexOf("\\nfunction downloadXlsx(", start);
+  assert.ok(start > 0 && end > start, "CRC and ZIP writer helpers are present");
+  const compiledZip = ts.transpileModule(source.slice(start, end), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  const context = { Uint8Array, DataView, TextEncoder, Math, Number, Error };
+  vm.runInNewContext(compiledZip + "\\nthis.writeZip = zipStored; this.calculateCrc32 = crc32;", context);
+
+  const xmlFiles = [
+    {
+      name: "[Content_Types].xml",
+      content: '<?xml version="1.0" encoding="UTF-8"?><Types><Default Extension="xml" ContentType="application/xml"/></Types>'
+    },
+    {
+      name: "xl/worksheets/sheet1.xml",
+      content: '<?xml version="1.0" encoding="UTF-8"?><worksheet><sheetData><row><c>Filamér Christian University — Roxas City, Capiz</c></row><row><c>REGISTRAR’S OFFICE · ACUCA</c></row></sheetData></worksheet>'
+    },
+    {
+      name: "xl/styles.xml",
+      content: '<?xml version="1.0" encoding="UTF-8"?><styleSheet><fonts count="1"/></styleSheet>'
+    }
+  ];
+  const archive = context.writeZip(xmlFiles);
+  assert.ok(archive instanceof Uint8Array, "ZIP writer returns raw Uint8Array bytes");
+  const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
+  const endOffset = archive.byteLength - 22;
+  assert.equal(view.getUint32(endOffset, true), 0x06054b50, "EOCD signature is present");
+  const entryCount = view.getUint16(endOffset + 10, true);
+  const centralSize = view.getUint32(endOffset + 12, true);
+  const centralOffset = view.getUint32(endOffset + 16, true);
+  assert.equal(entryCount, xmlFiles.length);
+  assert.equal(centralOffset + centralSize, endOffset, "central directory ends immediately before EOCD");
+
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  const entries = new Map();
+  let centralCursor = centralOffset;
+  for (let index = 0; index < entryCount; index++) {
+    assert.equal(view.getUint32(centralCursor, true), 0x02014b50, "central-directory signature is valid");
+    const flags = view.getUint16(centralCursor + 8, true);
+    const method = view.getUint16(centralCursor + 10, true);
+    const crc = view.getUint32(centralCursor + 16, true);
+    const compressedSize = view.getUint32(centralCursor + 20, true);
+    const uncompressedSize = view.getUint32(centralCursor + 24, true);
+    const nameLength = view.getUint16(centralCursor + 28, true);
+    const extraLength = view.getUint16(centralCursor + 30, true);
+    const commentLength = view.getUint16(centralCursor + 32, true);
+    const localOffset = view.getUint32(centralCursor + 42, true);
+    const nameBytes = archive.subarray(centralCursor + 46, centralCursor + 46 + nameLength);
+    const name = decoder.decode(nameBytes);
+
+    assert.equal(flags, 0x0800, name + " declares UTF-8 filenames");
+    assert.equal(method, 0, name + " uses ZIP STORE (uncompressed) mode");
+    assert.equal(compressedSize, uncompressedSize, name + " stores raw bytes without compression");
+
+    assert.equal(view.getUint32(localOffset, true), 0x04034b50, name + " has a valid local-header signature");
+    assert.equal(view.getUint16(localOffset + 6, true), flags, name + " local flags match central flags");
+    assert.equal(view.getUint16(localOffset + 8, true), method, name + " local compression method is STORE");
+    assert.equal(view.getUint32(localOffset + 14, true), crc, name + " local CRC matches central CRC");
+    assert.equal(view.getUint32(localOffset + 18, true), compressedSize);
+    assert.equal(view.getUint32(localOffset + 22, true), uncompressedSize);
+    const localNameLength = view.getUint16(localOffset + 26, true);
+    const localExtraLength = view.getUint16(localOffset + 28, true);
+    assert.equal(localNameLength, nameLength);
+    assert.equal(decoder.decode(archive.subarray(localOffset + 30, localOffset + 30 + localNameLength)), name);
+
+    const dataStart = localOffset + 30 + localNameLength + localExtraLength;
+    const data = archive.subarray(dataStart, dataStart + uncompressedSize);
+    assert.equal(context.calculateCrc32(data), crc, name + " CRC-32 matches its UTF-8 payload");
+    entries.set(name, decoder.decode(data));
+    centralCursor += 46 + nameLength + extraLength + commentLength;
+  }
+  assert.equal(centralCursor, centralOffset + centralSize, "all central-directory bytes are accounted for");
+  for (const file of xmlFiles) {
+    assert.equal(entries.get(file.name), file.content, file.name + " round-trips byte-for-byte as UTF-8");
+  }
+  assert.match(entries.get("xl/worksheets/sheet1.xml"), /Filamér Christian University — Roxas City, Capiz/);
+  assert.match(entries.get("xl/worksheets/sheet1.xml"), /REGISTRAR’S OFFICE · ACUCA/);
+});
+
 test("FCU final-grade export uses the exact configured components and their weights", async () => {
   const components = [
     { name: "EXAM", percentage: 50 },
