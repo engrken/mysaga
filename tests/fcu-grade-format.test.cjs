@@ -317,7 +317,7 @@ test("PDF component values are weighted by the configured course allocation", ()
   assert.ok(source.includes('function printFinalGradesPdf(format: "generic" | "iso" = "generic")'));
   assert.ok(source.includes("College / Department name is missing."));
   assert.ok(source.includes('onClick={() => printFinalGradesPdf("generic")}'));
-  assert.ok(source.includes('onClick={() => printFinalGradesPdf("iso")}'));
+  assert.ok(source.includes('printFinalGradesPdf("iso"); event.currentTarget.closest("details")'));
   assert.match(source, /generic-print-address/);
   assert.match(source, /generic-print-department/);
   assert.match(source, /generic-print-title/);
@@ -411,8 +411,10 @@ test("ISO header configuration is isolated per school and FCU receives its suppl
 });
 
  
-test("Final Grades exposes separate Generic and ISO Excel exports and includes nested category components", () => {
+test("Final Grades exposes a universal ISO export format picker and includes nested category components", () => {
   assert.ok(source.includes("Download Generic Excel Sheet"));
+  assert.ok(source.includes("Export / Save ISO Grading Sheet"));
+  assert.ok(source.includes("Save / Print ISO PDF"));
   assert.ok(source.includes("Download ISO Excel Sheet"));
   assert.ok(source.includes("function exportIsoGradesExcel()"));
   assert.ok(source.includes("Add category or subcategory from Grading Setup"));
