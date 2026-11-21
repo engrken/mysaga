@@ -336,7 +336,7 @@ test("PDF component values are weighted by the configured course allocation", ()
   assert.ok(printHeader.includes('<div className="iso-print-page-cell"><span>Page No.</span><b>1</b></div>'));
   assert.ok(printHeader.includes("isoHeaderConfig.affiliationLine1"));
   assert.ok(printHeader.includes("isoHeaderConfig.affiliationLine2"));
-  assert.ok(source.includes("border:1px solid #000!important; border-collapse:collapse!important;"));
+  assert.ok(source.includes("border:1px solid black!important; border-collapse:collapse!important;"));
   assert.ok(source.includes('organizationAddress: "Roxas Avenue, Roxas City, Capiz, Philippines"'));
   assert.ok(source.includes('formNo: "FCU-EOMS-RO-006-F"'));
   assert.ok(source.includes('effectivity: "October 1, 2025"'));
