@@ -26,7 +26,7 @@ import { absenceDates, attendanceDays as orderedAttendanceDays, attendanceRiskSu
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 import { buildWorkbookPages, workbookWidths } from "@/lib/scorebook-layout";
 
-type User = { id: string; role: string; fullName: string; email: string; isDemo?: boolean; isTenantManager?: boolean; isSchoolAdmin?: boolean; emailDeliveryEnabled?: boolean; profileImagePath: string | null; facultyId?: string | null; defaultGradeSheetComponents?: string | null; courseProgram?: string | null; yearLevel?: string | null; school: { id: string; slug: string; name: string; shortName: string; portalTitle: string; logoText: string; logoPath: string | null; departmentLogoPath: string | null; primaryColor: string; address: string | null; departmentName: string | null; deanName: string | null } };
+type User = { id: string; role: string; fullName: string; email: string; isDemo?: boolean; isTenantManager?: boolean; isSchoolAdmin?: boolean; emailDeliveryEnabled?: boolean; profileImagePath: string | null; facultyId?: string | null; defaultGradeSheetComponents?: string | null; courseProgram?: string | null; yearLevel?: string | null; school: { id: string; slug: string; name: string; shortName: string; portalTitle: string; logoText: string; logoPath: string | null; departmentLogoPath: string | null; primaryColor: string; address: string | null; departmentName: string | null; deanName: string | null; isoHeaderConfig: string | null } };
 type WorkbookChange = { subjectId: string; enrollmentId: string; assessmentId: string; points: number | null; remark: "EXCUSED" | "ABSENT" | "DID_NOT_SUBMIT" | null };
 type AttendanceMark = { subjectId: string; enrollmentId: string; assessmentId: string; remark: "PRESENT" | "LATE" | "ABSENT" | "EXCUSED" | null };
 type Subject = { id: string; classId: string | null; code: string; title: string; term: string; academicYear: string; schedule: string | null; courseYear: string | null; gradeSheetComponents?: string | null; isPublished: boolean; gradeStatus: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; _count?: { enrollments: number } };
@@ -35,6 +35,41 @@ type Assessment = { id: string; categoryId: string; title: string; maxScore: num
 type Enrollment = { id: string; studentName: string; studentNumber: string | null; studentUserId: string | null; remarks: string | null; finalGradeOverride?: string | null; gradeChangeCount?: number; gradeChangeHistory?: Array<{ id:string; previousFinalGrade:string|null; previousRemarks:string|null; newFinalGrade:string|null; newRemarks:string|null; reason:string; createdAt:string; actor:{fullName:string} }>; scores: Array<{ assessmentId: string; points: number | null; remark: string | null }>; finalPercent: number | null };
 type GradeBand = { id: string; minPercent: number; finalGrade: string; remarks: string };
 type GradeSheetComponent = { name: string; percentage: number };
+type IsoHeaderConfig = {
+  organizationAddress: string;
+  formName: string;
+  formNo: string;
+  effectivity: string;
+  issuingOffice: string;
+  revisionNo: string;
+  eomsTitle: string;
+  isoStandard: string;
+  affiliationLine1: string;
+  affiliationLine2: string;
+};
+const FCU_ISO_HEADER_DEFAULTS: IsoHeaderConfig = {
+  organizationAddress: "Roxas Avenue, Roxas City, Capiz, Philippines",
+  formName: "COLLEGIATE GRADING SHEET",
+  formNo: "FCU-EOMS-RO-006-F",
+  effectivity: "October 1, 2025",
+  issuingOffice: "REGISTRAR’S OFFICE",
+  revisionNo: "1",
+  eomsTitle: "EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM",
+  isoStandard: "ISO 21001:2025",
+  affiliationLine1: "Member Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)",
+  affiliationLine2: "Member: Association of Christian Schools, Colleges in Asia (ACUCA)"
+};
+function emptyIsoHeaderConfig(): IsoHeaderConfig {
+  return { organizationAddress: "", formName: "", formNo: "", effectivity: "", issuingOffice: "", revisionNo: "", eomsTitle: "", isoStandard: "", affiliationLine1: "", affiliationLine2: "" };
+}
+function readIsoHeaderConfig(schoolName: string, schoolSlug: string, stored: string | null): IsoHeaderConfig {
+  const defaults = /filamer christian university/i.test(schoolName) || schoolSlug.toLocaleLowerCase() === "fcu" ? FCU_ISO_HEADER_DEFAULTS : emptyIsoHeaderConfig();
+  if (!stored) return { ...defaults };
+  try {
+    const parsed = JSON.parse(stored) as Partial<IsoHeaderConfig>;
+    return Object.fromEntries(Object.keys(defaults).map(key => [key, typeof parsed[key as keyof IsoHeaderConfig] === "string" ? parsed[key as keyof IsoHeaderConfig] : defaults[key as keyof IsoHeaderConfig]])) as IsoHeaderConfig;
+  } catch { return { ...defaults }; }
+}
 type Detail = Subject & { categories: Category[]; gradeBands: GradeBand[]; assessments: Assessment[]; enrollments: Enrollment[] };
 type Grade = { id: string; classId?: string | null; droppingWarning?: AbsenceStreak | null; attendanceWarning?: { absent: number; late: number; lateAbsences: number; counted: number; percent: number } | null; itemCount?: number; recordedCount?: number; code: string; title: string; term: string; academicYear: string; teacher: string; status: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; percent: number | null; finalGrade: string | null; remarks: string; gradeBands: Array<{ minPercent: number; finalGrade: string; remarks: string }>; categories: Array<{ id: string; name: string; weight: number; conversionBase: number; assessments: Array<{id:string;title:string;points:number|null;remark:string|null;maxScore:number;weight:number|null;lateAsAbsent?:boolean;dueDate?:string|null}> }> };
 type StudentSearchMatch = { enrollmentId: string; studentName: string; studentRemark: string | null; class: { id: string; classId: string | null; code: string; title: string; term: string; academicYear: string; status: "DRAFT" | "SUBMITTED" | "VERIFIED" }; finalPercent: number | null; finalGrade: string | null; finalRemark: string; records: Array<{id:string;title:string;category:string;points:number|null;remark:string|null;maxScore:number;dueDate:string|null}> };
@@ -717,11 +752,13 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>([]); const [copyFromId, setCopyFromId] = useState(""); const [rosterText, setRosterText] = useState(""); const [rosterFileName, setRosterFileName] = useState(""); const [categoryName, setCategoryName] = useState(""); const [categoryParent, setCategoryParent] = useState(""); const [categoryWeight, setCategoryWeight] = useState("50"); const [categoryOpen, setCategoryOpen] = useState(false);
   const [lectureCourseWeight, setLectureCourseWeight] = useState("60"); const [laboratoryCourseWeight, setLaboratoryCourseWeight] = useState("40");
   const [gradingSetupType, setGradingSetupType] = useState<"SINGLE" | "COMBINED">("SINGLE"); const [singleGroupType, setSingleGroupType] = useState<"LECTURE" | "LABORATORY">("LECTURE");
-  const [theme, setTheme] = useState<"light" | "dark">("light"); const [academicYear, setAcademicYear] = useState("2026-2027"); const [calendarSystem, setCalendarSystem] = useState<"SEMESTER" | "TRIMESTER">("SEMESTER"); const [activeTerm, setActiveTerm] = useState("1st Semester"); const [academicPeriodReady, setAcademicPeriodReady] = useState(false); const academicYears = [...Array.from({length: 10}, (_, index) => 2016 + index), ...Array.from({length: 10}, (_, index) => 2026 + index)].map(start => `${start}-${start + 1}`).sort((a,b) => b.localeCompare(a)); const [schoolYearFilter, setSchoolYearFilter] = useState("All School Years"); const [termFilter, setTermFilter] = useState("All Terms"); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | null>(null); const [deanName, setDeanName] = useState(user.school.deanName || "");
+  const [theme, setTheme] = useState<"light" | "dark">("light"); const [academicYear, setAcademicYear] = useState("2026-2027"); const [calendarSystem, setCalendarSystem] = useState<"SEMESTER" | "TRIMESTER">("SEMESTER"); const [activeTerm, setActiveTerm] = useState("1st Semester"); const [academicPeriodReady, setAcademicPeriodReady] = useState(false); const academicYears = [...Array.from({length: 10}, (_, index) => 2016 + index), ...Array.from({length: 10}, (_, index) => 2026 + index)].map(start => `${start}-${start + 1}`).sort((a,b) => b.localeCompare(a)); const [schoolYearFilter, setSchoolYearFilter] = useState("All School Years"); const [termFilter, setTermFilter] = useState("All Terms"); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | "iso-grades" | null>(null); const [deanName, setDeanName] = useState(user.school.deanName || "");
   const [schoolAddress, setSchoolAddress] = useState(user.school.address || "");
   const [departmentName, setDepartmentName] = useState(user.school.departmentName || "");
+  const [isoHeaderConfig, setIsoHeaderConfig] = useState<IsoHeaderConfig>(() => readIsoHeaderConfig(user.school.name, user.school.slug, user.school.isoHeaderConfig));
   useEffect(() => { setSchoolAddress(user.school.address || ""); }, [user.school.address]);
   useEffect(() => { setDepartmentName(user.school.departmentName || ""); }, [user.school.departmentName]);
+  useEffect(() => { setIsoHeaderConfig(readIsoHeaderConfig(user.school.name, user.school.slug, user.school.isoHeaderConfig)); }, [user.school.name, user.school.slug, user.school.isoHeaderConfig]);
   const defaultGradeSheetComponents = useMemo<GradeSheetComponent[]>(() => { const roots = (detail?.categories || []).filter(category => !category.parentId && (detail?.assessments || []).some(item => !item.title.toLocaleLowerCase().startsWith("attendance ·") && rootCategory(detail?.categories?.find(value => value.id === item.categoryId)!, detail?.categories || []).id === category.id)).sort((a,b) => a.sortOrder-b.sortOrder); const configured = roots.map(category => ({ name: category.name, percentage: Number(effectiveCategoryWeight(category, detail?.categories || []).toFixed(2)) })); try { const saved = JSON.parse(user.defaultGradeSheetComponents || ""); if (Array.isArray(saved) && saved.length) { const matched = saved.map((item: GradeSheetComponent) => configured.find(option => option.name.toLocaleLowerCase() === String(item.name).toLocaleLowerCase())).filter((item): item is GradeSheetComponent => Boolean(item)); if (matched.length) return matched; } } catch {} return configured.length ? configured : [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }]; }, [user.defaultGradeSheetComponents, detail?.categories, detail?.assessments]);
   const [gradeSheetComponents, setGradeSheetComponents] = useState<GradeSheetComponent[]>(defaultGradeSheetComponents);
   const [componentDraft, setComponentDraft] = useState<GradeSheetComponent[]>(defaultGradeSheetComponents);
