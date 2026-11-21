@@ -1350,8 +1350,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     }, "Grading sheet components saved for this class. Grade calculations were not changed.");
   }
   async function saveComponentsAsDefault() {
-    const total = componentDraft.reduce((sum, item) => sum + Number(item.percentage || 0), 0);
-    if (Math.abs(total - 100) > 0.01 || componentDraft.some(item => !item.name.trim())) { setErr("Component names are required and percentages must total 100%."); return; }
+    if (!componentDraft.length || componentDraft.some(item => !item.name.trim())) { setErr("Select at least one valid Grading Setup category."); return; }
     await run(async () => {
       await api("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName: profileName, facultyId: profileFacultyId, schoolAddress, departmentName, deanName, defaultGradeSheetComponents: componentDraft }) });
       setGradeSheetComponents(componentDraft);
