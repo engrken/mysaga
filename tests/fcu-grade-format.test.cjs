@@ -67,7 +67,7 @@ test("FCU final-grade export uses the exact configured components and their weig
   assert.match(sheet, /<pageSetup paperSize="14" orientation="portrait" fitToWidth="1"/);
   assert.match(sheet, /showGridLines="0" zoomScale="90"/);
   assert.match(sheet, /<selection pane="bottomLeft" activeCell="A17"/);
-  assert.match(sheet, /<c r="A15"[^>]*>.*?NO\./s);
+  assert.match(sheet, /<c r="A15"[^>]*><is><t xml:space="preserve"><\/t><\/is><\/c>/);
   assert.match(sheet, /<c r="B15"[^>]*>.*?NAME OF STUDENTS/s);
   assert.match(sheet, /<c r="C15"[^>]*>.*?EXAM\. 50%/s);
   assert.match(sheet, /<c r="D15"[^>]*>.*?ACT\. 40%/s);
