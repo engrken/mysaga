@@ -497,12 +497,25 @@ function downloadIsoXlsx(
     { name: "xl/drawings/_rels/drawing1.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/iso-school-block.png"/></Relationships>' },
     { name: "xl/media/iso-school-block.png", content: logoBlockPng }
   ];
-  const url = URL.createObjectURL(new Blob([zipStored(files) as BlobPart], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  // Copy the exact ZIP byte range into an ArrayBuffer before creating the Blob.
+  // This keeps the XLSX download binary instead of relying on a typed-array view.
+  const archiveBytes = zipStored(files);
+  const binaryBuffer = archiveBytes.buffer.slice(
+    archiveBytes.byteOffset,
+    archiveBytes.byteOffset + archiveBytes.byteLength
+  ) as ArrayBuffer;
+  const blob = new Blob([binaryBuffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(url);
+  document.body.removeChild(link);
+  // Browsers may still be consuming the Blob when the click handler returns.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function categoryDescendantIds(categoryId: string, categories: Category[]) {
