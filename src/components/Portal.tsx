@@ -281,8 +281,8 @@ function gradeSheetComponentPercent(detail: Detail, enrollment: Enrollment, comp
   return totalWeight > 0 ? Number((weighted / totalWeight).toFixed(2)) : null;
 }
 
-function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Detail, schoolName: string, schoolAddress: string, teacherName: string, deanName: string, components: GradeSheetComponent[] = [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }]) {
-  const academicAssessments = detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·"));
+function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Detail, schoolName: string, schoolAddress: string, teacherName: string, deanName: string, components: GradeSheetComponent[] = [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }], assessmentOrder?: Assessment[]) {
+  const academicAssessments = assessmentOrder ?? detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·"));
   const assessmentColumns = academicAssessments.map(item => {
     const category = detail.categories.find(value => value.id === item.categoryId);
     const categoryItems = academicAssessments.filter(value => value.categoryId === item.categoryId);
@@ -295,7 +295,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     return (category ? categoryPath(category, detail.categories) + " · " : "") + item.title + " (Max " + item.maxScore + weightNote + ")";
   });
   const componentColumns = components.map(item => item.name.toLocaleUpperCase() + " (" + item.percentage.toFixed(2) + "%)");
-  const headers = ["NAME OF STUDENTS", ...assessmentColumns, ...componentColumns, "ATTENDANCE (%)", "TOTAL GRADE", "FINAL GRADE", "REMARKS"];
+  const headers = ["NO.", "NAME OF STUDENTS", ...assessmentColumns, ...componentColumns, "ATTENDANCE (%)", "TOTAL GRADE", "FINAL GRADE", "REMARKS"];
   const columnCount = headers.length;
   const last = excelColumn(columnCount - 1);
   const rows: Array<Array<{ value: unknown; style: number }>> = [];
@@ -306,7 +306,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
   };
   addRow([{ col: 0, value: schoolName, style: 1 }]);
   addRow([{ col: 0, value: "School Address: " + (schoolAddress || "School address not set"), style: 2 }]);
-  addRow([{ col: 0, value: "GRADING SHEET", style: 3 }]);
+  addRow([{ col: 0, value: sheetName.toLocaleUpperCase(), style: 3 }]);
   addRow([]);
   addRow([{ col: 0, value: "Course Number: " + detail.code, style: 4 }]);
   addRow([{ col: 0, value: "Descriptive Title: " + detail.title, style: 4 }]);
@@ -330,7 +330,8 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
       return score?.points == null ? "" : score.points + " / " + item.maxScore;
     });
     const values = [
-      (index + 1) + ". " + enrollment.studentName,
+      enrollment.studentNumber || String(index + 1),
+      enrollment.studentName,
       ...scores,
       ...components.map(component => { const percent = gradeSheetComponentPercent(detail, enrollment, component); return percent === null ? "" : percent.toFixed(2) + "%"; }),
       attendancePercent === null ? "" : attendancePercent.toFixed(2) + "%",
@@ -338,7 +339,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
       special ? "" : enrollment.finalGradeOverride || band?.finalGrade || "",
       enrollment.remarks || band?.remarks || ""
     ];
-    addRow(values.map((value, col) => ({ col, value, style: col === 0 ? 6 : 7 })));
+    addRow(values.map((value, col) => ({ col, value, style: col === 1 ? 6 : 7 })));
   }
   addRow([]);
   const signatureRow = rows.length + 1;
@@ -368,11 +369,11 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     const height = rowIndex === 0 ? ' ht="26" customHeight="1"' : rowIndex === 2 ? ' ht="24" customHeight="1"' : rowIndex === 15 ? ' ht="42" customHeight="1"' : rowIndex >= 16 && rowIndex < 16 + detail.enrollments.length ? ' ht="22" customHeight="1"' : ' ht="20" customHeight="1"';
     return '<row r="' + rowNumber + '"' + height + '>' + xmlCells + '</row>';
   }).join("");
-  const componentStart = 2 + academicAssessments.length;
+  const componentStart = 3 + academicAssessments.length;
   const attendanceColumn = componentStart + components.length;
   const totalColumn = attendanceColumn + 1;
   const widths = "<cols>" + headers.map((header,index) => {
-    const width = index === 0 ? 32 : index >= totalColumn
+    const width = index === 0 ? 14 : index === 1 ? 32 : index >= totalColumn
       ? (header === "FINAL GRADE" ? 12 : header === "REMARKS" ? 16 : 14)
       : index === attendanceColumn - 1 ? 14
       : Math.max(16, Math.min(26, Math.ceil(header.length * 0.72)));
@@ -418,9 +419,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail: Detail, categories: Category[], teacherName: string) {
-  // The FCU template contains one complete header image, not independent text cells.
-  // Use the same artwork in Print and Excel; no external IMAGE() formula required.
+async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail: Detail, categories: Category[], teacherName: string, deanName: string, components: GradeSheetComponent[]) {
   let logoPng: Uint8Array | null = null;
   try {
     const headerResponse = await fetch("/fcu-grading-header.png");
@@ -431,27 +430,23 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     console.error("FCU grade-sheet header unavailable:", error);
     return;
   }
-  // Keep the FCU grading-sheet header consistent across every export.
-  // The three assessment columns occupy the original E:H component area;
-  // their score values still come from matching configured grading categories.
-  const assessmentHeaders = ["MAJOR EXAM", "ATTENDANCE", "ASSESSMENT"];
-  const gradeSlots = 4;
-  const componentRanges = assessmentHeaders.map((name, index) => ({
-    name,
-    category: categories.find(category => category.name.trim().toLocaleUpperCase() === name),
-    start: 4 + Math.floor(index * gradeSlots / assessmentHeaders.length),
-    end: 3 + Math.floor((index + 1) * gradeSlots / assessmentHeaders.length)
+
+  const componentColumns = components.map((component, index) => ({
+    component,
+    category: categories.find(category => !category.parentId && category.name.trim().toLocaleLowerCase() === component.name.trim().toLocaleLowerCase()),
+    col: index + 2
   }));
-  const columnCount = gradeSlots + 7;
+  const totalCol = 2 + componentColumns.length;
+  const columnCount = totalCol + 3;
   const last = excelColumn(columnCount - 1);
-  const totalCol = columnCount - 3;
   const cells: Array<Array<{ value: unknown; style: number }>> = [];
   const row = (values: Array<{ col: number; value: unknown; style?: number }>) => {
-    const result = Array.from({ length: columnCount }, () => ({ value: "", style: 0 } as {value: unknown; style: number}));
+    const result = Array.from({ length: columnCount }, () => ({ value: "", style: 0 } as { value: unknown; style: number }));
     for (const item of values) result[item.col] = { value: item.value, style: item.style ?? 1 };
     cells.push(result);
   };
-  for (let i = 0; i < 9; i++) row([]); // A1:K9: official university header image
+
+  for (let i = 0; i < 9; i++) row([]);
   row([]);
   row([{ col: 0, value: { runs: [
     { text: "Course No.  " },
@@ -459,7 +454,7 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     { text: "    Descriptive Title  " },
     { text: "   " + detail.title + "                                      ", underline: true }
   ] }, style: 2 }]);
-  row([{ col: 0, value: "_______________________________________________   ", style: 2 }]);
+  row([{ col: 0, value: "____________________________________________________________________________________________", style: 2 }]);
   row([{ col: 0, value: { runs: [
     { text: "Class I.D.  " },
     { text: "  " + (detail.classId || "—") + "    ", underline: true },
@@ -470,115 +465,141 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
   ] }, style: 2 }]);
   row([{ col: 0, value: "-----------------------------------------------------------------------------------------------------------------------------------------------", style: 6 }]);
   row([
-    { col: 0, value: "NAME OF STUDENTS", style: 4 },
-    ...componentRanges.map(range => ({ col: range.start, value: ": " + range.name + " :", style: 4 })),
-    { col: totalCol, value: ": TG :", style: 4 },
-    { col: totalCol + 1, value: ": FG :", style: 4 },
-    { col: totalCol + 2, value: ": REMARKS :", style: 4 }
+    { col: 0, value: "NO.", style: 4 },
+    { col: 1, value: "NAME OF STUDENTS", style: 4 },
+    ...componentColumns.map(item => ({
+      col: item.col,
+      value: item.component.name.toLocaleUpperCase() + ". " + (Number(item.component.percentage.toFixed(2))).toString() + "%",
+      style: 4
+    })),
+    { col: totalCol, value: "TOTAL GRADE", style: 4 },
+    { col: totalCol + 1, value: "FINAL GRADE", style: 4 },
+    { col: totalCol + 2, value: "REMARKS", style: 4 }
   ]);
   row([{ col: 0, value: "-----------------------------------------------------------------------------------------------------------------------------------------------", style: 6 }]);
+
   for (const [index, enrollment] of detail.enrollments.entries()) {
     const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
-    const suppress = ["INC", "DROPPED"].includes(enrollment.remarks || "");
-    const componentValues = componentRanges.map(range => {
-      const percent = range.category
-        ? weightedCategoryPercent(enrollment, range.category, detail.categories, detail.assessments)
+    const special = ["INC", "NP", "DROPPED"].includes(enrollment.remarks || "");
+    const componentValues = componentColumns.map(item => {
+      const rawPercent = item.category
+        ? weightedCategoryPercent(enrollment, item.category, categories, detail.assessments)
         : null;
-      return { col: range.start, value: suppress || percent === null || !range.category ? "" : Number((percent * effectiveCategoryWeight(range.category, detail.categories) / 100).toFixed(2)), style: 5 };
+      const contribution = rawPercent === null ? null : rawPercent * item.component.percentage / 100;
+      return {
+        col: item.col,
+        value: special || contribution === null ? "" : Number(contribution.toFixed(2)),
+        style: 5
+      };
     });
-    const gradeString = suppress ? "" : enrollment.finalGradeOverride || band?.finalGrade || "";
-    const gradeNumber = gradeString && /^[0-9]+(?:\.[0-9]+)?$/.test(gradeString) ? Number(gradeString) : gradeString;
+    const gradeString = special ? "" : enrollment.finalGradeOverride || band?.finalGrade || "";
     row([
-      { col: 0, value: (index + 1) + ". " + enrollment.studentName.toLocaleUpperCase(), style: 5 },
+      { col: 0, value: enrollment.studentNumber || String(index + 1), style: 6 },
+      { col: 1, value: enrollment.studentName.toLocaleUpperCase(), style: 7 },
       ...componentValues,
-      { col: totalCol, value: suppress || enrollment.finalPercent === null ? "" : Number(enrollment.finalPercent.toFixed(2)), style: 5 },
-      { col: totalCol + 1, value: gradeNumber, style: 5 },
-      { col: totalCol + 2, value: (enrollment.remarks || band?.remarks) ? ":   " + (enrollment.remarks || band?.remarks) + "   :" : "", style: 6 }
+      { col: totalCol, value: special || enrollment.finalPercent === null ? "" : Number(enrollment.finalPercent.toFixed(2)), style: 5 },
+      { col: totalCol + 1, value: gradeString, style: 6 },
+      { col: totalCol + 2, value: enrollment.remarks || band?.remarks || "", style: 6 }
     ]);
   }
-  // The official workbook places two signature columns below the grading list.
+
   row([]);
-  row([{ col: 0, value: "Submitted by:                                                                         Noted:", style: 2 }]);
+  const signatureRow = cells.length + 1;
+  const split = Math.max(1, Math.floor((columnCount - 1) / 2));
+  row([{ col: 0, value: "Submitted by:", style: 2 }, { col: split + 1, value: "Noted:", style: 2 }]);
   row([]);
-  row([{ col: 0, value: { runs: [
-    { text: "              " + teacherName.toLocaleUpperCase() + "              ", underline: true },
-    { text: "                           ________________________________", underline: true }
-  ] }, style: 2 }]);
-  row([{ col: 0, value: "TEACHER'S SIGNATURE OVER PRINTED NAME                         DEAN'S SIGNATURE OVER PRINTED NAME", style: 2 }]);
+  row([
+    { col: 0, value: { runs: [{ text: teacherName.toLocaleUpperCase(), underline: true }] }, style: 2 },
+    { col: split + 1, value: { runs: [{ text: (deanName || "____________________________").toLocaleUpperCase(), underline: true }] }, style: 2 }
+  ]);
+  row([
+    { col: 0, value: "TEACHER'S SIGNATURE OVER PRINTED NAME", style: 2 },
+    { col: split + 1, value: "DEAN'S SIGNATURE OVER PRINTED NAME", style: 2 }
+  ]);
+
   const xmlRows = cells.map((values, rowIndex) => {
     const rowNumber = rowIndex + 1;
     const xmlCells = values.map((cell, colIndex) => {
-      const reference = `${excelColumn(colIndex)}${rowNumber}`;
-      if (typeof cell.value === "number" && Number.isFinite(cell.value)) return `<c r="${reference}" s="${cell.style}"><v>${cell.value}</v></c>`;
+      const reference = excelColumn(colIndex) + rowNumber;
+      if (typeof cell.value === "number" && Number.isFinite(cell.value)) {
+        return '<c r="' + reference + '" s="' + cell.style + '" t="n"><v>' + cell.value + '</v></c>';
+      }
       if (cell.value && typeof cell.value === "object" && "runs" in cell.value) {
         const runs = (cell.value as { runs: Array<{ text: string; underline?: boolean }> }).runs;
-        return `<c r="${reference}" s="${cell.style}" t="inlineStr"><is>${runs.map(run => `<r><rPr><rFont val="Arial"/><sz val="11"/>${run.underline ? '<u/>' : ''}</rPr><t xml:space="preserve">${xmlEscape(run.text)}</t></r>`).join("")}</is></c>`;
+        return '<c r="' + reference + '" s="' + cell.style + '" t="inlineStr"><is>' +
+          runs.map(run => '<r><rPr><rFont val="Arial"/><sz val="9"/>' + (run.underline ? '<u/>' : '') + '</rPr><t xml:space="preserve">' + xmlEscape(run.text) + '</t></r>').join("") +
+          '</is></c>';
       }
-      const text = xmlEscape(cell.value);
-      return `<c r="${reference}" s="${cell.style}" t="inlineStr"><is><t xml:space="preserve">${text}</t></is></c>`;
+      return '<c r="' + reference + '" s="' + cell.style + '" t="inlineStr"><is><t xml:space="preserve">' + xmlEscape(cell.value) + '</t></is></c>';
     }).join("");
-    const height = rowIndex < 9 ? ' ht="15.5" customHeight="1"' : rowIndex === 13 ? ' ht="10.95" customHeight="1"' : rowIndex === 15 ? ' ht="10.05" customHeight="1"' : rowIndex >= 16 && rowIndex < 16 + detail.enrollments.length ? ' ht="13.8" customHeight="1"' : ' ht="15" customHeight="1"';
-    return `<row r="${rowNumber}"${height}>${xmlCells}</row>`;
+    const height = rowIndex < 9 ? ' ht="15.5" customHeight="1"'
+      : rowIndex === 14 ? ' ht="32" customHeight="1"'
+      : rowIndex >= 16 && rowIndex < 16 + detail.enrollments.length ? ' ht="20" customHeight="1"'
+      : ' ht="18" customHeight="1"';
+    return '<row r="' + rowNumber + '"' + height + '>' + xmlCells + '</row>';
   }).join("");
-  const merges = [
-    "A1:" + last + "9", "A11:" + last + "11", "A12:" + last + "12", "A13:" + last + "13",
-    "A14:" + last + "14", "A15:D15", "A16:" + last + "16",
-    ...detail.enrollments.map((_, index) => "A" + (index + 17) + ":D" + (index + 17)),
-    ...componentRanges.flatMap(range => range.start === range.end ? [] : [
-      excelColumn(range.start) + "15:" + excelColumn(range.end) + "15",
-      ...detail.enrollments.map((_, index) => excelColumn(range.start) + (index + 17) + ":" + excelColumn(range.end) + (index + 17))
-    ]),
-    ...[detail.enrollments.length + 18, detail.enrollments.length + 20, detail.enrollments.length + 21].map(index => "A" + index + ":" + last + index)
+
+  const signatureRanges = [
+    "A" + signatureRow + ":" + excelColumn(split) + signatureRow,
+    excelColumn(split + 1) + signatureRow + ":" + last + signatureRow,
+    "A" + (signatureRow + 2) + ":" + excelColumn(split) + (signatureRow + 2),
+    excelColumn(split + 1) + (signatureRow + 2) + ":" + last + (signatureRow + 2),
+    "A" + (signatureRow + 3) + ":" + excelColumn(split) + (signatureRow + 3),
+    excelColumn(split + 1) + (signatureRow + 3) + ":" + last + (signatureRow + 3)
   ];
+  const merges = ["A1:" + last + "9", "A11:" + last + "11", "A12:" + last + "12", "A13:" + last + "13", "A14:" + last + "14", ...signatureRanges];
   const mergeXml = merges.map(range => '<mergeCell ref="' + range + '"/>').join("");
-  const widths = '<cols><col min="1" max="1" width="8.44" customWidth="1"/>' +
-    '<col min="2" max="2" width="8" customWidth="1"/><col min="3" max="3" width="8.22" customWidth="1"/>' +
-    '<col min="4" max="4" width="9.55" customWidth="1"/>' +
-    '<col min="5" max="' + totalCol + '" width="9" customWidth="1"/>' +
-    '<col min="' + (totalCol + 1) + '" max="' + (totalCol + 2) + '" width="8.3" customWidth="1"/>' +
-    '<col min="' + (totalCol + 3) + '" max="' + columnCount + '" width="13" customWidth="1"/></cols>';
+  const widths = '<cols>' +
+    '<col min="1" max="1" width="12" customWidth="1"/>' +
+    '<col min="2" max="2" width="28" customWidth="1"/>' +
+    (componentColumns.length ? '<col min="3" max="' + (totalCol) + '" width="12" customWidth="1"/>' : '') +
+    '<col min="' + (totalCol + 1) + '" max="' + (totalCol + 1) + '" width="12" customWidth="1"/>' +
+    '<col min="' + (totalCol + 2) + '" max="' + (totalCol + 2) + '" width="10" customWidth="1"/>' +
+    '<col min="' + (totalCol + 3) + '" max="' + (totalCol + 3) + '" width="14" customWidth="1"/>' +
+    '</cols>';
   const worksheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
     '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" zoomScale="90" workbookViewId="0"><pane ySplit="16" topLeftCell="A17" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A17" sqref="A17"/></sheetView></sheetViews>' +
-    '<sheetFormatPr defaultRowHeight="15"/>' + widths + '<sheetData>' + xmlRows + '</sheetData>' +
+    '<sheetFormatPr defaultRowHeight="18"/>' + widths + '<sheetData>' + xmlRows + '</sheetData>' +
     '<mergeCells count="' + merges.length + '">' + mergeXml + '</mergeCells>' +
     '<printOptions horizontalCentered="1"/><pageMargins left="0.275" right="0.20" top="0.39" bottom="0.24" header="0.20" footer="0.20"/>' +
     '<pageSetup paperSize="14" orientation="portrait" fitToWidth="1" fitToHeight="0"/>' +
     '<drawing r:id="rId1"/></worksheet>';
   const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<numFmts count="1"><numFmt numFmtId="164" formatCode="&quot;:   &quot;0.00&quot;  :&quot;"/></numFmts>' +
-    '<fonts count="3"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font><font><b/><sz val="15"/><name val="Arial"/></font></fonts>' +
-    '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
-    '<borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border>' +
-    '<border><left style="dotted"/><right style="dotted"/><top/><bottom style="dotted"/><diagonal/></border>' +
-    '<border><left/><right/><top style="dashed"/><bottom style="dashed"/><diagonal/></border></borders>' +
+    '<numFmts count="1"><numFmt numFmtId="164" formatCode="0.00&quot;%&quot;"/></numFmts>' +
+    '<fonts count="5"><font><sz val="9"/><name val="Arial"/></font><font><b/><sz val="9"/><name val="Arial"/></font><font><sz val="8.5"/><name val="Arial"/><color rgb="FF5B6573"/></font><font><b/><sz val="14"/><name val="Arial"/></font><font><b/><sz val="9"/><name val="Arial"/></font></fonts>' +
+    '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF0F8"/><bgColor indexed="64"/></patternFill></fill></fills>' +
+    '<borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="dotted"/><right style="dotted"/><top/><bottom style="dotted"/><diagonal/></border><border><left/><right/><top style="dashed"/><bottom style="dashed"/><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="7"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
-    '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
+    '<cellXfs count="8">' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+    '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
     '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
-    '<xf numFmtId="0" fontId="1" fillId="0" borderId="2" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
+    '<xf numFmtId="0" fontId="4" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
     '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
-    '<xf numFmtId="0" fontId="0" fillId="0" borderId="2" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>' +
     '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
   const safeSheetName = sheetName.replace(/[\\/?*\[\]:]/g, " ").slice(0, 31) || "FCU Grades";
   const files = [
-    { name: "[Content_Types].xml", content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${logoPng ? '<Default Extension="png" ContentType="image/png"/><Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' : ""}<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>` },
+    { name: "[Content_Types].xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
     { name: "_rels/.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
-    { name: "xl/workbook.xml", content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xmlEscape(safeSheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>` },
+    { name: "xl/workbook.xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="' + xmlEscape(safeSheetName) + '" sheetId="1" r:id="rId1"/></sheets></workbook>' },
     { name: "xl/_rels/workbook.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' },
     { name: "xl/worksheets/sheet1.xml", content: worksheet },
     { name: "xl/styles.xml", content: styles },
-    ...(logoPng ? [
-      { name: "xl/worksheets/_rels/sheet1.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>' },
-      { name: "xl/drawings/drawing1.xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="7040000" cy="1755000"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="1" name="Official FCU ISO grading header"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>' },
-      { name: "xl/drawings/_rels/drawing1.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/></Relationships>' },
-      { name: "xl/media/image1.png", content: logoPng }
-    ] : [])
+    { name: "xl/worksheets/_rels/sheet1.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>' },
+    { name: "xl/drawings/drawing1.xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="7040000" cy="1755000"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="1" name="Official FCU grading header"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>' },
+    { name: "xl/drawings/_rels/drawing1.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/></Relationships>' },
+    { name: "xl/media/image1.png", content: logoPng }
   ];
   const url = URL.createObjectURL(new Blob([zipStored(files) as BlobPart], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-  const link = document.createElement("a"); link.href = url; link.download = filename; link.click();
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function categoryPercent(enrollment: Enrollment, category: Category, assessments: Assessment[], categories: Category[]) {
@@ -636,6 +657,16 @@ function attendanceSummary(enrollment: Enrollment, assessments: Assessment[], sc
 }
 
 function leafCategories(categories: Category[]) { return categories.filter(category => !categories.some(item => item.parentId === category.id)); }
+function orderedCategoryTree(categories: Category[]) {
+  const ordered: Category[] = [];
+  const append = (parentId: string | null) => {
+    categories.filter(category => (category.parentId ?? null) === parentId)
+      .slice().sort((a, b) => a.sortOrder - b.sortOrder)
+      .forEach(category => { ordered.push(category); append(category.id); });
+  };
+  append(null);
+  return ordered;
+}
 function categoryPath(category: Category, categories: Category[]) {
   const names = [category.name]; let parent = categories.find(item => item.id === category.parentId);
   while (parent) { names.unshift(parent.name); parent = categories.find(item => item.id === parent?.parentId); }
@@ -1128,6 +1159,29 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     if (!detail || !window.confirm("Remove this empty category?")) return;
     await run(async () => { await api(`/api/teacher/subjects/${detail.id}`, { method: "PATCH", body: JSON.stringify({ deleteCategoryId: categoryId }) }); setDetail(current => current ? { ...current, categories: current.categories.filter(category => category.id !== categoryId) } : current); }, "Empty grading category removed.");
   }
+  async function moveAssessmentCategory(categoryId: string, direction: -1 | 1) {
+    if (!detail || detail.gradeStatus === "VERIFIED") return;
+    const category = detail.categories.find(item => item.id === categoryId);
+    if (!category) return;
+    const siblings = detail.categories.filter(item => (item.parentId ?? null) === (category.parentId ?? null)).slice().sort((a,b) => a.sortOrder-b.sortOrder);
+    const from = siblings.findIndex(item => item.id === categoryId);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= siblings.length) return;
+    const reordered = siblings.slice();
+    [reordered[from], reordered[to]] = [reordered[to], reordered[from]];
+    const orderById = new Map(reordered.map((item,index) => [item.id,index]));
+    const nextCategories = orderedCategoryTree(detail.categories.map(item => orderById.has(item.id) ? { ...item, sortOrder: orderById.get(item.id)! } : item));
+    await run(async () => {
+      await api(`/api/teacher/subjects/${detail.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ categories: nextCategories.map(item => ({
+          id: item.id, parentId: item.parentId, name: item.name, weight: item.weight,
+          conversionBase: item.conversionBase, sortOrder: item.sortOrder
+        })) })
+      });
+      setDetail(current => current ? { ...current, categories: nextCategories } : current);
+    }, "Category order saved. Record Scores now follows this arrangement.");
+  }
   async function saveAssessmentItems() {
     if (!detail) return;
     await run(async () => { await api(`/api/teacher/subjects/${detail.id}`, { method: "PATCH", body: JSON.stringify({ assessmentItems: detail.assessments.map(item => ({ id: item.id, categoryId: item.categoryId, title: item.title, maxScore: Number(item.maxScore), weight: item.weight == null ? null : Number(item.weight), dueDate: item.dueDate ? item.dueDate.slice(0,10) : null, scheduleOverrideReason: item.scheduleOverrideReason || null, attendanceType: item.attendanceType || null })) }) }); }, "Assessment setup saved.");
@@ -1371,15 +1425,28 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   }
   function exportGrades() {
     if (!detail) return;
+    void downloadFcuGradeXlsx(
+      `${detail.code.replace(/[^a-z0-9-_]+/gi, "-")}-final-grades.xlsx`,
+      "Final Grades",
+      detail,
+      detail.categories,
+      user.fullName,
+      deanName.trim(),
+      gradeSheetComponents
+    );
+  }
+  function exportRecordScoresExcel() {
+    if (!detail) return;
     downloadGradeSheetXlsx(
-      `${detail.code.replace(/[^a-z0-9-_]+/gi, "-")}-grading-sheet.xlsx`,
-      "Grading Sheet",
+      `${detail.code.replace(/[^a-z0-9-_]+/gi, "-")}-record-scores.xlsx`,
+      "Record Scores",
       detail,
       user.school.name,
       user.school.address || "",
       user.fullName,
       deanName.trim(),
-      gradeSheetComponents
+      gradeSheetComponents,
+      scorebookAssessments
     );
   }
   function downloadScoreCsv(blank=false) {
@@ -1514,7 +1581,17 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   useEffect(() => { setRosterPage(1); }, [activeId, classStudentFilter]);
   useEffect(() => { setAssessmentCategoryOverrides({}); }, [activeId]);
   useEffect(() => { if (rosterPage > rosterPageCount) setRosterPage(rosterPageCount); }, [rosterPage, rosterPageCount]);
-  const recordCategories = useMemo(() => detail ? leafCategories(detail.categories) : [], [detail]);
+  const recordCategories = useMemo(() => detail ? leafCategories(orderedCategoryTree(detail.categories)) : [], [detail?.categories]);
+  const assessmentCategoryOrderRows = useMemo(() => {
+    if (!detail) return [] as Array<{ category: Category; depth: number; index: number; count: number }>;
+    const rows: Array<{ category: Category; depth: number; index: number; count: number }> = [];
+    const append = (parentId: string | null, depth: number) => {
+      const siblings = detail.categories.filter(category => (category.parentId ?? null) === parentId).slice().sort((a,b) => a.sortOrder-b.sortOrder);
+      siblings.forEach((category,index) => { rows.push({ category, depth, index, count: siblings.length }); append(category.id, depth + 1); });
+    };
+    append(null,0);
+    return rows;
+  }, [detail?.categories]);
   const assessmentItemGroups = useMemo(() => {
     if (!detail) return [] as Array<{ category: Category; items: Assessment[] }>;
     return recordCategories.map(category => ({
@@ -1811,6 +1888,10 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           {classSection === "roster" && <section id="class-section-roster" className="surface gradebook-card roster-management"><div className="section-heading"><div><span className="eyebrow">CLASS MANAGEMENT</span><h2>Class roster</h2><p className="muted">Update student names and IDs, or remove class records.</p></div><div className="roster-toolbar-actions"><button className="btn btn-outline-primary" onClick={()=>printClass("roster")} disabled={!detail.enrollments.length}>Print roster</button><button className="btn btn-primary" onClick={()=>setRosterOpen(true)}>＋ Add students</button></div></div><ClassRosterEnrollmentTools key={detail.id} subjectId={detail.id} status={detail.gradeStatus} onRosterChanged={async () => { const result = await api("/api/teacher/subjects/" + encodeURIComponent(detail.id)); const updated = result.subject as Detail; setDetail(updated); setSubjects(current => current.map(subject => subject.id === updated.id ? { ...subject, _count: { enrollments: updated.enrollments.length } } : subject)); }}/><div className="table-scroll"><table className="table grade-table"><thead><tr><th>#</th><th>STUDENT NAME</th><th>STUDENT ID</th><th>ACTIONS</th></tr></thead><tbody>{pageEnrollments.map((en,index)=><tr key={en.id}><td>{(rosterPage - 1) * rosterPerPage + index + 1}</td><td><b>{en.studentName}</b></td><td>{en.studentNumber||"—"}</td><td><div className="roster-row-actions"><button className="btn btn-outline-primary btn-sm" disabled={busy||detail.gradeStatus==="VERIFIED"} onClick={()=>setRosterEdit({id:en.id,studentName:en.studentName,studentNumber:en.studentNumber||""})}>Edit</button><button className="btn btn-outline-danger btn-sm" disabled={busy||detail.gradeStatus==="VERIFIED"} onClick={()=>deleteRosterStudent(en)}>Remove</button></div></td></tr>)}</tbody></table></div>{rosterPageCount > 1 && <div className="list-pagination"><span>Showing {(rosterPage - 1) * rosterPerPage + 1}–{Math.min(rosterPage * rosterPerPage, filteredEnrollments.length)} of {filteredEnrollments.length} students</span><div><button className="btn btn-outline-secondary btn-sm" disabled={rosterPage <= 1} onClick={() => setRosterPage(page => page - 1)}>Previous</button><span>Page {rosterPage} of {rosterPageCount}</span><button className="btn btn-outline-secondary btn-sm" disabled={rosterPage >= rosterPageCount} onClick={() => setRosterPage(page => page + 1)}>Next</button></div></div>}{detail.enrollments.length === 0 ? <div className="inline-empty">No students are in this class yet. Use Add students to build the roster.</div> : filteredEnrollments.length === 0 ? <div className="inline-empty">No students match this name or ID filter.</div> : null}<div className="privacy-note text-start mt-3">Students are matched to their portal account by student ID. The student account itself is never deleted by roster removal.</div></section>}
           {classSection === "items" && <section className="surface gradebook-card">
             <div className="section-heading"><div><h2>Assessment items</h2><p className="muted">Items are grouped by category. Large groups start collapsed so long attendance histories stay quick to scan; expand a group when you need to edit its items. Attendance is tracked as Present, Absent, or Excused—not points.</p></div><div className="grading-actions"><button className="btn btn-outline-primary btn-sm" onClick={saveAssessmentItems} disabled={busy||!detail.assessments.length}>Save items</button><button className="btn btn-outline-primary" onClick={()=>void addAttendanceSession()} disabled={busy}>＋ Attendance day</button><button className="btn btn-primary" onClick={() => setAssessmentOpen(true)}>＋ Add assessment</button></div></div>
+            {assessmentCategoryOrderRows.length > 0 && <div className="assessment-order-panel border rounded p-3 mb-3">
+              <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2"><div><b>Category order in Record Scores</b><div className="small muted">Move parent categories or subcategories up and down. This order is saved for the class and controls the Record Scores workbook columns.</div></div><span className="small muted">{detail.gradeStatus === "VERIFIED" ? "Finalized class · ordering locked" : "Changes save when an arrow is selected"}</span></div>
+              {assessmentCategoryOrderRows.map(item => <div key={item.category.id} className="d-flex align-items-center gap-2 py-1 border-top" style={{paddingLeft: (item.depth * 22) + "px"}}><span className="small muted" style={{minWidth: item.depth === 0 ? "104px" : "104px"}}>{item.depth === 0 ? "Parent category" : "Subcategory"}</span><span className="flex-grow-1">{item.category.name}</span><button type="button" className="btn btn-outline-secondary btn-sm py-0" aria-label={"Move " + item.category.name + " up"} title="Move up" disabled={busy || detail.gradeStatus === "VERIFIED" || item.index === 0} onClick={() => void moveAssessmentCategory(item.category.id,-1)}>↑</button><button type="button" className="btn btn-outline-secondary btn-sm py-0" aria-label={"Move " + item.category.name + " down"} title="Move down" disabled={busy || detail.gradeStatus === "VERIFIED" || item.index === item.count - 1} onClick={() => void moveAssessmentCategory(item.category.id,1)}>↓</button></div>)}
+            </div>}
             {detail.assessments.length ? <div className="assessment-category-groups">{assessmentItemGroups.map(({category,items})=>{const expanded=assessmentCategoryOverrides[category.id]??items.length<=12;return <section className="assessment-category-group" key={category.id}>
               <button type="button" className="assessment-category-toggle" aria-expanded={expanded} onClick={()=>setAssessmentCategoryOverrides(current=>({...current,[category.id]:!expanded}))}><span className="assessment-category-name">{categoryPath(category,detail.categories)}</span><span className="assessment-category-count">{items.length} {items.length===1?"item":"items"}</span><span className="assessment-category-action">{expanded?"Hide items":"Show items"}</span></button>
               {expanded&&<div className="assessment-list">{items.map(item=>{const attendanceItem=item.title.toLocaleLowerCase().startsWith("attendance ·");return <article className="assessment-list-row" key={item.id}>
@@ -1829,7 +1910,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
             {(()=>{const alerted=filteredEnrollments.map(enrollment=>({enrollment,summary:attendanceSummary(enrollment,detail.assessments)})).filter(item=>item.summary.alertLevel!=="none" || item.summary.droppingWarning);const critical=alerted.filter(item=>item.summary.alertLevel==="critical").length;const early=alerted.filter(item=>item.summary.alertLevel==="early").length;return <section className="attendance-alert-panel" aria-label="Attendance monitoring overview"><div className="attendance-alert-header"><div><span className="attendance-alert-eyebrow">ATTENDANCE OVERVIEW</span><b>Monitoring alerts</b><small>Early warning starts at {EARLY_ABSENCE_PERCENT}% absent. High risk starts at {HIGH_RISK_ABSENCE_PERCENT}%. Excused days are excluded.</small></div><div className="attendance-alert-summary"><span className="attendance-alert-total"><b>{alerted.length}</b><small>{alerted.length===1?"student flagged":"students flagged"}</small></span><span className="attendance-alert-count early"><i></i>{early} early</span><span className="attendance-alert-count critical"><i></i>{critical} high risk</span></div></div>{alerted.length?<div className="attendance-alert-list">{alerted.map(({enrollment,summary})=><article key={enrollment.id} className={`attendance-alert-item ${summary.alertLevel}`}><div className="attendance-alert-person"><b>{enrollment.studentName}</b>{summary.alertLevel !== "none" && <span className={`attendance-alert-badge ${summary.alertLevel}`}>{summary.alertLevel==="critical"?"High risk":"Early warning"}</span>}</div><div className="attendance-alert-detail"><span>{summary.effectiveAbsent} absences of {summary.counted} counted days</span><b>{summary.absencePercent?.toFixed(1)}%</b></div><AbsenceDateList dates={summary.absenceDates}/>{summary.droppingWarning && <DroppingWarning streak={summary.droppingWarning}/>}<div className="attendance-alert-meter" role="presentation"><span style={{width:`${Math.min(100,summary.absencePercent??0)}%`}} /></div></article>)}</div>:<div className="attendance-alert-clear"><span aria-hidden="true">✓</span><div><b>No attendance alerts</b><small>No students in the current roster filter meet an attendance alert threshold.</small></div></div>}</section>})()}{attendanceDays.length ? <div className="table-scroll"><table className="table grade-table ecr-table attendance-table"><thead><tr><th>STUDENT</th><th>SUMMARY</th>{attendanceDays.map(item=><th key={item.id}>{item.dueDate ? new Date(item.dueDate).toLocaleDateString() : item.title}<small>{item.attendanceType === "ONLINE" ? "Online" : item.attendanceType === "FACE_TO_FACE" ? "Face-to-Face" : "Type not set"} · {item.scheduleOverrideReason ? `Make-up class: ${item.scheduleOverrideReason}` : "Scheduled class day"}</small></th>)}</tr></thead><tbody>{filteredEnrollments.map(enrollment=>{const summary=attendanceSummary(enrollment,detail.assessments);return <tr key={enrollment.id}><td><b>{enrollment.studentName}</b></td><td className="attendance-summary"><b>Attendance · {summary.percent===null?"—":summary.percent.toFixed(1)+"%"}</b><small>P {summary.present} · A {summary.effectiveAbsent} · L {summary.late - summary.lateAbsences} · E {summary.excused}</small>{summary.lateAbsences > 0 && <small>{summary.lateAbsences} equivalent absence(s) from late marks</small>}{summary.atRisk&&<span className="absence-risk-badge">DANGER OF FAILING · {summary.absencePercent?.toFixed(1)}% ABSENT</span>}</td>{attendanceDays.map(item=>{const score=scoresByEnrollment.get(enrollment.id)?.get(item.id);const converted=summary.converted.has(item.id);const value=score?.remark==="LATE"?(converted?"LATE_AS_ABSENT":"LATE"):score?.remark==="EXCUSED"?"EXCUSED":score?.remark==="ABSENT"?"ABSENT":score?.remark==="PRESENT"||score?.points!=null?"PRESENT":"";return <td key={item.id}><select className="form-select form-select-sm attendance-mark" aria-label={`${enrollment.studentName} ${item.title}`} value={value} onChange={event=>saveAttendanceMark(enrollment.id,item.id,(event.target.value||null) as AttendanceMark["remark"])} disabled={detail.gradeStatus==="VERIFIED"}><option value="">Not marked</option><option value="PRESENT">Present</option>{converted && <option value="LATE_AS_ABSENT" disabled>{CONVERTED_LATE_LABEL}</option>}<option value="LATE">Late</option><option value="ABSENT">Absent</option><option value="EXCUSED">Excused</option></select>{converted && <small className="d-block text-danger">Three consecutive lates</small>}</td>})}</tr>})}</tbody></table></div> : <div className="inline-empty">No attendance sessions yet. Add a day that matches this class schedule to start recording attendance.</div>}
             <div className="scorebook-legend"><span><b>Danger indicator</b> appears when absences exceed 20% of non-excused class days.</span><span>Every third consecutive Late is counted as Absent.</span><span>To change a class schedule, edit the subject details before recording sessions.</span></div>
           </section>}
-          {classSection === "record" && <section id="class-section-record" className="surface gradebook-card scorebook-section" ref={scorebookRegionRef}><div className="section-heading"><div><span className="eyebrow">ELECTRONIC CLASS RECORD</span><h2>Record scores</h2><p className="muted">Enter scores by student and assessment. Each category includes an Equivalent (%) column showing the earned share of its parent Lecture or Laboratory allocation (for example, 93% × 25% = 23.25%). The final course grade also applies the top-level Lecture/Laboratory weights. Changes save when you leave a field. Pending work is not treated as zero.</p></div><div className="scorebook-toolbar"><span className="gradebook-count">{filteredEnrollments.length} of {detail.enrollments.length} students · {detail.assessments.length} items</span><label className="scorebook-contribution-toggle"><input type="checkbox" className="form-check-input" checked={showWeightBreakdown} onChange={event=>setShowWeightBreakdown(event.target.checked)} />Detailed breakdown row</label><button className="btn btn-outline-primary btn-sm" onClick={()=>downloadScoreCsv(true)} disabled={!scorebookAssessments.length}>Download template</button><button className="btn btn-outline-primary btn-sm" onClick={()=>{setBulkScoresOpen(true);setBulkErrors([]);setBulkRowsPreview([]);setBulkOperations([])}} disabled={!scorebookAssessments.length||detail.gradeStatus==="VERIFIED"}>Import scores</button><button className="btn btn-outline-secondary btn-sm" onClick={()=>downloadScoreCsv(false)} disabled={!scorebookAssessments.length}>Export scores</button></div></div>
+          {classSection === "record" && <section id="class-section-record" className="surface gradebook-card scorebook-section" ref={scorebookRegionRef}><div className="section-heading"><div><span className="eyebrow">ELECTRONIC CLASS RECORD</span><h2>Record scores</h2><p className="muted">Enter scores by student and assessment. Each category includes an Equivalent (%) column showing the earned share of its parent Lecture or Laboratory allocation (for example, 93% × 25% = 23.25%). The final course grade also applies the top-level Lecture/Laboratory weights. Changes save when you leave a field. Pending work is not treated as zero.</p></div><div className="scorebook-toolbar"><span className="gradebook-count">{filteredEnrollments.length} of {detail.enrollments.length} students · {detail.assessments.length} items</span><label className="scorebook-contribution-toggle"><input type="checkbox" className="form-check-input" checked={showWeightBreakdown} onChange={event=>setShowWeightBreakdown(event.target.checked)} />Detailed breakdown row</label><button className="btn btn-outline-primary btn-sm" onClick={()=>downloadScoreCsv(true)} disabled={!scorebookAssessments.length}>Download template</button><button className="btn btn-outline-primary btn-sm" onClick={()=>{setBulkScoresOpen(true);setBulkErrors([]);setBulkRowsPreview([]);setBulkOperations([])}} disabled={!scorebookAssessments.length||detail.gradeStatus==="VERIFIED"}>Import scores</button><button className="btn btn-outline-primary btn-sm" onClick={exportRecordScoresExcel} disabled={!scorebookAssessments.length}>Export Excel</button><button className="btn btn-outline-secondary btn-sm" onClick={()=>downloadScoreCsv(false)} disabled={!scorebookAssessments.length}>Export CSV</button></div></div>
             {workbookSaveState !== "idle" && <div className={`small mb-2 ${workbookSaveState === "error" ? "text-danger" : "text-secondary"}`} role="status" aria-live="polite">
               {workbookSaveState === "queued" ? "Workbook changes queued…" : workbookSaveState === "saving" ? "Saving workbook…" : workbookSaveState === "saved" ? "✓ Workbook saved" : "Workbook not saved."}
               {workbookSaveState === "error" && <button type="button" className="btn btn-link btn-sm" onClick={() => { workbookFailedRef.current = false; void flushWorkbookScores(); }}>Retry saving</button>}
