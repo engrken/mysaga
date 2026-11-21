@@ -178,7 +178,7 @@ test("generic grading sheet export uses class records, actual assessment scores,
   assert.match(sheet, /NO\./);
   assert.match(sheet, /NAME OF STUDENTS/);
   assert.match(sheet, /<c r="A17"[^>]*>.*?1/s);
-  assert.match(sheet, /<c r="B17"[^>]*>.*?ANA REYES/s);
+  assert.match(sheet, /<c r="B17"[^>]*>.*?Ana Reyes/s);
   assert.match(sheet, /QUIZZES \(30\.00%\)/);
   assert.match(sheet, /MAJOR EXAM \(50\.00%\)/);
   assert.equal((sheet.match(/ATTENDANCE \(%\)/g) || []).length, 1, "attendance remains one calculated percentage column");
@@ -244,7 +244,7 @@ test("category ordering is hierarchical, persistent, and exposed from Assessment
     { id: "root-a-leaf", parentId: "sub-a", sortOrder: 0 }
   ];
   assert.deepEqual(
-    context.orderCategories(categories).map(item => item.id),
+    Array.from(context.orderCategories(categories), item => item.id),
     ["root-b", "root-a", "sub-a", "root-a-leaf", "sub-b"]
   );
   assert.match(source, /async function moveAssessmentCategory/);
