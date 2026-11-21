@@ -494,7 +494,7 @@ export async function POST(request: Request, context: Context) {
     select: {
       id: true, gradeStatus: true, academicYear: true, schedule: true,
       categories: { orderBy: { sortOrder: "asc" } },
-      assessments: { select: { id: true, categoryId: true, title: true, weight: true, dueDate: true } },
+      assessments: { select: { id: true, categoryId: true, title: true, weight: true, dueDate: true, sortOrder: true } },
       enrollments: { select: { id: true, studentNumber: true } }
     }
   });
