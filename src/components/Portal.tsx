@@ -1949,30 +1949,87 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     ctx.fillText(isoHeaderConfig.affiliationLine2, 800, 371, 1560);
     return gradeHeaderCanvasBytes(canvas);
   }
+  async function renderIsoExcelLogoBlockPng(): Promise<Uint8Array> {
+    const schoolLogo = await loadGradeHeaderLogo(schoolLogoPath);
+    const canvas = document.createElement("canvas");
+    canvas.width = 400;
+    canvas.height = 540;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not prepare the ISO Excel school identity block.");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    drawGradeHeaderLogo(ctx, schoolLogo, 112, 16, 176, 230, true);
+    ctx.fillStyle = "#000";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "bold 23px Arial";
+    ctx.fillText(user.school.name.toLocaleUpperCase(), 200, 365, 370);
+    ctx.font = "16px Arial";
+    ctx.fillText(isoHeaderConfig.organizationAddress, 200, 430, 370);
+    return gradeHeaderCanvasBytes(canvas);
+  }
   async function exportIsoGradesExcel() {
     if (!detail || !ensureIsoHeaderConfigured()) return;
     try {
-      const headerPng = await renderIsoGradeHeaderPng();
+      const logoBlockPng = await renderIsoExcelLogoBlockPng();
       const academicAssessments = detail.assessments.filter(item => !item.title.toLocaleLowerCase().startsWith("attendance ·"));
       const assessmentHeaders = academicAssessments.map(item => {
         const category = detail.categories.find(value => value.id === item.categoryId);
         return (category ? categoryPath(category, detail.categories) + " · " : "") + item.title + " (Max " + item.maxScore + ")";
       });
-      const headers = ["No.", "Student Name", "Student Number", ...assessmentHeaders, ...gradeSheetComponents.map(item => item.name + " (%)"), "Final Grade", "Remarks"];
+      const headers = [
+        "No.",
+        "Student Name",
+        "Student Number",
+        ...assessmentHeaders,
+        ...gradeSheetComponents.map(item => item.name + " (%)"),
+        "TOTAL GRADE (%)",
+        "FINAL GRADE",
+        "REMARKS"
+      ];
       const rows: unknown[][] = [];
       detail.enrollments.forEach((enrollment: any, index: number) => {
         const scores = academicAssessments.map(item => enrollment.scores.find((score: any) => score.assessmentId === item.id)?.points ?? "");
-        const components = gradeSheetComponents.map(component => gradeSheetComponentPercent(detail, enrollment, component) ?? "");
-        const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
-        rows.push([index + 1, enrollment.studentName || "", enrollment.studentNumber || "", ...scores, ...components, band?.finalGrade || "", band?.remarks || ""]);
+        const special = ["INC", "NP", "DROPPED"].includes(enrollment.remarks || "");
+        const components = gradeSheetComponents.map(component =>
+          special ? "" : gradeSheetComponentContribution(detail, enrollment, component) ?? ""
+        );
+        const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent).find(item =>
+          enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent
+        );
+        const totalGrade = special || enrollment.finalPercent === null ? "" : Number(enrollment.finalPercent.toFixed(2));
+        const finalGrade = special ? "" : enrollment.finalGradeOverride || band?.finalGrade || "";
+        rows.push([
+          index + 1,
+          enrollment.studentName || "",
+          enrollment.studentNumber || "",
+          ...scores,
+          ...components,
+          totalGrade,
+          finalGrade,
+          enrollment.remarks || band?.remarks || ""
+        ]);
       });
-      downloadXlsx(
+      downloadIsoXlsx(
         detail.code.replace(/[^a-z0-9-_]+/gi, "-") + "-iso-grading-sheet.xlsx",
         "ISO Grading Sheet",
         headers,
         rows,
-        headerPng,
-        0.25
+        logoBlockPng,
+        {
+          organizationName: user.school.name,
+          organizationAddress: isoHeaderConfig.organizationAddress,
+          formName: "COLLEGIATE GRADING SHEET",
+          formNo: isoHeaderConfig.formNo,
+          effectivity: isoHeaderConfig.effectivity,
+          issuingOffice: isoHeaderConfig.issuingOffice,
+          revisionNo: isoHeaderConfig.revisionNo,
+          eomsTitle: isoHeaderConfig.eomsTitle + " (" + isoHeaderConfig.isoStandard + ")",
+          affiliationLine1: isoHeaderConfig.affiliationLine1,
+          affiliationLine2: isoHeaderConfig.affiliationLine2,
+          submittedBy: user.fullName,
+          deanName
+        }
       );
       setErr("");
     } catch (error) {
