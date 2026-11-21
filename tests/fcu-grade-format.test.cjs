@@ -337,7 +337,8 @@ test("PDF component values are weighted by the configured course allocation", ()
   assert.ok(source.includes('useEffect(() => { setSchoolAddress(user.school.address || ""); }, [user.school.address]);'));
   assert.ok(source.includes('useEffect(() => { setDepartmentName(user.school.departmentName || ""); }, [user.school.departmentName]);'));
   assert.ok(source.includes('function printFinalGradesPdf(format: "generic" | "iso" = "generic")'));
-  assert.ok(source.includes("College / Department name is missing."));
+  assert.ok(source.includes("Your generic grading-sheet header is incomplete."));
+  assert.ok(source.includes('setTab("profile");'));
   assert.ok(source.includes('printFinalGradesPdf("generic"); event.currentTarget.closest("details")'));
   assert.ok(source.includes('printFinalGradesPdf("iso"); event.currentTarget.closest("details")'));
   assert.match(source, /generic-print-address/);
