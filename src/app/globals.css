@@ -1794,3 +1794,19 @@ body[data-saga-theme="dark"]:has(.portal-layout[data-saga-role="student"]) .saga
 .generic-print-grade-table tbody tr:nth-child(even){background:#fafbfd}
 @media(max-width:900px){.grading-sheet-dean-field{min-width:160px}.grading-sheet-dean-field input{min-width:160px}}
 @media(max-width:760px){.generic-print-course-details{grid-template-columns:1fr 1fr}.grading-sheet-dean-field{width:100%}.grading-sheet-dean-field input{width:100%}}
+
+/* ISO grading-sheet export format picker */
+.iso-export-menu{position:relative;display:inline-block}
+.iso-export-menu>summary{display:inline-flex;align-items:center;gap:9px;cursor:pointer;list-style:none}
+.iso-export-menu>summary::-webkit-details-marker{display:none}
+.iso-export-menu[open]>summary{filter:brightness(.96)}
+.iso-export-options{position:absolute;z-index:30;top:calc(100% + 7px);right:0;width:min(290px,calc(100vw - 36px));padding:6px;background:#fff;border:1px solid #dce3ec;border-radius:11px;box-shadow:0 12px 30px rgba(20,38,66,.16)}
+.iso-export-option{display:flex;width:100%;align-items:center;gap:11px;padding:10px;border:0;border-radius:8px;background:transparent;color:#24344d;text-align:left;cursor:pointer}
+.iso-export-option:hover,.iso-export-option:focus-visible{background:#f2f6fb;outline:none}
+.iso-export-option>span:last-child{display:grid;gap:3px}
+.iso-export-option strong{font-size:.78rem;font-weight:750}
+.iso-export-option small{font-size:.68rem;color:#6b7789}
+.iso-export-option-icon{display:grid;place-items:center;flex:0 0 42px;height:38px;border-radius:8px;font-size:.68rem;font-weight:850}
+.iso-export-option-icon.pdf{background:#fff0ef;color:#b42318}
+.iso-export-option-icon.xlsx{background:#eaf6ee;color:#217447}
+@media(max-width:640px){.iso-export-menu{width:100%}.iso-export-menu>summary{width:100%;justify-content:center}.iso-export-options{left:0;right:auto;width:100%}}
