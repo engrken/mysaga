@@ -651,7 +651,7 @@ test("Record Scores export dynamically merges institutional, metadata, category,
   assert.match(sheet, /<c r="L23"[^>]*>.*?DEAN EXAMPLE/s);
   assert.match(sheet, /<c r="A24"[^>]*>.*?SIGNATURE OVER PRINTED NAME \/ DATE/s);
   assert.match(sheet, /<c r="L24"[^>]*>.*?SIGNATURE OVER PRINTED NAME \/ DATE/s);
-  assert.match(sheet, /<cellXfs count="18">/);
+  assert.match(styles, /<cellXfs count="18">/);
   assert.match(sheet, /Submitted by:/);
   assert.match(sheet, /Noted:/);
   assert.match(sheet, /TEACHER EXAMPLE/);
