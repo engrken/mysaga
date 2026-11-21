@@ -1577,7 +1577,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       ctx.restore();
     }
   }
-  async function renderGenericGradeHeaderPng(): Promise<Uint8Array> {
+  async function renderGenericGradeHeaderPng(currentDetail: Detail): Promise<Uint8Array> {
     const [schoolLogo, departmentLogo] = await Promise.all([
       loadGradeHeaderLogo(schoolLogoPath),
       loadGradeHeaderLogo(departmentLogoPath)
@@ -1603,7 +1603,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     ctx.font = "bold 31px Arial";
     ctx.fillText("COLLEGIATE GRADE SHEET", 800, 285, 1160);
     ctx.font = "bold 22px Arial";
-    ctx.fillText(detail.term.toLocaleUpperCase() + " A.Y. " + detail.academicYear, 800, 340, 1160);
+    ctx.fillText(currentDetail.term.toLocaleUpperCase() + " A.Y. " + currentDetail.academicYear, 800, 340, 1160);
     return gradeHeaderCanvasBytes(canvas);
   }
   async function renderIsoGradeHeaderPng(): Promise<Uint8Array> {
@@ -1699,7 +1699,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   async function exportGrades() {
     if (!detail || !ensureGenericHeaderConfigured()) return;
     try {
-      const headerPng = await renderGenericGradeHeaderPng();
+      const headerPng = await renderGenericGradeHeaderPng(detail);
       await downloadFcuGradeXlsx(
         detail.code.replace(/[^a-z0-9-_]+/gi, "-") + "-final-grades.xlsx",
         "Final Grades",
