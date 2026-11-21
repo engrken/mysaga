@@ -732,7 +732,7 @@ function categoryPath(category: Category, categories: Category[]) {
   const names = [category.name]; let parent = categories.find(item => item.id === category.parentId);
   while (parent) { names.unshift(parent.name); parent = categories.find(item => item.id === parent?.parentId); }
   return names.join(" / ");
-}function categoryHasGradingAssessments(category: Category, categories: Category[], assessments: Assessment[], visited = new Set<string>()) {
+}function categoryHasGradingAssessments(category: Category, categories: Category[], assessments: Assessment[], visited = new Set<string>()): boolean {
   if (visited.has(category.id)) return false;
   visited.add(category.id);
   if (assessments.some(item => item.categoryId === category.id && !item.title.toLocaleLowerCase().startsWith("attendance ·"))) return true;
