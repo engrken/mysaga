@@ -2162,22 +2162,22 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         @media print {
           .generic-print-sheet { display:block!important; width:100%!important; color:#000!important; background:#fff!important; font-family:Arial,Helvetica,sans-serif!important; }
           .generic-print-sheet { font-size:9pt; }
-          .generic-print-sheet>header { position:relative; display:grid; grid-template-columns:76px minmax(0,1fr) 76px; align-items:center; gap:10px; width:100%; max-width:900px; box-sizing:border-box; text-align:center; border:0; padding:0 6px 8px; margin:0 auto 6px; }
-          .generic-print-logo-slot { display:flex; align-items:center; justify-content:center; min-width:0; min-height:64px; }
-          .generic-print-logo { display:block; width:60px; height:60px; object-fit:contain; }
+          .generic-print-sheet>header { display:grid; grid-template-columns:88px minmax(0,1fr) 88px; align-items:center; gap:12px; width:100%; max-width:900px; box-sizing:border-box; text-align:center; border:0; padding:0 8px 8px; margin:0 auto 8px; }
+          .generic-print-logo-slot { display:flex; align-items:center; justify-content:center; justify-self:center; width:88px; min-width:88px; min-height:68px; }
+          .generic-print-logo { display:block; width:58px; height:58px; object-fit:contain; margin:0 auto; }
+          .generic-print-school-heading { min-width:0; text-align:center; }
           .generic-print-sheet>header h1 { margin:0; font-size:14pt; font-weight:700; }
           .generic-print-sheet>header p { margin:2px 0 4px; font-size:8.5pt; min-height:10px; line-height:1.2; }
           .generic-print-sheet>header .generic-print-department { margin:0 0 5px; font-size:9pt; font-weight:600; min-height:0; }
           .generic-print-sheet>header .generic-print-department:empty { display:none; }
           .generic-print-sheet>header strong { display:block; font-size:12pt; letter-spacing:.04em; }
-          .generic-print-doc-control { border:1px solid #333; margin:5px 0 8px; font-size:7pt; }
-          .generic-print-doc-control .doc-control-row { display:grid; grid-template-columns:1fr 1fr 1fr; }
-          .generic-print-doc-control span { padding:3px 5px; border-right:1px solid #777; border-bottom:1px solid #777; }
-          .generic-print-membership { font-size:7pt; line-height:1.25; margin:4px 0 8px; }
-          .generic-print-course-details { display:grid; grid-template-columns:1fr 1.4fr 1fr 1fr; gap:0; margin:6px 0 10px; font-size:8pt; border:1px solid #333; }
-          .generic-print-course-details>div { display:flex; gap:5px; border-right:1px solid #777; border-bottom:1px solid #777; padding:5px; min-width:0; }
-          .generic-print-course-details b { white-space:nowrap; }
-          .generic-print-course-details span { overflow-wrap:anywhere; }
+          .generic-print-course-details { display:flex; flex-direction:column; gap:7px; margin:8px 0 12px; padding:0; font-size:8.5pt; border:0; }
+          .generic-print-course-details-row { display:grid; align-items:baseline; gap:18px; min-width:0; }
+          .generic-print-course-details-row-primary { grid-template-columns:minmax(0,1fr) minmax(0,2.2fr); }
+          .generic-print-course-details-row-secondary { grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.25fr); }
+          .generic-print-course-details-row>div { display:flex; align-items:baseline; gap:6px; min-width:0; border:0; padding:0; }
+          .generic-print-course-details b { white-space:nowrap; font-weight:700; }
+          .generic-print-course-details span { display:block; flex:1; min-width:0; min-height:13px; padding:0 3px 1px; border-bottom:1px solid #222; overflow-wrap:anywhere; }
           .generic-print-grade-table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:8pt; line-height:1.15; }
           .generic-print-grade-table thead { display:table-header-group; }
           .generic-print-grade-table th,.generic-print-grade-table td { border:1px solid #333!important; padding:5px 4px!important; vertical-align:middle; }
@@ -2187,7 +2187,6 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           .generic-print-grade-table td:not(:nth-child(2)) { text-align:center; }
           .generic-print-grade-table tbody tr { break-inside:avoid; page-break-inside:avoid; }
           .generic-print-grade-table small { display:block; font-weight:400; font-size:6.5pt; }
-          .grade-sheet-calculation-note { margin:6px 0 0; font-size:6.5pt; line-height:1.2; color:#222; }
           .generic-print-sheet .print-signatures { display:grid; grid-template-columns:1fr 1fr; gap:50px; margin-top:24px; break-inside:avoid; page-break-inside:avoid; font-size:8pt; }
           .generic-print-sheet .print-signatures>div { min-height:60px; }
           .generic-print-sheet .print-signatures p { margin:24px 0 0; text-align:center; }
@@ -2204,18 +2203,16 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
             {departmentLogoPath ? <img className="generic-print-logo" src={"/api/media?pathname=" + encodeURIComponent(departmentLogoPath)} alt="College / department logo"/> : <span aria-hidden="true"/>}
           </div>
         </header>
-        <div className="generic-print-doc-control">
-          <div className="doc-control-row"><span><b>Form Name:</b> GRADING SHEETS</span><span><b>Effectivity:</b> —</span><span><b>Form No.:</b> —</span></div>
-          <div className="doc-control-row"><span><b>Issuing Office:</b> —</span><span><b>Revision No.:</b> —</span><span><b>Page No.:</b> 1</span></div>
-        </div>
-        <div className="generic-print-membership"><b>Institutional membership / accreditation:</b> —</div>
         <div className="generic-print-course-details">
-          <div><b>Course No.:</b><span>{detail.code}</span></div>
-          <div><b>Descriptive Title:</b><span>{detail.title}</span></div>
-          <div><b>Class I.D.:</b><span>{detail.classId || "—"}</span></div>
-          <div><b>Semester:</b><span>{detail.term}</span></div>
-          <div><b>Academic Year:</b><span>{detail.academicYear}</span></div>
-          <div><b>Course &amp; Year:</b><span>{detail.courseYear || "—"}</span></div>
+          <div className="generic-print-course-details-row generic-print-course-details-row-primary">
+            <div><b>Course No.:</b><span>{detail.code}</span></div>
+            <div><b>Descriptive Title:</b><span>{detail.title}</span></div>
+          </div>
+          <div className="generic-print-course-details-row generic-print-course-details-row-secondary">
+            <div><b>Class ID:</b><span>{detail.classId || "—"}</span></div>
+            <div><b>Semester:</b><span>{detail.term}</span></div>
+            <div><b>Academic Year:</b><span>{detail.academicYear}</span></div>
+          </div>
         </div>
         <table className="print-grade-table generic-print-grade-table">
           <thead><tr><th aria-label="Sequence number"></th><th>NAME OF STUDENTS</th>{gradeSheetComponents.map((component,index)=><th key={index}>{component.name.toLocaleUpperCase()}<small>{component.percentage.toFixed(2)}%</small></th>)}<th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
@@ -2225,7 +2222,6 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
             return <tr key={enrollment.id}><td>{index+1}.</td><td>{enrollment.studentName.toLocaleUpperCase()}</td>{gradeSheetComponents.map((component,componentIndex)=>{const contribution=gradeSheetComponentContribution(detail,enrollment,component);return <td key={componentIndex}>{contribution===null?"":contribution.toFixed(2)}</td>;})}<td>{special||enrollment.finalPercent===null?"":enrollment.finalPercent.toFixed(2)+"%"}</td><td>{special?"":enrollment.finalGradeOverride||band?.finalGrade||""}</td><td>{enrollment.remarks||band?.remarks||""}</td></tr>;
           })}</tbody>
         </table>
-        <p className="grade-sheet-calculation-note">Component labels and percentages are presentation settings only. Official grades continue to use the class grading categories and configured calculation rules. Component scores are shown when a matching class category exists.</p>
         <div className="print-signatures">
           <div>Submitted by:<p><u>{user.fullName}</u><small>TEACHER&apos;S SIGNATURE OVER PRINTED NAME</small></p></div>
           <div>Noted:<p><u>{deanName || " "}</u><small>DEAN&apos;S SIGNATURE OVER PRINTED NAME</small></p></div>
