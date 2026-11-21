@@ -103,7 +103,7 @@ test("Generic PDF export is offered only once inside the export dropdown", () =>
 
 test("ISO Excel export follows the FCU editable A1:G4 header grid and Folio page setup", () => {
   const start = source.indexOf("function downloadIsoXlsx(");
-  const end = source.indexOf("\\nfunction categoryDescendantIds(", start);
+  const end = source.indexOf("\nfunction categoryDescendantIds(", start);
   assert.ok(start > 0 && end > start, "dedicated ISO XLSX writer is present");
   const compiledWriter = ts.transpileModule(source.slice(start, end), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
@@ -117,7 +117,7 @@ test("ISO Excel export follows the FCU editable A1:G4 header grid and Folio page
     excelColumn: columns,
     xmlEscape: escape
   };
-  vm.runInNewContext(compiledWriter + "\\nthis.writeIsoWorkbook = downloadIsoXlsx;", context);
+  vm.runInNewContext(compiledWriter + "\nthis.writeIsoWorkbook = downloadIsoXlsx;", context);
   context.writeIsoWorkbook(
     "iso.xlsx",
     "ISO Grading Sheet",
