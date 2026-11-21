@@ -295,7 +295,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     return (category ? categoryPath(category, detail.categories) + " · " : "") + item.title + " (Max " + item.maxScore + weightNote + ")";
   });
   const componentColumns = components.map(item => item.name.toLocaleUpperCase() + " (" + item.percentage.toFixed(2) + "%)");
-  const headers = ["NAME OF STUDENTS", ...assessmentColumns, ...componentColumns, "ATTENDANCE (%)", "TOTAL GRADE", "FINAL GRADE", "REMARKS"];
+  const headers = ["NO.", "NAME OF STUDENTS", ...assessmentColumns, ...componentColumns, "ATTENDANCE (%)", "TOTAL GRADE", "FINAL GRADE", "REMARKS"];
   const columnCount = headers.length;
   const last = excelColumn(columnCount - 1);
   const rows: Array<Array<{ value: unknown; style: number }>> = [];
@@ -330,7 +330,8 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
       return score?.points == null ? "" : score.points + " / " + item.maxScore;
     });
     const values = [
-      (index + 1) + ". " + enrollment.studentName,
+      enrollment.studentNumber || String(index + 1),
+      enrollment.studentName,
       ...scores,
       ...components.map(component => { const percent = gradeSheetComponentPercent(detail, enrollment, component); return percent === null ? "" : percent.toFixed(2) + "%"; }),
       attendancePercent === null ? "" : attendancePercent.toFixed(2) + "%",
@@ -338,7 +339,7 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
       special ? "" : enrollment.finalGradeOverride || band?.finalGrade || "",
       enrollment.remarks || band?.remarks || ""
     ];
-    addRow(values.map((value, col) => ({ col, value, style: col === 0 ? 6 : 7 })));
+    addRow(values.map((value, col) => ({ col, value, style: col === 1 ? 6 : 7 })));
   }
   addRow([]);
   const signatureRow = rows.length + 1;
@@ -368,11 +369,11 @@ function downloadGradeSheetXlsx(filename: string, sheetName: string, detail: Det
     const height = rowIndex === 0 ? ' ht="26" customHeight="1"' : rowIndex === 2 ? ' ht="24" customHeight="1"' : rowIndex === 15 ? ' ht="42" customHeight="1"' : rowIndex >= 16 && rowIndex < 16 + detail.enrollments.length ? ' ht="22" customHeight="1"' : ' ht="20" customHeight="1"';
     return '<row r="' + rowNumber + '"' + height + '>' + xmlCells + '</row>';
   }).join("");
-  const componentStart = 2 + academicAssessments.length;
+  const componentStart = 3 + academicAssessments.length;
   const attendanceColumn = componentStart + components.length;
   const totalColumn = attendanceColumn + 1;
   const widths = "<cols>" + headers.map((header,index) => {
-    const width = index === 0 ? 32 : index >= totalColumn
+    const width = index === 0 ? 14 : index === 1 ? 32 : index >= totalColumn
       ? (header === "FINAL GRADE" ? 12 : header === "REMARKS" ? 16 : 14)
       : index === attendanceColumn - 1 ? 14
       : Math.max(16, Math.min(26, Math.ceil(header.length * 0.72)));
