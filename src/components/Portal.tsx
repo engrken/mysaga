@@ -488,8 +488,7 @@ function downloadGradeSheetXlsx(
     let title = item.title.trim();
     if (title.includes("·")) title = title.split("·").pop()?.trim() ?? title;
     if (title.includes("/")) title = title.split("/").pop()?.trim() ?? title;
-    title = title.replace(/\s*\(Max\s+[^)]+\)\s*$/i, "").replace(/\s*\(\d+(?:\.\d+)?\)\s*$/, "").trim();
-    return title + " (" + item.maxScore + ")";
+    return title.replace(/\s*\(Max\s+[^)]+\)\s*$/i, "").replace(/\s*\(\d+(?:\.\d+)?\)\s*$/, "").trim();
   };
 
   const buildCategoryNode = (category: Category, depth: number): ExportCategoryNode | null => {
@@ -508,10 +507,8 @@ function downloadGradeSheetXlsx(
 
   const scoreColumns: ScoreColumn[] = [];
   let nextColumn = 3;
-  let maxCategoryDepth = 0;
   const assignColumns = (node: ExportCategoryNode) => {
     node.startColumn = nextColumn;
-    maxCategoryDepth = Math.max(maxCategoryDepth, node.depth);
     for (const item of node.items) { scoreColumns.push({ kind: "assessment", category: node.category, item }); nextColumn++; }
     if (node.items.length) { scoreColumns.push({ kind: "equivalent", category: node.category }); nextColumn++; }
     node.children.forEach(assignColumns);
@@ -525,70 +522,154 @@ function downloadGradeSheetXlsx(
   const columnCount = remarksColumn + 1;
   const last = excelColumn(columnCount - 1);
   const rows: ExportCell[][] = [];
+  const mergedRanges: string[] = [];
   const addRow = (values: Array<{ col: number; value: unknown; style?: number }>) => {
     const row = Array.from({ length: columnCount }, () => ({ value: "", style: 0 } as ExportCell));
     for (const value of values) row[value.col] = { value: value.value, style: value.style ?? 0 };
     rows.push(row);
   };
-
-  addRow([{ col: 0, value: schoolName, style: 1 }]);
-  addRow([{ col: 0, value: schoolAddress || "School address not set", style: 2 }]);
-  addRow([{ col: 0, value: (departmentName || schoolName).toLocaleUpperCase(), style: 3 }]);
-  addRow([]);
-  addRow([{ col: 0, value: "Course Number: " + detail.code, style: 4 }]);
-  addRow([{ col: 0, value: "Descriptive Title: " + detail.title, style: 4 }]);
-  addRow([{ col: 0, value: "Class ID: " + (detail.classId || "—"), style: 4 }]);
-  addRow([{ col: 0, value: "Semester: " + detail.term, style: 4 }]);
-  addRow([{ col: 0, value: "Academic Year: " + detail.academicYear, style: 4 }]);
-  addRow([{ col: 0, value: "Course & Year: " + (detail.courseYear || "—"), style: 4 }]);
-  addRow([{ col: 0, value: "Schedule: " + (formatSchedule(detail.schedule) || "—"), style: 4 }]);
-  addRow([{ col: 0, value: "Display Components: " + components.map(item => item.name + " " + item.percentage.toFixed(2) + "%").join(" · "), style: 4 }]);
-  addRow([]);
-
-  const tableHeaderStartRow = rows.length + 1;
-  const categoryRowCount = rootNodes.length ? maxCategoryDepth + 1 : 0;
-  const itemHeaderRow = tableHeaderStartRow + categoryRowCount;
-  const categoryNodesAtDepth: ExportCategoryNode[][] = Array.from({ length: categoryRowCount }, () => []);
-  const collectNodes = (node: ExportCategoryNode) => {
-    categoryNodesAtDepth[node.depth].push(node);
-    node.children.forEach(collectNodes);
-  };
-  rootNodes.forEach(collectNodes);
-  for (let depth = 0; depth < categoryRowCount; depth++) {
-    addRow(categoryNodesAtDepth[depth].map(node => ({ col: node.startColumn, value: node.category.name.toLocaleUpperCase(), style: 5 })));
-  }
-
-  addRow([
-    { col: 0, value: "NO.", style: 5 },
-    { col: 1, value: "NAME OF STUDENTS", style: 5 },
-    { col: 2, value: "ATTENDANCE %", style: 5 },
-    ...scoreColumns.map((column, index) => ({
-      col: 3 + index, value: column.kind === "assessment" ? assessmentTitle(column.item) : "EQUIVALENT (%)", style: 5
-    })),
-    { col: totalColumn, value: "TOTAL GRADE", style: 5 },
-    { col: finalColumn, value: "FINAL GRADE", style: 5 },
-    { col: remarksColumn, value: "CLASS REMARK", style: 5 }
-  ]);
-
-  const mergedRanges: string[] = [];
-  for (const rowNumber of [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12]) mergedRanges.push("A" + rowNumber + ":" + last + rowNumber);
-  const headerBottomRow = itemHeaderRow;
-  const mergeVertical = (columnIndex: number) => {
-    if (headerBottomRow > tableHeaderStartRow) {
-      const coordinate = excelColumn(columnIndex) + tableHeaderStartRow;
-      mergedRanges.push(coordinate + ":" + excelColumn(columnIndex) + headerBottomRow);
+  const addMergedValue = (
+    values: Array<{ col: number; value: unknown; style?: number }>,
+    rowNumber: number, startColumn: number, endColumn: number, value: unknown, style: number
+  ) => {
+    for (let column = startColumn; column <= endColumn; column++) {
+      values.push({ col: column, value: column === startColumn ? value : "", style });
+    }
+    if (endColumn > startColumn) {
+      mergedRanges.push(excelColumn(startColumn) + rowNumber + ":" + excelColumn(endColumn) + rowNumber);
     }
   };
-  [0, 1, 2, totalColumn, finalColumn, remarksColumn].forEach(mergeVertical);
-  const mergeCategoryNode = (node: ExportCategoryNode) => {
-    const startRow = tableHeaderStartRow + node.depth;
-    const endRow = node.children.length ? startRow : tableHeaderStartRow + maxCategoryDepth;
-    const startCell = excelColumn(node.startColumn) + startRow;
-    const endCell = excelColumn(node.startColumn + node.columnCount - 1) + endRow;
-    if (node.columnCount > 1 || endRow > startRow) mergedRanges.push(startCell + ":" + endCell);
-    node.children.forEach(mergeCategoryNode);
+
+  const headerLastColumn = columnCount - 1;
+  const fullWidthRow = (value: unknown, style: number) => {
+    const values: Array<{ col: number; value: unknown; style?: number }> = [];
+    addMergedValue(values, rows.length + 1, 0, headerLastColumn, value, style);
+    addRow(values);
   };
-  rootNodes.forEach(mergeCategoryNode);
+  fullWidthRow(schoolName, 11);
+  fullWidthRow(schoolAddress || "School address not set", 12);
+  fullWidthRow((departmentName || schoolName).toLocaleUpperCase(), 3);
+  addRow([]);
+
+  const labelWidth = columnCount >= 8 ? 2 : 1;
+  const firstValueWidth = columnCount >= 10 ? 4 : Math.max(1, Math.floor((columnCount - (labelWidth * 2)) / 2));
+  const firstLabelStart = 0;
+  const firstLabelEnd = labelWidth - 1;
+  const firstValueStart = firstLabelEnd + 1;
+  const firstValueEnd = Math.min(columnCount - 3, firstValueStart + firstValueWidth - 1);
+  const secondLabelStart = firstValueEnd + 1;
+  const secondLabelEnd = Math.min(columnCount - 2, secondLabelStart + labelWidth - 1);
+  const secondValueStart = secondLabelEnd + 1;
+  const pairedMetadataRow = (
+    firstLabel: string, firstValue: unknown, secondLabel: string, secondValue: unknown
+  ) => {
+    const rowNumber = rows.length + 1;
+    const values: Array<{ col: number; value: unknown; style?: number }> = [];
+    addMergedValue(values, rowNumber, firstLabelStart, firstLabelEnd, firstLabel, 13);
+    addMergedValue(values, rowNumber, firstValueStart, firstValueEnd, firstValue, 14);
+    addMergedValue(values, rowNumber, secondLabelStart, secondLabelEnd, secondLabel, 13);
+    addMergedValue(values, rowNumber, secondValueStart, headerLastColumn, secondValue, 14);
+    addRow(values);
+  };
+  const fullWidthMetadataRow = (label: string, value: unknown) => {
+    const rowNumber = rows.length + 1;
+    const values: Array<{ col: number; value: unknown; style?: number }> = [];
+    addMergedValue(values, rowNumber, 0, firstLabelEnd, label, 13);
+    addMergedValue(values, rowNumber, firstValueStart, headerLastColumn, value, 14);
+    addRow(values);
+  };
+  pairedMetadataRow("Course Number:", detail.code, "Descriptive Title:", detail.title);
+  pairedMetadataRow("Class ID:", detail.classId || "—", "Semester:", detail.term);
+  pairedMetadataRow("Academic Year:", detail.academicYear, "Course & Year:", detail.courseYear || "—");
+  fullWidthMetadataRow("Schedule:", formatSchedule(detail.schedule) || "—");
+  fullWidthMetadataRow("Display Components:", components.map(item => item.name + " " + item.percentage.toFixed(2) + "%").join(" · "));
+  pairedMetadataRow("Students Enrolled:", detail.enrollments.length, "Assessment Items:", academicAssessments.length);
+  addRow([]);
+  addRow([]);
+  addRow([]);
+
+  const tableHeaderStartRow = 14;
+  const itemHeaderRow = 16;
+  const maxScoreRow = 17;
+  const headerRows: Array<Array<{ col: number; value: unknown; style?: number }>> = [[], [], [], []];
+  const addHeaderRectangle = (
+    startColumn: number, endColumn: number, startRow: number, endRow: number, value: unknown, style: number
+  ) => {
+    for (let rowNumber = startRow; rowNumber <= endRow; rowNumber++) {
+      const values = headerRows[rowNumber - tableHeaderStartRow];
+      for (let column = startColumn; column <= endColumn; column++) {
+        values.push({ col: column, value: rowNumber === startRow && column === startColumn ? value : "", style });
+      }
+    }
+    if (startColumn !== endColumn || startRow !== endRow) {
+      mergedRanges.push(
+        excelColumn(startColumn) + startRow + ":" + excelColumn(endColumn) + endRow
+      );
+    }
+  };
+
+  const identityHeaders = [
+    { col: 0, value: "NO." },
+    { col: 1, value: "NAME OF STUDENTS" },
+    { col: 2, value: "ATTENDANCE %" }
+  ];
+  for (let rowOffset = 0; rowOffset < headerRows.length; rowOffset++) {
+    identityHeaders.forEach(item => headerRows[rowOffset].push({
+      col: item.col, value: rowOffset === 0 ? item.value : "", style: 5
+    }));
+  }
+  [0, 1, 2].forEach(column => {
+    const cell = excelColumn(column);
+    mergedRanges.push(cell + tableHeaderStartRow + ":" + cell + maxScoreRow);
+  });
+
+  const summaryHeaders = [
+    { col: totalColumn, value: "TOTAL GRADE (%)" },
+    { col: finalColumn, value: "FINAL GRADE" },
+    { col: remarksColumn, value: "REMARKS" }
+  ];
+  for (let rowOffset = 0; rowOffset < headerRows.length; rowOffset++) {
+    summaryHeaders.forEach(item => headerRows[rowOffset].push({
+      col: item.col, value: rowOffset === 0 ? item.value : "", style: 16
+    }));
+  }
+  [totalColumn, finalColumn, remarksColumn].forEach(column => {
+    const cell = excelColumn(column);
+    mergedRanges.push(cell + tableHeaderStartRow + ":" + cell + maxScoreRow);
+  });
+
+  for (const node of rootNodes) {
+    const endColumn = node.startColumn + node.columnCount - 1;
+    if (!node.children.length) {
+      addHeaderRectangle(node.startColumn, endColumn, tableHeaderStartRow, tableHeaderStartRow + 1, node.category.name.toLocaleUpperCase(), 5);
+    } else {
+      addHeaderRectangle(node.startColumn, endColumn, tableHeaderStartRow, tableHeaderStartRow, node.category.name.toLocaleUpperCase(), 5);
+    }
+  }
+  const addSubcategorySegments = (node: ExportCategoryNode, path: string[]) => {
+    if (node.items.length && node.depth > 0) {
+      const ownColumnCount = node.items.length + 1;
+      const label = path.slice(1).join(" / ").toLocaleUpperCase();
+      addHeaderRectangle(node.startColumn, node.startColumn + ownColumnCount - 1, tableHeaderStartRow + 1, tableHeaderStartRow + 1, label, 5);
+    } else if (node.items.length && node.depth === 0 && node.children.length) {
+      const ownColumnCount = node.items.length + 1;
+      addHeaderRectangle(node.startColumn, node.startColumn + ownColumnCount - 1, tableHeaderStartRow + 1, tableHeaderStartRow + 1, "GENERAL ACTIVITIES", 5);
+    }
+    node.children.forEach(child => addSubcategorySegments(child, [...path, child.category.name]));
+  };
+  rootNodes.forEach(node => addSubcategorySegments(node, [node.category.name]));
+
+  scoreColumns.forEach((column, index) => {
+    const columnIndex = 3 + index;
+    if (column.kind === "assessment") {
+      headerRows[2].push({ col: columnIndex, value: assessmentTitle(column.item), style: 5 });
+      headerRows[3].push({ col: columnIndex, value: "MAX: " + column.item.maxScore, style: 15 });
+    } else {
+      headerRows[2].push({ col: columnIndex, value: "EQUIVALENT", style: 5 });
+      headerRows[3].push({ col: columnIndex, value: "(%)", style: 15 });
+    }
+  });
+  headerRows.forEach(values => addRow(values));
 
   const gradeBands = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent);
   for (const [index, enrollment] of detail.enrollments.entries()) {
@@ -664,10 +745,12 @@ function downloadGradeSheetXlsx(
       if (typeof cell.value === "number" && Number.isFinite(cell.value)) return '<c r="' + reference + '" s="' + cell.style + '"><v>' + cell.value + '</v></c>';
       return '<c r="' + reference + '" s="' + cell.style + '" t="inlineStr"><is><t xml:space="preserve">' + xmlEscape(cell.value) + '</t></is></c>';
     }).join(""));
-    const rowHeight = rowIndex === 0 ? 26 : rowIndex === 2 ? 26
-      : rowNumber >= tableHeaderStartRow && rowNumber < itemHeaderRow ? 28
-      : rowNumber === itemHeaderRow ? 52
-      : rowNumber > itemHeaderRow && rowNumber <= itemHeaderRow + detail.enrollments.length ? 22
+    const rowHeight = rowNumber === 1 ? 24 : rowNumber === 2 ? 20 : rowNumber === 3 ? 22
+      : [4, 11, 12, 13].includes(rowNumber) ? 8
+      : rowNumber === 14 || rowNumber === 15 ? 27
+      : rowNumber === 16 ? 38
+      : rowNumber === 17 ? 22
+      : rowNumber > maxScoreRow && rowNumber <= maxScoreRow + detail.enrollments.length ? 22
       : rowNumber === signatureNameRow ? 28 : 20;
     return '<row r="' + rowNumber + '" ht="' + rowHeight + '" customHeight="1">' + xmlCells + '</row>';
   }).join("");
@@ -693,7 +776,7 @@ function downloadGradeSheetXlsx(
   }).join("") + "</cols>";
 
   const safeSheetName = sheetName.replace(/[\\/?*\\[\\]:]/g, " ").slice(0, 31) || "Grading Sheet";
-  const firstDataRow = itemHeaderRow + 1;
+  const firstDataRow = maxScoreRow + 1;
   const worksheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
     '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" zoomScale="90" workbookViewId="0"><pane ySplit="' + (firstDataRow - 1) + '" topLeftCell="A' + firstDataRow + '" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A' + firstDataRow + '" sqref="A' + firstDataRow + '"/></sheetView></sheetViews>' +
@@ -703,11 +786,11 @@ function downloadGradeSheetXlsx(
     '<pageSetup paperSize="256" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
   const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<fonts count="5"><font><sz val="9"/><name val="Arial"/></font><font><b/><sz val="14"/><name val="Arial"/></font><font><sz val="8.5"/><name val="Arial"/><color rgb="FF5B6573"/></font><font><b/><sz val="11"/><name val="Arial"/></font><font><b/><sz val="9"/><name val="Arial"/></font></fonts>' +
+    '<fonts count="8"><font><sz val="9"/><name val="Arial"/></font><font><b/><sz val="14"/><name val="Arial"/></font><font><sz val="8.5"/><name val="Arial"/><color rgb="FF5B6573"/></font><font><b/><sz val="11"/><name val="Arial"/></font><font><b/><sz val="9"/><name val="Arial"/></font><font><b/><sz val="12"/><name val="Arial"/></font><font><i/><sz val="9"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts>' +
     '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF0F8"/><bgColor indexed="64"/></patternFill></fill></fills>' +
     '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD4DCE7"/></left><right style="thin"><color rgb="FFD4DCE7"/></right><top style="thin"><color rgb="FFD4DCE7"/></top><bottom style="thin"><color rgb="FFD4DCE7"/></bottom><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="11">' +
+    '<cellXfs count="17">' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
     '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"><alignment horizontal="center" vertical="center"/></xf>' +
@@ -719,6 +802,12 @@ function downloadGradeSheetXlsx(
     '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
     '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="5" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="6" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
+    '<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="2" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="7" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
     '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
   const files = [
     { name: "[Content_Types].xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
@@ -735,7 +824,6 @@ function downloadGradeSheetXlsx(
   link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-
 
 async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail: Detail, categories: Category[], teacherName: string, deanName: string, components: GradeSheetComponent[], headerPng: Uint8Array) {
   const componentCategoryPath = (category: Category) => {

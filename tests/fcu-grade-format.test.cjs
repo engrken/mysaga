@@ -488,29 +488,150 @@ test("Record Scores Excel export mirrors the full grouped scorebook and saved si
   assert.match(sheet, /NAME OF STUDENTS/);
   assert.match(sheet, /QUIZZES/);
   assert.match(sheet, /MAJOR EXAM/);
-  assert.match(sheet, /Quiz 1 \(10\)/);
-  assert.match(sheet, /EQUIVALENT \(%\)/);
+  assert.match(sheet, /Quiz 1/);
+  assert.match(sheet, /MAX: 10/);
+  assert.match(sheet, /EQUIVALENT/);
+  assert.match(sheet, /\(\%\)/);
   assert.doesNotMatch(sheet, /Lecture \/ Quizzes|Quizzes · Quiz 1|Item wt|Course wt|Student Number|2023-0001/);
-  assert.match(sheet, /<mergeCell ref="D14:E14"\/>/);
-  assert.match(sheet, /<mergeCell ref="F14:G14"\/>/);
-  assert.match(sheet, /<c r="A16"[^>]*><v>1<\/v><\/c>/);
-  assert.match(sheet, /<c r="B16"[^>]*>.*?Ana Reyes/s);
-  assert.match(sheet, /<c r="A17"[^>]*><v>2<\/v><\/c>/);
-  assert.match(sheet, /<c r="D16"[^>]*>.*?8 \/ 10/s);
-  assert.match(sheet, /<c r="E16"[^>]*>.*?27\.00%/s);
-  assert.match(sheet, /<c r="G16"[^>]*>.*?46\.00%/s);
-  assert.match(sheet, /<c r="H16"[^>]*>.*?90\.00%/s);
-  assert.match(sheet, /<c r="I16"[^>]*>.*?2\.00/s);
-  assert.match(sheet, /<c r="J16"[^>]*>.*?PASSED/s);
+  assert.match(sheet, /<mergeCell ref="D14:E15"\/>/);
+  assert.match(sheet, /<mergeCell ref="F14:G15"\/>/);
+  assert.match(sheet, /<c r="A18"[^>]*><v>1<\/v><\/c>/);
+  assert.match(sheet, /<c r="B18"[^>]*>.*?Ana Reyes/s);
+  assert.match(sheet, /<c r="A19"[^>]*><v>2<\/v><\/c>/);
+  assert.match(sheet, /<c r="D18"[^>]*>.*?8 \/ 10/s);
+  assert.match(sheet, /<c r="E18"[^>]*>.*?27\.00%/s);
+  assert.match(sheet, /<c r="G18"[^>]*>.*?46\.00%/s);
+  assert.match(sheet, /<c r="H18"[^>]*>.*?90\.00%/s);
+  assert.match(sheet, /<c r="I18"[^>]*>.*?2\.00/s);
+  assert.match(sheet, /<c r="J18"[^>]*>.*?PASSED/s);
   assert.match(sheet, /TEACHER ONE/);
   assert.match(sheet, /DEAN TWO/);
   assert.match(sheet, /SIGNATURE OVER PRINTED NAME \/ DATE/);
   assert.doesNotMatch(sheet, /Teacher&apos;s Signature over Printed Name|Dean&apos;s Signature over Printed Name/);
   assert.match(sheet, /orientation="landscape" fitToWidth="1"/);
-  assert.match(sheet, /<pane ySplit="15" topLeftCell="A16"/);
+  assert.match(sheet, /<pane ySplit="17" topLeftCell="A18"/);
   assert.match(source, /@page \{ size: 8\.5in 13in/);
   assert.doesNotMatch(sheet, /Class Summary|Certification/);
   assert.ok(files["xl/styles.xml"]);
+});
+
+
+test("Record Scores export dynamically merges institutional, metadata, category, summary, and signature headers", () => {
+  const start = source.indexOf("function gradeSheetAttendancePercent(");
+  const end = source.indexOf("async function downloadFcuGradeXlsx(", start);
+  assert.ok(start > 0 && end > start, "generic grading-sheet exporter is present");
+  const compiledGeneric = ts.transpileModule(source.slice(start, end), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  let saved;
+  const context = {
+    Uint8Array, Number, String, Math, Set, Blob, TextEncoder,
+    URL: { createObjectURL: () => "blob:test", revokeObjectURL() {} },
+    document: { createElement: () => ({ click() {} }) },
+    window: { setTimeout() {} },
+    setTimeout() {},
+    zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
+    excelColumn: columns,
+    sortWorksheetRowCells: value => value,
+    xmlEscape: escape,
+    categoryPath: category => category.name,
+    formatSchedule: raw => raw || "",
+    attendanceDays: assessments => assessments,
+    consecutiveLateAbsences: () => new Set()
+  };
+  vm.runInNewContext(compiledGeneric + "\nthis.generateGeneric = downloadGradeSheetXlsx;", context);
+
+  const categories = [
+    { id: "LECTURE", parentId: null, name: "Lecture", sortOrder: 0, weight: 60 },
+    { id: "MAJOR", parentId: "LECTURE", name: "Major Examinations", sortOrder: 0, weight: 40 },
+    { id: "SEE", parentId: "LECTURE", name: "Self-Evaluation Exercises", sortOrder: 1, weight: 30 },
+    { id: "QUIZ", parentId: "LECTURE", name: "Quizzes/Assignments", sortOrder: 2, weight: 30 },
+    { id: "LABORATORY", parentId: null, name: "Laboratory", sortOrder: 1, weight: 40 },
+    { id: "LAB_ACT", parentId: "LABORATORY", name: "Laboratory Activities", sortOrder: 0, weight: 100 }
+  ];
+  const assessmentGroups = [
+    ["MAJOR", ["Midterm Examination", "Final Examination", "Comprehensive Examination"]],
+    ["SEE", ["SEE 1", "SEE 2", "SEE 3"]],
+    ["QUIZ", ["Quiz 1", "Quiz 2", "Assignment 1"]],
+    ["LAB_ACT", ["Laboratory Exercise 1", "Laboratory Exercise 2", "Laboratory Practical"]]
+  ];
+  const assessments = assessmentGroups.flatMap(([categoryId, names]) =>
+    names.map((name, index) => ({
+      id: categoryId + "_" + index, categoryId, title: categoryId + " · " + name,
+      maxScore: 50, dueDate: null, weight: null
+    }))
+  );
+  const detail = {
+    code: "ECE 16", title: "Design Project", classId: "BSECE-4A",
+    term: "1st Semester", academicYear: "2026-2027", courseYear: "BSECE 4",
+    schedule: "MWF 1:00–2:00 PM", categories, assessments, enrollments: [], gradeBands: []
+  };
+  context.generateGeneric(
+    "record-scores.xlsx", "Record Scores", detail,
+    "FILAMER CHRISTIAN UNIVERSITY, INC.",
+    "Roxas Avenue, Roxas City, Capiz, Philippines",
+    "COLLEGE OF ENGINEERING", "Teacher Example", "Dean Example",
+    [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }],
+    assessments
+  );
+  const files = Object.fromEntries(saved.map(file => [file.name, file.content]));
+  const sheet = files["xl/worksheets/sheet1.xml"];
+  const styles = files["xl/styles.xml"];
+
+  for (const row of [1, 2, 3]) assert.match(sheet, new RegExp('<mergeCell ref="A' + row + ':V' + row + '"/>'));
+  assert.match(sheet, /FILAMER CHRISTIAN UNIVERSITY, INC\./);
+  assert.match(sheet, /Roxas Avenue, Roxas City, Capiz, Philippines/);
+  assert.match(sheet, /COLLEGE OF ENGINEERING/);
+  assert.match(sheet, /<mergeCell ref="A5:B5"\/>/);
+  assert.match(sheet, /<mergeCell ref="C5:F5"\/>/);
+  assert.match(sheet, /<mergeCell ref="G5:H5"\/>/);
+  assert.match(sheet, /<mergeCell ref="I5:V5"\/>/);
+  assert.match(sheet, /<mergeCell ref="A6:B6"\/>/);
+  assert.match(sheet, /<mergeCell ref="C6:F6"\/>/);
+  assert.match(sheet, /<mergeCell ref="G6:H6"\/>/);
+  assert.match(sheet, /<mergeCell ref="I6:V6"\/>/);
+  assert.match(sheet, /<mergeCell ref="A8:B8"\/>/);
+  assert.match(sheet, /<mergeCell ref="C8:V8"\/>/);
+  assert.match(sheet, /<mergeCell ref="A9:B9"\/>/);
+  assert.match(sheet, /<mergeCell ref="C9:V9"\/>/);
+
+  assert.match(sheet, /<mergeCell ref="D14:O14"\/>/);
+  assert.match(sheet, /<mergeCell ref="P14:S14"\/>/);
+  assert.match(sheet, /<mergeCell ref="D15:G15"\/>/);
+  assert.match(sheet, /<mergeCell ref="H15:K15"\/>/);
+  assert.match(sheet, /<mergeCell ref="L15:O15"\/>/);
+  assert.match(sheet, /<mergeCell ref="P15:S15"\/>/);
+  assert.match(sheet, /<c r="D16"[^>]*>.*?Midterm Examination/s);
+  assert.match(sheet, /<c r="D17"[^>]*>.*?MAX: 50/s);
+  assert.match(sheet, /<c r="G16"[^>]*>.*?EQUIVALENT/s);
+  assert.match(sheet, /<c r="G17"[^>]*>.*?\(%\)/s);
+
+  for (const reference of ["T14:T17", "U14:U17", "V14:V17"]) {
+    assert.ok(sheet.includes('<mergeCell ref="' + reference + '"/>'), reference + " is merged vertically");
+  }
+  assert.match(sheet, /<c r="T14"[^>]*>.*?TOTAL GRADE \(%\)/s);
+  assert.match(sheet, /<c r="U14"[^>]*>.*?FINAL GRADE/s);
+  assert.match(sheet, /<c r="V14"[^>]*>.*?REMARKS/s);
+  assert.match(sheet, /<mergeCell ref="A19:K19"\/>/);
+  assert.match(sheet, /<mergeCell ref="L19:V19"\/>/);
+  assert.match(sheet, /<mergeCell ref="A20:K20"\/>/);
+  assert.match(sheet, /<mergeCell ref="L20:V20"\/>/);
+  assert.match(sheet, /<mergeCell ref="A21:K21"\/>/);
+  assert.match(sheet, /<mergeCell ref="L21:V21"\/>/);
+  assert.match(sheet, /Submitted by:/);
+  assert.match(sheet, /Noted:/);
+  assert.match(sheet, /TEACHER EXAMPLE/);
+  assert.match(sheet, /DEAN EXAMPLE/);
+  assert.match(sheet, /<pane ySplit="17" topLeftCell="A18"/);
+  assert.match(sheet, /<c r="A1" s="11"/);
+  assert.match(sheet, /<c r="A2" s="12"/);
+  assert.match(sheet, /<c r="A3" s="3"/);
+  assert.match(styles, /<fonts count="8">/);
+  assert.match(styles, /<b\/><sz val="12"\/>/);
+  assert.match(styles, /<i\/><sz val="9"\/>/);
+  assert.match(styles, /<b\/><sz val="10"\/>/);
+  assert.match(sheet, /<row r="4"[^>]*><c r="A4" s="0"/);
+  assert.match(sheet, /<row r="13"[^>]*><c r="A13" s="0"/);
 });
 
 test("generic grading sheet supports a class with no assessment items without invalid Excel column ranges", () => {
