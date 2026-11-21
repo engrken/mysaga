@@ -110,7 +110,6 @@ export async function PATCH(request: Request, context: Context) {
     }).safeParse(input);
     if (!parsed.success) return NextResponse.json({ error: "Select between 1 and 30 valid grading components." }, { status: 400 });
     const components = parsed.data.saveGradeSheetComponents;
-    const total = components.reduce((sum, item) => sum + item.percentage, 0);
     if (new Set(components.map(item => item.name.toLocaleLowerCase())).size !== components.length) return NextResponse.json({ error: "Component categories must be unique." }, { status: 400 });
     await prisma.subject.update({ where: { id: subjectId }, data: { gradeSheetComponents: JSON.stringify(components) } });
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated grading sheet display components", entity: "subject", entityId: subjectId } });
