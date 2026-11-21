@@ -480,6 +480,6 @@ test("Edit Components displays each category weight relative to its immediate pa
   assert.equal(context.categoryWeightLabel(categories[3], categories), "30.00% within Major Examinations");
 
   assert.match(source, /percentage: Number\(localCategoryWeight\(category\)\.toFixed\(2\)\)/);
-  assert.match(source, /localCategoryWeight\(category\)\.toFixed\(2\)%/);
+  assert.match(source, /localCategoryWeight\(category\)\.toFixed\(2\)\}%/);
   assert.doesNotMatch(source.slice(source.indexOf("Add category or subcategory from Grading Setup")), /effectiveCategoryWeight/);
 });
