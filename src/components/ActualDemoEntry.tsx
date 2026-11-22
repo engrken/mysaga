@@ -9,12 +9,12 @@ const roles = [
   {
     key: "TEACHER" as Role, icon: "▤", title: "Teacher",
     subtitle: "Open the real faculty portal",
-    description: "Explore the actual teaching dashboard, My Classes, electronic workbook, attendance records, grade summaries, and report layouts using sample students."
+    description: "Explore the actual teaching dashboard, My Classes, electronic workbook, attendance records, grade summaries, and the Class Chats hub. Try the fictional Google Chat Space connection, roster sync, invitations, and class announcements."
   },
   {
     key: "STUDENT" as Role, icon: "✦", title: "Student",
     subtitle: "Open the real student portal",
-    description: "View the actual student overview, class list, assessment breakdown, published grades, and built-in grade simulator with fictional records."
+    description: "View the actual student overview, class list, assessment breakdown, published grades, and Class Chats. Preview sample Space conversations and accept a fictional Chat invitation."
   }
 ];
 
@@ -71,7 +71,7 @@ export default function ActualDemoEntry() {
         </article>)}
       </div>
       <p className={styles.disclaimer}>
-        <strong>Read-only public access.</strong> The real dashboard, navigation, calculations, and sample academic records are visible, but saving, uploads, profile edits, account actions, and subscription management are disabled. Guest sessions expire after 45 minutes. This protects the live system and other visitors.
+        <strong>Read-only public access.</strong> The real dashboard, navigation, calculations, and sample academic records are visible, but saving, uploads, profile edits, account actions, and subscription management are disabled. Class Chat controls are simulated locally with fictional accounts, invitations, and messages; they never contact Google or change records. Guest sessions expire after 45 minutes. This protects the live system and other visitors.
       </p>
       <p className={styles.disclaimer}>
         Want to experiment with changing scores or attendance? <Link href="/demo/practice">Open the separate practice simulator</Link> (not the actual portal interface).
