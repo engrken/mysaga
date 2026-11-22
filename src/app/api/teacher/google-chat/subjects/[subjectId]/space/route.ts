@@ -6,7 +6,7 @@ import { googleChatAccessToken, googleChatRequest } from "@/lib/google-chat";
 
 export const runtime = "nodejs";
 type Context = { params: Promise<{ subjectId: string }> };
-const schema = z.object({ displayName: z.string().trim().min(1).max(100).optional() });
+const schema = z.object({ displayName: z.string().trim().min(1).max(100).optional(), spaceName: z.string().regex(/^spaces\/[A-Za-z0-9_-]+$/).optional() });
 
 export async function GET(_request: Request, context: Context) {
   const teacher = await requireRole("TEACHER");
@@ -38,15 +38,20 @@ export async function POST(request: Request, context: Context) {
   if (!connection) return NextResponse.json({ error: "Connect your Google account first." }, { status: 409 });
   try {
     const token = await googleChatAccessToken(connection);
-    const displayName = parsed.data.displayName || `${subject.code} — ${subject.title}`.slice(0, 100);
-    const space = await googleChatRequest<{ name: string; displayName?: string }>(token, "spaces", {
-      method: "POST",
-      body: JSON.stringify({ spaceType: "SPACE", displayName, externalUserAllowed: true })
-    });
+    const defaultName = `${subject.code} — ${subject.title}`.slice(0, 100);
+    const space = parsed.data.spaceName
+      ? await googleChatRequest<{ name: string; displayName?: string; externalUserAllowed?: boolean }>(token, parsed.data.spaceName)
+      : await googleChatRequest<{ name: string; displayName?: string; externalUserAllowed?: boolean }>(token, "spaces", {
+          method: "POST",
+          body: JSON.stringify({ spaceType: "SPACE", displayName: parsed.data.displayName || defaultName, externalUserAllowed: true })
+        });
+    if (space.externalUserAllowed !== true) {
+      return NextResponse.json({ error: "Choose a Space that allows external users, so students using Gmail or another Workspace can be invited when school policies permit." }, { status: 400 });
+    }
     const saved = await prisma.googleChatSpace.create({
       data: {
         schoolId: teacher.schoolId, subjectId, teacherId: teacher.id,
-        spaceName: space.name, displayName: space.displayName || displayName, externalUserAllowed: true
+        spaceName: space.name, displayName: space.displayName || parsed.data.displayName || defaultName, externalUserAllowed: true
       },
       select: { spaceName: true, displayName: true, externalUserAllowed: true, createdAt: true }
     });
