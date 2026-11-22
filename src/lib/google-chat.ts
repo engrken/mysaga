@@ -112,10 +112,17 @@ export async function completeGoogleOAuth(code: string, state: string) {
 
   const existingConnection = await prisma.googleChatConnection.findUnique({
     where: { schoolId_teacherId: { schoolId: user.schoolId, teacherId: user.id } },
-    select: { encryptedRefreshToken: true }
+    select: { encryptedRefreshToken: true, googleSubject: true }
   });
   if (!tokens.refresh_token && !existingConnection) {
     throw new Error("Google did not grant offline access. Reconnect and approve the requested access.");
+  }
+
+  if (existingConnection && existingConnection.googleSubject !== identity.sub) {
+    const linkedSpaces = await prisma.googleChatSpace.count({ where: { schoolId: user.schoolId, teacherId: user.id } });
+    if (linkedSpaces > 0) {
+      throw new Error("This teacher already has class Spaces linked to a different Google account. Reconnect with the original account or unlink those Spaces first.");
+    }
   }
 
   await prisma.googleChatConnection.upsert({
