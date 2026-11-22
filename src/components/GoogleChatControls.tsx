@@ -77,7 +77,7 @@ export default function GoogleChatControls({ subjectId }: { subjectId: string })
       const response = await fetch(`/api/teacher/google-chat/subjects/${encodeURIComponent(subjectId)}/sync`, { method: "POST" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not sync class members.");
-      setMessage(`Sync complete: ${data.synced} added or already present; ${data.failed} need attention.`);
+      setMessage(`Sync processed ${data.processed}: ${data.synced} added or already present; ${data.failed} failed; ${data.remaining} remaining.`);
     } catch (e) { setError(e instanceof Error ? e.message : "Could not sync class members."); }
     finally { setBusy(false); }
   }
