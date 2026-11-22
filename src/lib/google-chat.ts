@@ -25,7 +25,8 @@ function oauthKey() {
 
 function encryptionKey() {
   const raw = requiredEnv("GOOGLE_TOKEN_ENCRYPTION_KEY");
-  const key = /^[a-f0-9]{64}$/i.test(raw) ? Buffer.from(raw, "hex") : Buffer.from(raw, "base64");
+  let key = /^[a-f0-9]{64}$/i.test(raw) ? Buffer.from(raw, "hex") : Buffer.from(raw, "base64");
+  if (key.length !== 32 && Buffer.byteLength(raw, "utf8") === 32) key = Buffer.from(raw, "utf8");
   if (key.length !== 32) throw new Error("GOOGLE_TOKEN_ENCRYPTION_KEY must encode exactly 32 random bytes (base64 or 64-character hex).");
   return key;
 }
@@ -65,7 +66,7 @@ export async function createGoogleOAuthUrl(user: { id: string; schoolId: string 
 }
 
 export async function completeGoogleOAuth(code: string, state: string) {
-  const { payload } = await jwtVerify(state, oauthKey());
+  const { payload } = await jwtVerify(state, oauthKey(), { algorithms: ["HS256"] });
   if (payload.purpose !== "google-chat-oauth" || typeof payload.uid !== "string" || typeof payload.sid !== "string") {
     throw new Error("Invalid Google authorization state.");
   }
@@ -92,6 +93,11 @@ export async function completeGoogleOAuth(code: string, state: string) {
   };
   if (!tokenResponse.ok || !tokens?.access_token) {
     throw new Error("Google authorization did not return the required offline access. Reconnect and approve the requested access.");
+  }
+
+  const grantedScopes = new Set((tokens.scope || GOOGLE_SCOPES.join(" ")).split(/\\s+/));
+  if (GOOGLE_SCOPES.some(scope => !grantedScopes.has(scope))) {
+    throw new Error("Google authorization did not include every required Chat permission. Reconnect and approve all requested permissions.");
   }
 
   const identityResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
