@@ -18,7 +18,7 @@ export default function RealDemoBanner() {
   return <div className={styles.notice} role="status">
     <div className={styles.copy}>
       <strong>REAL SAGA PORTAL · READ-ONLY DEMO</strong>
-      <span>You are exploring the actual Teacher/Student interface using fictional school records. Navigation, calculations, and reports are real; saving and account changes are disabled.</span>
+      <span>You are exploring the actual Teacher/Student interface using fictional school records. Navigation, calculations, and reports are real; saving and account changes are disabled. Class Chat tools use fictional local data and never contact Google.</span>
     </div>
     <div className={styles.actions}>
       <Link href="/demo">Change demo role</Link>
