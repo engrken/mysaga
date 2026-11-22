@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 
 type DemoMembership = "NONE" | "PENDING" | "INVITED" | "MEMBER" | "FAILED" | "REMOVED";
 type DemoChatMessage = { id: string; author: string; text: string; time: string; announcement?: boolean };
@@ -126,7 +126,7 @@ function sampleClass(code: string, title: string, rosterCount: number): DemoChat
 }
 
 function updateClass(
-  setState: React.Dispatch<React.SetStateAction<DemoChatState | null>>,
+  setState: Dispatch<SetStateAction<DemoChatState | null>>,
   code: string,
   title: string,
   rosterCount: number,
