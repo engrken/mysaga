@@ -1,3 +1,4 @@
+import { removeGoogleChatEnrollment } from "@/lib/google-chat";
 import { SCHOOL_PLAN_LIMITS } from "@/lib/plans";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -233,6 +234,8 @@ export async function PATCH(request: Request, context: Context) {
     const enrollmentId = z.string().safeParse(input.deleteEnrollmentId); if (!enrollmentId.success) return NextResponse.json({ error: "Choose a student roster record to remove." }, { status: 400 });
     const enrollment = subject.enrollments.find(item => item.id === enrollmentId.data);
     if (!enrollment) return NextResponse.json({ error: "Student roster record not found." }, { status: 404 });
+    const chatRemoval = await removeGoogleChatEnrollment(enrollment.id, teacher.schoolId);
+    if (!chatRemoval.ok) return NextResponse.json({ error: "Could not remove this student from the linked Google Chat Space. Reconnect Google Chat and retry." }, { status: 502 });
     await prisma.enrollment.delete({ where: { id: enrollment.id } });
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "removed student and scores from class roster", entity: "enrollment", entityId: enrollment.id } });
     return NextResponse.json({ ok: true });
