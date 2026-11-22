@@ -11,6 +11,20 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: saga_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d saga_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     timeout-minutes: 20
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/saga_ci
@@ -28,6 +42,8 @@ jobs:
         run: npm ci
       - name: Validate Prisma schema
         run: npx prisma validate
+      - name: Apply all migrations to a clean CI database
+        run: npx prisma migrate deploy
       - name: Run TypeScript checks
         run: npx tsc --noEmit
       - name: Run full application build and test suite
