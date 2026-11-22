@@ -1,4 +1,4 @@
-import { removeGoogleChatEnrollment, syncGoogleChatEnrollment } from "@/lib/google-chat";
+import { removeGoogleChatEnrollment, removeGoogleChatSubjectMembers, syncGoogleChatEnrollment } from "@/lib/google-chat";
 import { SCHOOL_PLAN_LIMITS } from "@/lib/plans";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -166,6 +166,8 @@ export async function PATCH(request: Request, context: Context) {
   if ("deleteSubject" in input) {
     if (input.deleteSubject !== true) return NextResponse.json({ error: "Confirm class deletion." }, { status: 400 });
     if (subject.gradeStatus !== "DRAFT") return NextResponse.json({ error: "Recall submitted grades before deleting this class." }, { status: 409 });
+    const chatCleanup = await removeGoogleChatSubjectMembers(subjectId, teacher.schoolId);
+    if (!chatCleanup.ok) return NextResponse.json({ error: "Could not remove all students from the linked Google Chat Space. Reconnect Google Chat and retry." }, { status: 502 });
     await prisma.$transaction(async tx => {
       await tx.auditEvent.create({ data: { actorId: teacher.id, action: `deleted draft class ${subject.classId || subject.code}`, entity: "subject", entityId: subjectId } });
       await tx.subject.delete({ where: { id: subjectId } });
