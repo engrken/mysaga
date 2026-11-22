@@ -55,6 +55,7 @@
     "typescript": "^5.8.3"
   },
   "overrides": {
-    "zod": "$zod"
+    "zod": "$zod",
+    "effect": "3.22.2"
   }
 }

@@ -1,3 +1,4 @@
+import { removeGoogleChatEnrollment, removeGoogleChatSubjectMembers, syncGoogleChatEnrollment } from "@/lib/google-chat";
 import { SCHOOL_PLAN_LIMITS } from "@/lib/plans";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -165,6 +166,8 @@ export async function PATCH(request: Request, context: Context) {
   if ("deleteSubject" in input) {
     if (input.deleteSubject !== true) return NextResponse.json({ error: "Confirm class deletion." }, { status: 400 });
     if (subject.gradeStatus !== "DRAFT") return NextResponse.json({ error: "Recall submitted grades before deleting this class." }, { status: 409 });
+    const chatCleanup = await removeGoogleChatSubjectMembers(subjectId, teacher.schoolId);
+    if (!chatCleanup.ok) return NextResponse.json({ error: "Could not remove all students from the linked Google Chat Space. Reconnect Google Chat and retry." }, { status: 502 });
     await prisma.$transaction(async tx => {
       await tx.auditEvent.create({ data: { actorId: teacher.id, action: `deleted draft class ${subject.classId || subject.code}`, entity: "subject", entityId: subjectId } });
       await tx.subject.delete({ where: { id: subjectId } });
@@ -233,6 +236,8 @@ export async function PATCH(request: Request, context: Context) {
     const enrollmentId = z.string().safeParse(input.deleteEnrollmentId); if (!enrollmentId.success) return NextResponse.json({ error: "Choose a student roster record to remove." }, { status: 400 });
     const enrollment = subject.enrollments.find(item => item.id === enrollmentId.data);
     if (!enrollment) return NextResponse.json({ error: "Student roster record not found." }, { status: 404 });
+    const chatRemoval = await removeGoogleChatEnrollment(enrollment.id, teacher.schoolId);
+    if (!chatRemoval.ok) return NextResponse.json({ error: "Could not remove this student from the linked Google Chat Space. Reconnect Google Chat and retry." }, { status: 502 });
     await prisma.enrollment.delete({ where: { id: enrollment.id } });
     await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "removed student and scores from class roster", entity: "enrollment", entityId: enrollment.id } });
     return NextResponse.json({ ok: true });
@@ -600,6 +605,7 @@ export async function POST(request: Request, context: Context) {
       }
       throw error;
     }
+    for (const row of created) if (row.studentUserId) { try { await syncGoogleChatEnrollment(row.id, teacher.schoolId); } catch { /* Optional integration; roster import remains successful. */ } }
     return NextResponse.json({ count: created.length, enrollments: created }, { status: 201 });
   }
   const parsed = assessmentSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Check assessment title, category and maximum score." }, { status: 400 });

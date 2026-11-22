@@ -1,0 +1,57 @@
+name: Google Chat integration validation
+
+on:
+  push:
+    branches:
+      - feature/google-chat-integration
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: saga_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d saga_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/saga_ci
+      DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/saga_ci
+      AUTH_SECRET: ci-only-secret-value-with-at-least-32-characters
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies and generate Prisma client
+        run: npm ci
+      - name: Validate Prisma schema
+        run: npx prisma validate
+      - name: Build the existing main-branch schema baseline
+        run: |
+          git show origin/main:prisma/schema.prisma > prisma/schema.base.prisma
+          npx prisma db push --schema=prisma/schema.base.prisma
+      - name: Apply the new Google Chat migration to the baseline schema
+        run: npx prisma db execute --file=prisma/migrations/20261122000100_google_chat_integration/migration.sql
+      - name: Run TypeScript checks
+        run: npx tsc --noEmit
+      - name: Run full application build and test suite
+        run: npm run build

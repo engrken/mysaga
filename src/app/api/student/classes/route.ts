@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkAuthThrottle } from "@/lib/rate-limit";
 import { enrollVerifiedStudent, classEnrollmentError } from "@/lib/class-enrollment";
+import { syncGoogleChatEnrollment } from "@/lib/google-chat";
 
 const joinSchema = z.object({ code: z.string().trim().min(12).max(32) });
 
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
   if (!verified) return NextResponse.json({ error: "Verify your account before joining a class." }, { status: 403 });
   try {
     const result = await enrollVerifiedStudent(subject.id, student.schoolId, verified, student.id);
+    try { await syncGoogleChatEnrollment(result.enrollmentId, student.schoolId); } catch { /* Google Chat is optional; SAGA enrollment must still succeed. */ }
     return NextResponse.json({ ...result, class: { code: subject.code, title: subject.title } },
       { status: result.created ? 201 : 200, headers: { "Cache-Control": "no-store" } });
   } catch (error) {

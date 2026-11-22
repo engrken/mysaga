@@ -66,6 +66,9 @@ model School {
   tenantPayments        TenantPayment[]
   invitations           TenantInvitation[]
   invoices              TenantInvoice[]
+  googleChatConnections GoogleChatConnection[]
+  googleChatSpaces      GoogleChatSpace[]
+  googleChatMemberships GoogleChatMembershipSync[]
 }
 
 model TenantPayment {
@@ -119,6 +122,8 @@ model User {
   gradeChanges            GradeChangeHistory[] @relation("GradeChangeActor")
   bankQuestions           BankQuestion[]
   sentTenantInvitations   TenantInvitation[]
+  googleChatConnections   GoogleChatConnection[]
+  googleChatSpaces        GoogleChatSpace[] @relation("GoogleChatSpaceTeacher")
 
   @@unique([schoolId, email])
   @@unique([schoolId, studentNumber])
@@ -219,6 +224,8 @@ model Subject {
   gradeBands   GradeBand[]
   assessments  Assessment[]
   activities   ClassActivity[]
+  googleChatSpace GoogleChatSpace?
+  googleChatMemberships GoogleChatMembershipSync[]
 
   @@unique([schoolId, classId])
   @@index([schoolId, teacherId, academicYear, term])
@@ -252,6 +259,7 @@ model Enrollment {
   scores             Score[]
   gradeChangeHistory GradeChangeHistory[]
   activitySubmissions ActivitySubmission[]
+  googleChatMembership GoogleChatMembershipSync?
 
   @@unique([subjectId, studentNumber])
   @@index([subjectId, studentName])
@@ -467,4 +475,70 @@ model ActivitySubmission {
   @@unique([activityId, enrollmentId])
   @@index([enrollmentId])
   @@index([activityId, updatedAt])
+}
+
+
+enum GoogleChatSyncStatus {
+  PENDING
+  INVITED
+  MEMBER
+  REMOVED
+  FAILED
+}
+
+model GoogleChatConnection {
+  id                    String   @id @default(cuid())
+  schoolId              String
+  teacherId             String
+  googleSubject         String
+  googleEmail           String
+  encryptedAccessToken  String
+  encryptedRefreshToken String
+  accessTokenExpiresAt  DateTime
+  scopes                String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  school                School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacher               User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, teacherId])
+  @@index([schoolId, googleEmail])
+}
+
+model GoogleChatSpace {
+  id                  String   @id @default(cuid())
+  schoolId            String
+  subjectId           String   @unique
+  teacherId           String
+  spaceName           String   @unique
+  displayName         String
+  externalUserAllowed Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  school              School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  subject             Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher             User     @relation("GoogleChatSpaceTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, teacherId])
+}
+
+model GoogleChatMembershipSync {
+  id                   String              @id @default(cuid())
+  schoolId             String
+  subjectId            String
+  enrollmentId         String              @unique
+  studentEmail         String
+  googleMembershipName String?
+  status               GoogleChatSyncStatus @default(PENDING)
+  attempts             Int                 @default(0)
+  lastError            String?
+  lastAttemptAt        DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  school               School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  subject              Subject             @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  enrollment           Enrollment          @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, status, updatedAt])
+  @@index([subjectId, status])
 }
