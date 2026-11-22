@@ -43,6 +43,30 @@ jobs:
         run: npm ci
       - name: Validate Prisma schema
         run: npx prisma validate
+      - name: Seed the legacy student directory table expected by the original tenant migration
+        run: |
+          node --input-type=module <<'NODE'
+          import pg from "pg";
+          const client = new pg.Client({ connectionString: process.env.DIRECT_URL });
+          await client.connect();
+          await client.query(`
+            CREATE TABLE "StudentDirectory" (
+              "studentNumber" TEXT NOT NULL,
+              "firstName" TEXT NOT NULL,
+              "middleName" TEXT,
+              "lastName" TEXT NOT NULL,
+              "fullName" TEXT NOT NULL,
+              "email" TEXT NOT NULL,
+              "courseProgram" TEXT NOT NULL,
+              "yearLevel" TEXT NOT NULL,
+              "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              "updatedAt" TIMESTAMP(3) NOT NULL,
+              CONSTRAINT "StudentDirectory_pkey" PRIMARY KEY ("studentNumber")
+            );
+            CREATE UNIQUE INDEX "StudentDirectory_email_key" ON "StudentDirectory"("email");
+          `);
+          await client.end();
+          NODE
       - name: Apply all migrations to a clean CI database
         run: npx prisma migrate deploy
       - name: Run TypeScript checks
