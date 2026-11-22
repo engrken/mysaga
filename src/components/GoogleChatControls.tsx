@@ -3,11 +3,15 @@
 import { useEffect, useState } from "react";
 
 type Connection = { connected: boolean; connection: { googleEmail: string } | null };
-type Space = { spaceName: string; displayName: string; externalUserAllowed: boolean } | null;\ntype SpaceOption = { name: string; displayName: string; externalUserAllowed: boolean };
+type Space = { spaceName: string; displayName: string; externalUserAllowed: boolean } | null;
+type SpaceOption = { name: string; displayName: string; externalUserAllowed: boolean };
 
 export default function GoogleChatControls({ subjectId }: { subjectId: string }) {
   const [connection, setConnection] = useState<Connection | null>(null);
-  const [space, setSpace] = useState<Space>(null);\n  const [spaces, setSpaces] = useState<SpaceOption[]>([]);\n  const [selectedSpaceName, setSelectedSpaceName] = useState("");\n  const [announcement, setAnnouncement] = useState("");
+  const [space, setSpace] = useState<Space>(null);
+  const [spaces, setSpaces] = useState<SpaceOption[]>([]);
+  const [selectedSpaceName, setSelectedSpaceName] = useState("");
+  const [announcement, setAnnouncement] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -15,10 +19,12 @@ export default function GoogleChatControls({ subjectId }: { subjectId: string })
   async function refresh() {
     const [connectionResponse, spaceResponse, spacesResponse] = await Promise.all([
       fetch("/api/teacher/google-chat/connection", { cache: "no-store" }),
-      fetch(`/api/teacher/google-chat/subjects/${encodeURIComponent(subjectId)}/space`, { cache: "no-store" })
+      fetch(`/api/teacher/google-chat/subjects/${encodeURIComponent(subjectId)}/space`, { cache: "no-store" }),
+      fetch("/api/teacher/google-chat/spaces", { cache: "no-store" })
     ]);
     if (connectionResponse.ok) setConnection(await connectionResponse.json());
     if (spaceResponse.ok) setSpace((await spaceResponse.json()).space);
+    if (spacesResponse.ok) { const data = await spacesResponse.json(); setSpaces(data.spaces || []); }
   }
 
   useEffect(() => { void refresh(); }, [subjectId]);
