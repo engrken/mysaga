@@ -46,3 +46,24 @@ test("authentic demo navigation and styling remain mobile and theme aware", () =
   assert.match(portal, /user\.isDemo && <RealDemoBanner/);
   assert.match(realBanner, /READ-ONLY DEMO/);
 });
+
+
+test("public demo simulates Google Chat and Class Chats without live integrations", () => {
+  const portal = read("src/components/Portal.tsx");
+  const hub = read("src/components/ClassChatsHub.tsx");
+  const sandbox = read("src/components/DemoClassChats.tsx");
+  const entry = read("src/components/ActualDemoEntry.tsx");
+  assert.match(portal, /isDemo=\{user\.isDemo\}/);
+  assert.match(portal, /DemoGoogleChatControls/);
+  assert.match(hub, /isDemo \? <DemoClassChatsHub/);
+  assert.match(sandbox, /sessionStorage/);
+  assert.match(sandbox, /Create sample Space/);
+  assert.match(sandbox, /Sync sample class roster/);
+  assert.match(sandbox, /Add sample announcement/);
+  assert.match(sandbox, /Accept sample invitation/);
+  assert.match(sandbox, /example\.test/);
+  assert.doesNotMatch(sandbox, /\bfetch\s*\(/);
+  assert.doesNotMatch(sandbox, /googleapis\.com|chat\.google\.com/);
+  assert.match(entry, /fictional Google Chat Space connection/);
+  assert.match(entry, /never contact Google/);
+});

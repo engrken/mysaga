@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DemoClassChatsHub } from "./DemoClassChats";
 
 type MembershipStatus = "PENDING" | "INVITED" | "MEMBER" | "REMOVED" | "FAILED";
 type ChatClass = {
@@ -30,7 +31,11 @@ function studentStatus(status: MembershipStatus | null | undefined) {
   }
 }
 
-export default function ClassChatsHub({ role }: { role: "TEACHER" | "STUDENT" }) {
+export default function ClassChatsHub({ role, isDemo = false }: { role: "TEACHER" | "STUDENT"; isDemo?: boolean }) {
+  return isDemo ? <DemoClassChatsHub role={role} /> : <LiveClassChatsHub role={role} />;
+}
+
+function LiveClassChatsHub({ role }: { role: "TEACHER" | "STUDENT" }) {
   const [classes, setClasses] = useState<ChatClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
