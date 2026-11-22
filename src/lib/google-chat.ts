@@ -263,12 +263,12 @@ export async function removeGoogleChatEnrollment(enrollmentId: string, schoolId:
   const sync = await prisma.googleChatMembershipSync.findFirst({
     where: { enrollmentId, schoolId },
     select: {
-      id: true, googleMembershipName: true,
-      subject: { select: { teacherId: true } }
+      id: true, studentEmail: true, googleMembershipName: true,
+      subject: { select: { teacherId: true, googleChatSpace: { select: { spaceName: true } } } }
     }
   });
   if (!sync) return { ok: true };
-  if (!sync.googleMembershipName) {
+  if (!sync.subject.googleChatSpace) {
     await prisma.googleChatMembershipSync.update({ where: { id: sync.id }, data: { status: "REMOVED" } });
     return { ok: true };
   }
@@ -278,7 +278,23 @@ export async function removeGoogleChatEnrollment(enrollmentId: string, schoolId:
   if (!connection) return { ok: false, error: "Reconnect the teacher's Google account before removing this member." };
   try {
     const token = await googleChatAccessToken(connection);
-    await googleChatRequest<unknown>(token, sync.googleMembershipName, { method: "DELETE" });
+    let membershipName = sync.googleMembershipName;
+    if (!membershipName) {
+      try {
+        const existing = await googleChatRequest<{ name?: string }>(
+          token, `${sync.subject.googleChatSpace.spaceName}/members/${encodeURIComponent(sync.studentEmail)}`
+        );
+        membershipName = existing.name ?? null;
+      } catch (error) {
+        const status = error && typeof error === "object" && "status" in error ? Number(error.status) : 0;
+        if (status === 404 || status === 410) {
+          await prisma.googleChatMembershipSync.update({ where: { id: sync.id }, data: { status: "REMOVED", lastError: null } });
+          return { ok: true };
+        }
+        throw error;
+      }
+    }
+    if (membershipName) await googleChatRequest<unknown>(token, membershipName, { method: "DELETE" });
     await prisma.googleChatMembershipSync.update({
       where: { id: sync.id },
       data: { status: "REMOVED", lastError: null, lastAttemptAt: new Date() }
