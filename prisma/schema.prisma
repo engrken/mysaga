@@ -511,6 +511,7 @@ model GoogleChatSpace {
   subjectId           String   @unique
   teacherId           String
   spaceName           String   @unique
+  spaceUri            String?
   displayName         String
   externalUserAllowed Boolean  @default(true)
   createdAt           DateTime @default(now())
