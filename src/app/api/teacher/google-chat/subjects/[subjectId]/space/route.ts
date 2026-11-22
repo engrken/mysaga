@@ -14,7 +14,7 @@ export async function GET(_request: Request, context: Context) {
   const { subjectId } = await context.params;
   const subject = await prisma.subject.findFirst({
     where: { id: subjectId, schoolId: teacher.schoolId, teacherId: teacher.id },
-    select: { googleChatSpace: { select: { spaceName: true, displayName: true, externalUserAllowed: true, createdAt: true } } }
+    select: { googleChatSpace: { select: { spaceName: true, displayName: true, spaceUri: true, externalUserAllowed: true, createdAt: true } } }
   });
   if (!subject) return NextResponse.json({ error: "Class not found." }, { status: 404 });
   return NextResponse.json({ space: subject.googleChatSpace }, { headers: { "Cache-Control": "private, no-store" } });
@@ -40,8 +40,8 @@ export async function POST(request: Request, context: Context) {
     const token = await googleChatAccessToken(connection);
     const defaultName = `${subject.code} — ${subject.title}`.slice(0, 100);
     const space = parsed.data.spaceName
-      ? await googleChatRequest<{ name: string; displayName?: string; externalUserAllowed?: boolean }>(token, parsed.data.spaceName)
-      : await googleChatRequest<{ name: string; displayName?: string; externalUserAllowed?: boolean }>(token, "spaces", {
+      ? await googleChatRequest<{ name: string; displayName?: string; spaceUri?: string; externalUserAllowed?: boolean }>(token, parsed.data.spaceName)
+      : await googleChatRequest<{ name: string; displayName?: string; spaceUri?: string; externalUserAllowed?: boolean }>(token, "spaces", {
           method: "POST",
           body: JSON.stringify({ spaceType: "SPACE", displayName: parsed.data.displayName || defaultName, externalUserAllowed: true })
         });
@@ -61,9 +61,9 @@ export async function POST(request: Request, context: Context) {
     const saved = await prisma.googleChatSpace.create({
       data: {
         schoolId: teacher.schoolId, subjectId, teacherId: teacher.id,
-        spaceName: space.name, displayName: space.displayName || parsed.data.displayName || defaultName, externalUserAllowed: true
+        spaceName: space.name, displayName: space.displayName || parsed.data.displayName || defaultName, spaceUri: space.spaceUri || null, externalUserAllowed: true
       },
-      select: { spaceName: true, displayName: true, externalUserAllowed: true, createdAt: true }
+      select: { spaceName: true, displayName: true, spaceUri: true, externalUserAllowed: true, createdAt: true }
     });
     return NextResponse.json({ space: saved }, { status: 201 });
   } catch (error) {
