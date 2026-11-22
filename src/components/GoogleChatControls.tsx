@@ -85,7 +85,7 @@ export default function GoogleChatControls({ subjectId }: { subjectId: string })
   return <section className="surface gradebook-card mt-3" aria-label="Google Chat class integration">
     <div className="section-heading">
       <div><span className="eyebrow">OPTIONAL CLASS TOOL</span><h2>Google Chat Space</h2>
-        <p className="muted">Connect your Google account and keep this class Space aligned with the SAGA roster. Student invitations may require acceptance.</p>
+        <p className="muted">Connect your Google account and keep this class Space aligned with the SAGA roster. Students are invited using their verified SAGA email, which must be the Google account email they use in Chat. External Gmail and Workspace invitations also depend on both organizations’ Chat policies; invited students may need to accept.</p>
       </div>
     </div>
     {!connection?.connected ? <div className="d-flex flex-wrap align-items-center gap-2">
