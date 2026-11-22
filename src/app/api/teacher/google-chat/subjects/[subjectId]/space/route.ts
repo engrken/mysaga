@@ -45,6 +45,16 @@ export async function POST(request: Request, context: Context) {
           method: "POST",
           body: JSON.stringify({ spaceType: "SPACE", displayName: parsed.data.displayName || defaultName, externalUserAllowed: true })
         });
+    if (parsed.data.spaceName) {
+      const existingMemberships = await googleChatRequest<{ members?: Array<{ name?: string }> }>(
+        token, `${space.name}/members?pageSize=2`
+      );
+      if ((existingMemberships.members || []).length > 1) {
+        return NextResponse.json({ error: "Only link an empty Space (with you as its sole member). Create a new Space if this one already has other participants, so SAGA can enforce the class roster." }, { status: 409 });
+      }
+      const alreadyLinked = await prisma.googleChatSpace.findUnique({ where: { spaceName: space.name }, select: { id: true } });
+      if (alreadyLinked) return NextResponse.json({ error: "This Google Chat Space is already linked to another SAGA class." }, { status: 409 });
+    }
     if (space.externalUserAllowed !== true) {
       return NextResponse.json({ error: "Choose a Space that allows external users, so students using Gmail or another Workspace can be invited when school policies permit." }, { status: 400 });
     }
