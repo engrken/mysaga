@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.11.0-beta.1",
+    "date": "2026-11-22",
+    "kind": "feature",
+    "changes": [
+      "Added Google Chat integration for class Spaces, including secure teacher account linking, student membership invitations and roster synchronization, and teacher announcements.",
+      "Introduced the Class Chats hub for teachers and students, with role-scoped class Spaces, invitation and membership status, and direct links to Google Chat."
+    ]
+  },
+  {
     "version": "0.10.0-beta.1",
     "date": "2026-11-18",
     "kind": "feature",
