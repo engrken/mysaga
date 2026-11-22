@@ -95,7 +95,7 @@ export async function completeGoogleOAuth(code: string, state: string) {
     throw new Error("Google authorization did not return the required offline access. Reconnect and approve the requested access.");
   }
 
-  const grantedScopes = new Set((tokens.scope || GOOGLE_SCOPES.join(" ")).split(/\\s+/));
+  const grantedScopes = new Set((tokens.scope || GOOGLE_SCOPES.join(" ")).split(/\s+/));
   if (GOOGLE_SCOPES.some(scope => !grantedScopes.has(scope))) {
     throw new Error("Google authorization did not include every required Chat permission. Reconnect and approve all requested permissions.");
   }
@@ -235,8 +235,23 @@ export async function syncGoogleChatEnrollment(enrollmentId: string, schoolId: s
       data: { status: "FAILED", attempts: { increment: 1 }, lastAttemptAt: new Date(), lastError: message }
     });
     if (status === 409) {
-      await prisma.googleChatMembershipSync.update({ where: { id: sync.id }, data: { status: "MEMBER", lastError: null } });
-      return { synced: true, status: "MEMBER" };
+      try {
+        const token = await googleChatAccessToken(connection);
+        const existing = await googleChatRequest<{ name?: string; state?: string }>(
+          token, `${enrollment.subject.googleChatSpace.spaceName}/members/${encodeURIComponent(enrollment.student.email.toLowerCase())}`
+        );
+        await prisma.googleChatMembershipSync.update({
+          where: { id: sync.id },
+          data: {
+            googleMembershipName: existing.name ?? null,
+            status: existing.state === "INVITED" ? "INVITED" : "MEMBER",
+            lastError: null
+          }
+        });
+        return { synced: true, status: existing.state === "INVITED" ? "INVITED" : "MEMBER" };
+      } catch {
+        // A conflict is only treated as an existing membership after Google confirms it.
+      }
     }
     return { synced: false, reason: message };
   }
