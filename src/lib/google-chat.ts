@@ -104,13 +104,21 @@ export async function completeGoogleOAuth(code: string, state: string) {
     throw new Error("Google did not return a verified email address for this account.");
   }
 
+  const existingConnection = await prisma.googleChatConnection.findUnique({
+    where: { schoolId_teacherId: { schoolId: user.schoolId, teacherId: user.id } },
+    select: { encryptedRefreshToken: true }
+  });
+  if (!tokens.refresh_token && !existingConnection) {
+    throw new Error("Google did not grant offline access. Reconnect and approve the requested access.");
+  }
+
   await prisma.googleChatConnection.upsert({
     where: { schoolId_teacherId: { schoolId: user.schoolId, teacherId: user.id } },
     create: {
       schoolId: user.schoolId, teacherId: user.id, googleSubject: identity.sub,
       googleEmail: identity.email.toLowerCase(),
       encryptedAccessToken: encryptGoogleToken(tokens.access_token),
-      encryptedRefreshToken: encryptGoogleToken(tokens.refresh_token),
+      encryptedRefreshToken: tokens.refresh_token ? encryptGoogleToken(tokens.refresh_token) : existingConnection!.encryptedRefreshToken,
       accessTokenExpiresAt: new Date(Date.now() + Math.max(60, tokens.expires_in ?? 3600) * 1000),
       scopes: tokens.scope ?? GOOGLE_SCOPES.join(" ")
     },
@@ -265,4 +273,16 @@ export async function removeGoogleChatEnrollment(enrollmentId: string, schoolId:
     });
     return { ok: false, error: message };
   }
+}
+
+export async function removeGoogleChatSubjectMembers(subjectId: string, schoolId: string) {
+  const records = await prisma.googleChatMembershipSync.findMany({
+    where: { subjectId, schoolId, status: { not: "REMOVED" } },
+    select: { enrollmentId: true }
+  });
+  for (const record of records) {
+    const result = await removeGoogleChatEnrollment(record.enrollmentId, schoolId);
+    if (!result.ok) return result;
+  }
+  return { ok: true };
 }
