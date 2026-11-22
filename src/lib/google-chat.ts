@@ -90,7 +90,7 @@ export async function completeGoogleOAuth(code: string, state: string) {
   const tokens = await tokenResponse.json().catch(() => null) as null | {
     access_token?: string; refresh_token?: string; expires_in?: number; scope?: string; error?: string
   };
-  if (!tokenResponse.ok || !tokens?.access_token || !tokens.refresh_token) {
+  if (!tokenResponse.ok || !tokens?.access_token) {
     throw new Error("Google authorization did not return the required offline access. Reconnect and approve the requested access.");
   }
 
@@ -125,7 +125,7 @@ export async function completeGoogleOAuth(code: string, state: string) {
     update: {
       googleSubject: identity.sub, googleEmail: identity.email.toLowerCase(),
       encryptedAccessToken: encryptGoogleToken(tokens.access_token),
-      encryptedRefreshToken: encryptGoogleToken(tokens.refresh_token),
+      encryptedRefreshToken: tokens.refresh_token ? encryptGoogleToken(tokens.refresh_token) : existingConnection!.encryptedRefreshToken,
       accessTokenExpiresAt: new Date(Date.now() + Math.max(60, tokens.expires_in ?? 3600) * 1000),
       scopes: tokens.scope ?? GOOGLE_SCOPES.join(" ")
     }
