@@ -1,4 +1,4 @@
-import { removeGoogleChatEnrollment } from "@/lib/google-chat";
+import { removeGoogleChatEnrollment, syncGoogleChatEnrollment } from "@/lib/google-chat";
 import { SCHOOL_PLAN_LIMITS } from "@/lib/plans";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -603,6 +603,7 @@ export async function POST(request: Request, context: Context) {
       }
       throw error;
     }
+    for (const row of created) if (row.studentUserId) { try { await syncGoogleChatEnrollment(row.id, teacher.schoolId); } catch { /* Optional integration; roster import remains successful. */ } }
     return NextResponse.json({ count: created.length, enrollments: created }, { status: 201 });
   }
   const parsed = assessmentSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Check assessment title, category and maximum score." }, { status: 400 });
