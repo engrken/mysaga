@@ -227,3 +227,42 @@ export async function syncGoogleChatEnrollment(enrollmentId: string, schoolId: s
     return { synced: false, reason: message };
   }
 }
+
+export async function removeGoogleChatEnrollment(enrollmentId: string, schoolId: string) {
+  const sync = await prisma.googleChatMembershipSync.findFirst({
+    where: { enrollmentId, schoolId },
+    select: {
+      id: true, googleMembershipName: true,
+      subject: { select: { teacherId: true } }
+    }
+  });
+  if (!sync) return { ok: true };
+  if (!sync.googleMembershipName) {
+    await prisma.googleChatMembershipSync.update({ where: { id: sync.id }, data: { status: "REMOVED" } });
+    return { ok: true };
+  }
+  const connection = await prisma.googleChatConnection.findUnique({
+    where: { schoolId_teacherId: { schoolId, teacherId: sync.subject.teacherId } }
+  });
+  if (!connection) return { ok: false, error: "Reconnect the teacher's Google account before removing this member." };
+  try {
+    const token = await googleChatAccessToken(connection);
+    await googleChatRequest<unknown>(token, sync.googleMembershipName, { method: "DELETE" });
+    await prisma.googleChatMembershipSync.update({
+      where: { id: sync.id },
+      data: { status: "REMOVED", lastError: null, lastAttemptAt: new Date() }
+    });
+    return { ok: true };
+  } catch (error) {
+    const status = error && typeof error === "object" && "status" in error ? Number(error.status) : 0;
+    if (status === 404 || status === 410) {
+      await prisma.googleChatMembershipSync.update({ where: { id: sync.id }, data: { status: "REMOVED", lastError: null } });
+      return { ok: true };
+    }
+    const message = error instanceof Error ? error.message.slice(0, 500) : "Google Chat member removal failed.";
+    await prisma.googleChatMembershipSync.update({
+      where: { id: sync.id }, data: { status: "FAILED", attempts: { increment: 1 }, lastAttemptAt: new Date(), lastError: message }
+    });
+    return { ok: false, error: message };
+  }
+}
