@@ -199,6 +199,8 @@ export async function syncGoogleChatEnrollment(enrollmentId: string, schoolId: s
     }
   });
   if (!enrollment?.student?.email || !enrollment.subject.googleChatSpace) return { synced: false, reason: "not-configured" };
+  const spaceName = enrollment.subject.googleChatSpace.spaceName;
+  const studentEmail = enrollment.student.email.toLowerCase();
   const [connection] = await prisma.googleChatConnection.findMany({
     where: { schoolId, teacherId: enrollment.subject.teacherId }, take: 1
   });
@@ -208,15 +210,15 @@ export async function syncGoogleChatEnrollment(enrollmentId: string, schoolId: s
     where: { enrollmentId },
     create: {
       schoolId, subjectId: enrollment.subject.id, enrollmentId,
-      studentEmail: enrollment.student.email.toLowerCase(), status: "PENDING"
+      studentEmail, status: "PENDING"
     },
-    update: { studentEmail: enrollment.student.email.toLowerCase(), status: "PENDING", lastError: null }
+    update: { studentEmail, status: "PENDING", lastError: null }
   });
   try {
     const token = await googleChatAccessToken(connection);
     const membership = await googleChatRequest<{ name?: string; state?: string }>(
-      token, `${enrollment.subject.googleChatSpace.spaceName}/members`,
-      { method: "POST", body: JSON.stringify({ member: { name: `users/${enrollment.student.email.toLowerCase()}`, type: "HUMAN" } }) }
+      token, `${spaceName}/members`,
+      { method: "POST", body: JSON.stringify({ member: { name: `users/${studentEmail}`, type: "HUMAN" } }) }
     );
     await prisma.googleChatMembershipSync.update({
       where: { id: sync.id },
@@ -238,7 +240,7 @@ export async function syncGoogleChatEnrollment(enrollmentId: string, schoolId: s
       try {
         const token = await googleChatAccessToken(connection);
         const existing = await googleChatRequest<{ name?: string; state?: string }>(
-          token, `${enrollment.subject.googleChatSpace.spaceName}/members/${encodeURIComponent(enrollment.student.email.toLowerCase())}`
+          token, `${spaceName}/members/${encodeURIComponent(studentEmail)}`
         );
         await prisma.googleChatMembershipSync.update({
           where: { id: sync.id },
