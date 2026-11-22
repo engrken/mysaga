@@ -10,6 +10,7 @@ import { resolveTeacherSchoolTarget } from "@/lib/teacher-school-registration";
 import { normalizeFacultyId } from "@/lib/account-identifiers";
 import type { School } from "@/generated/prisma/client";
 import { consumeEmailChallenge, emailVerificationFields, issueEmailChallenge } from "@/lib/email-verification";
+import { syncGoogleChatEnrollment } from "@/lib/google-chat";
 
 const bodySchema = z.object({
   schoolId: z.string().min(1).optional(), schoolName: z.string().trim().min(2).max(160).optional(),
@@ -186,6 +187,10 @@ export async function POST(request: Request) {
       return created;
     });
     if (!user) return NextResponse.json({ error: "The verification code is invalid, expired, or already used." }, { status: 400 });
+    if (user.role === "STUDENT") {
+      const linked = await prisma.enrollment.findMany({ where: { studentUserId: user.id, subject: { schoolId: user.schoolId } }, select: { id: true } });
+      for (const enrollment of linked) { try { await syncGoogleChatEnrollment(enrollment.id, user.schoolId); } catch { /* Optional integration; registration must still succeed. */ } }
+    }
     await createSession(user);
     return NextResponse.json({ ok: true, role: user.role }, { status: 201 });
   } catch (error) {
