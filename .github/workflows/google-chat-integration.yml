@@ -48,7 +48,7 @@ jobs:
       - name: Build the existing main-branch schema baseline
         run: |
           git show origin/main:prisma/schema.prisma > prisma/schema.base.prisma
-          npx prisma db push --schema=prisma/schema.base.prisma --skip-generate
+          npx prisma db push --schema=prisma/schema.base.prisma
       - name: Apply the new Google Chat migration to the baseline schema
         run: npx prisma db execute --schema=prisma/schema.prisma --file=prisma/migrations/20261122000100_google_chat_integration/migration.sql
       - name: Run TypeScript checks
