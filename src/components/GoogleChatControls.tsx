@@ -92,7 +92,7 @@ export default function GoogleChatControls({ subjectId }: { subjectId: string })
       <a className="btn btn-outline-primary" href="/api/teacher/google-chat/connect">Connect Google account</a>
       <span className="muted small">Connect once; you can use the same account for your other classes.</span>
     </div> : <div className="d-flex flex-wrap align-items-center gap-2">
-      <span className="small">Connected as <b>{connection.connection?.googleEmail}</b></span>
+      <span className="small">Connected as <b>{connection.connection?.googleEmail}</b></span> <a className="btn btn-outline-secondary btn-sm" href="/api/teacher/google-chat/connect">Reconnect Google account</a>
       {!space ? <><button className="btn btn-primary btn-sm" onClick={() => void createSpace()} disabled={busy}>Create class Space</button>
         {spaces.filter(item => item.externalUserAllowed).length > 0 && <><select className="form-select form-select-sm" style={{maxWidth: "280px"}} value={selectedSpaceName} onChange={event => setSelectedSpaceName(event.target.value)}><option value="">Or choose an existing Space…</option>{spaces.filter(item => item.externalUserAllowed).map(item => <option key={item.name} value={item.name}>{item.displayName}</option>)}</select><button className="btn btn-outline-primary btn-sm" onClick={() => void linkExistingSpace()} disabled={busy || !selectedSpaceName}>Link selected Space</button></>}</> :
         <><span className="badge text-bg-success">Space linked</span><span className="small">{space.displayName}</span>
