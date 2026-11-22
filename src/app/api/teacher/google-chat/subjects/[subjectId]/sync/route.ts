@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma/client";
 import { syncGoogleChatEnrollment } from "@/lib/google-chat";
 
 export const runtime = "nodejs";
@@ -15,12 +16,12 @@ export async function POST(_request: Request, context: Context) {
     select: { id: true }
   });
   if (!subject) return NextResponse.json({ error: "Class or linked Google Chat Space not found." }, { status: 404 });
-  const pendingWhere = {
+  const pendingWhere: Prisma.EnrollmentWhereInput = {
     subjectId,
     studentUserId: { not: null },
     OR: [
       { googleChatMembership: { is: null } },
-      { googleChatMembership: { is: { status: { in: ["PENDING", "FAILED"] as const } } } }
+      { googleChatMembership: { is: { status: { in: ["PENDING", "FAILED"] } } } }
     ]
   };
   const enrollments = await prisma.enrollment.findMany({
