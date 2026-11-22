@@ -224,6 +224,8 @@ model Subject {
   gradeBands   GradeBand[]
   assessments  Assessment[]
   activities   ClassActivity[]
+  googleChatSpace GoogleChatSpace?
+  googleChatMemberships GoogleChatMembershipSync[]
 
   @@unique([schoolId, classId])
   @@index([schoolId, teacherId, academicYear, term])
