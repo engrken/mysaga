@@ -49,8 +49,22 @@ jobs:
         run: |
           git show origin/main:prisma/schema.prisma > prisma/schema.base.prisma
           npx prisma db push --schema=prisma/schema.base.prisma
-      - name: Apply the Class Chats hub migration to the current main schema
-        run: npx prisma db execute --file=prisma/migrations/20261122000200_google_chat_space_uri/migration.sql
+      - name: Verify the Class Chats hub migration is present in the main schema
+        run: |
+          node --input-type=module <<'NODE'
+          import pg from "pg";
+          const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+          try {
+            await client.connect();
+            const result = await client.query(
+              "SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'GoogleChatSpace' AND column_name = 'spaceUri'"
+            );
+            if (result.rowCount !== 1) throw new Error("GoogleChatSpace.spaceUri is missing from the current main schema.");
+            console.log("GoogleChatSpace.spaceUri exists in the current main schema.");
+          } finally {
+            await client.end();
+          }
+          NODE
       - name: Run TypeScript checks
         run: npx tsc --noEmit
       - name: Run full application build and test suite
