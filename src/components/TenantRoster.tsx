@@ -20,6 +20,8 @@ type RosterEntry = {
   studentNumber: string | null;
   fullName: string;
   email: string | null;
+  courseProgram?: string | null;
+  yearLevel?: string | null;
   status: RosterStatus;
   updatedAt: string | null;
   protected?: boolean;
@@ -98,8 +100,8 @@ export default function TenantRoster({ school, schools, roster, managerName, man
     setEditing(entry);
     setEditEmail(entry.email ?? "");
     setEditName(entry.fullName);
-    setEditProgram("");
-    setEditYear("");
+    setEditProgram(entry.courseProgram ?? "");
+    setEditYear(entry.yearLevel ?? "");
     setVerified(entry.status === "VERIFIED");
     setSaveError("");
     setNotice("");
