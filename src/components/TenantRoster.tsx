@@ -20,6 +20,8 @@ type RosterEntry = {
   studentNumber: string | null;
   fullName: string;
   email: string | null;
+  courseProgram?: string | null;
+  yearLevel?: string | null;
   status: RosterStatus;
   updatedAt: string | null;
   protected?: boolean;
@@ -40,6 +42,9 @@ export default function TenantRoster({ school, schools, roster, managerName, man
   const [listError, setListError] = useState("");
   const [editing, setEditing] = useState<RosterEntry | null>(null);
   const [editEmail, setEditEmail] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editProgram, setEditProgram] = useState("");
+  const [editYear, setEditYear] = useState("");
   const [verified, setVerified] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -94,6 +99,9 @@ export default function TenantRoster({ school, schools, roster, managerName, man
   function beginEdit(entry: RosterEntry) {
     setEditing(entry);
     setEditEmail(entry.email ?? "");
+    setEditName(entry.fullName);
+    setEditProgram(entry.courseProgram ?? "");
+    setEditYear(entry.yearLevel ?? "");
     setVerified(entry.status === "VERIFIED");
     setSaveError("");
     setNotice("");
@@ -104,16 +112,17 @@ export default function TenantRoster({ school, schools, roster, managerName, man
     if (!editing || saving) return;
     const fields = new FormData(event.currentTarget);
     const common = { email: editEmail, updatedAt: editing.updatedAt, currentPassword: fields.get("currentPassword") };
+    const details = { fullName: editName.trim(), courseProgram: editProgram.trim(), yearLevel: editYear.trim() };
     const payload = editing.accountId
-      ? { ...common, kind: "ACCOUNT", accountId: editing.accountId, verified }
-      : { ...common, kind: "DIRECTORY", studentNumber: editing.studentNumber };
+      ? { ...common, ...(isStudentRoster ? details : {}), kind: "ACCOUNT", accountId: editing.accountId, verified }
+      : { ...common, ...details, kind: editing.status === "CLASS_ONLY" ? "CLASS_ONLY" : "DIRECTORY", studentNumber: editing.studentNumber };
     setSaving(true);
     setSaveError("");
     try {
       const response = await fetch(endpoint, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not update the record.");
-      setNotice(data.changed ? "Account information updated." : "The record already matches these settings.");
+      setNotice(data.changed ? (editing.status === "CLASS_ONLY" ? "Student directory record created." : "Student information updated.") : "The record already matches these settings.");
       setEditing(null);
       setRevision(value => value + 1);
     } catch (error) {
@@ -180,7 +189,7 @@ export default function TenantRoster({ school, schools, roster, managerName, man
                     {isStudentRoster && <td className="text-nowrap">{entry.studentNumber || "—"}</td>}
                     <td className="text-break">{entry.email || "—"}</td>
                     <td><span className={`badge ${entry.status === "VERIFIED" ? "text-bg-success" : entry.status === "UNVERIFIED" ? "text-bg-warning" : "text-bg-secondary"}`}>{statusLabels[entry.status]}</span></td>
-                    <td>{entry.protected ? <span className="small text-secondary text-nowrap">Tenant manager</span> : entry.updatedAt && <button type="button" className="btn btn-sm btn-outline-primary"
+                    <td>{entry.protected ? <span className="small text-secondary text-nowrap">Tenant manager</span> : (entry.updatedAt || entry.status === "CLASS_ONLY") && <button type="button" className="btn btn-sm btn-outline-primary"
                       aria-label={`Edit ${entry.fullName}`} aria-expanded={editing?.key === entry.key}
                       disabled={saving} onClick={() => beginEdit(entry)}>Edit</button>}</td>
                   </tr>
@@ -189,6 +198,11 @@ export default function TenantRoster({ school, schools, roster, managerName, man
                       <fieldset disabled={saving}>
                         <legend className="h6 fw-bold mb-3">Edit {entry.fullName}</legend>
                         <div className="row g-3">
+                          {isStudentRoster && <>
+                            <div className="col-12"><label className="form-label" htmlFor="roster-edit-name">Student name</label><input id="roster-edit-name" className="form-control" value={editName} maxLength={200} required onChange={event => setEditName(event.target.value)} /></div>
+                            <div className="col-12 col-md"><label className="form-label" htmlFor="roster-edit-program">Course / program</label><input id="roster-edit-program" className="form-control" value={editProgram} maxLength={120} required placeholder="e.g. BS Information Technology" onChange={event => setEditProgram(event.target.value)} /></div>
+                            <div className="col-12 col-md-3"><label className="form-label" htmlFor="roster-edit-year">Year level</label><input id="roster-edit-year" className="form-control" value={editYear} maxLength={40} required placeholder="e.g. 1st Year" onChange={event => setEditYear(event.target.value)} /></div>
+                          </>}
                           <div className="col-12 col-md">
                             <label className="form-label" htmlFor="roster-edit-email">Email address</label>
                             <input id="roster-edit-email" className="form-control" type="email" value={editEmail} maxLength={200} required onChange={event => {
@@ -211,7 +225,7 @@ export default function TenantRoster({ school, schools, roster, managerName, man
                         </div>
                         <p className="form-text">{entry.accountId
                           ? "Account changes sign the user out. Mark an address verified only after confirming it belongs to the account holder."
-                          : "This email is used for registration and Quick Check until the student creates a portal account."}</p>
+                          : entry.status === "CLASS_ONLY" ? "Saving creates the missing directory record. Existing class enrollments and grades are preserved; a directory email does not verify a portal account." : "Directory email is used for registration and Quick Check until the student creates a portal account."}</p>
                         {saveError && <div className="alert alert-danger py-2" role="alert">{saveError}</div>}
                         <div className="d-flex flex-wrap gap-2">
                           <button type="submit" className="btn btn-primary btn-sm">{saving ? "Saving…" : "Save changes"}</button>
