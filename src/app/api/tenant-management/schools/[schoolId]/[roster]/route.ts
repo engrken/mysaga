@@ -116,6 +116,15 @@ const changeDetails = z.object({
   yearLevel: z.string().trim().min(1).max(40).optional(),
   currentPassword: z.string().min(1).max(100)
 });
+function studentNameParts(fullName: string) {
+  const comma = fullName.split(",");
+  const words = fullName.trim().split(/\\s+/);
+  const lastName = comma.length > 1 ? comma[0].trim() : words[words.length - 1];
+  const firstAndMiddle = comma.length > 1 ? comma.slice(1).join(",").trim() : words.slice(0, -1).join(" ") || fullName.trim();
+  const firstParts = firstAndMiddle.split(/\\s+/);
+  return { firstName: firstParts[0], middleName: firstParts.length > 1 ? firstParts.slice(1).join(" ") : null, lastName };
+}
+
 const changeSchema = z.discriminatedUnion("kind", [
   changeDetails.extend({ kind: z.literal("ACCOUNT"), accountId: z.string().min(1).max(100), verified: z.boolean() }),
   changeDetails.extend({ kind: z.literal("DIRECTORY"), studentNumber: z.string().min(1).max(40) }),
@@ -163,15 +172,9 @@ export async function PATCH(request: Request, { params }: Context) {
           || await tx.user.findFirst({ where: { schoolId, studentNumber: number }, select: { id: true } })) return null;
         if (await tx.user.findFirst({ where: { schoolId, email: { equals: email, mode: "insensitive" } }, select: { id: true } })
           || await tx.studentDirectory.findFirst({ where: { schoolId, email: { equals: email, mode: "insensitive" } }, select: { studentNumber: true } })) throw new Error("EMAIL_IN_USE");
-        const comma = input.fullName.split(",");
-        const words = input.fullName.trim().split(/\\s+/);
-        const lastName = comma.length > 1 ? comma[0].trim() : words[words.length - 1];
-        const firstAndMiddle = comma.length > 1 ? comma.slice(1).join(",").trim() : words.slice(0, -1).join(" ") || input.fullName.trim();
-        const firstParts = firstAndMiddle.split(/\\s+/);
         await tx.studentDirectory.create({ data: {
-          schoolId, studentNumber: number, firstName: firstParts[0],
-          middleName: firstParts.length > 1 ? firstParts.slice(1).join(" ") : null,
-          lastName, fullName: input.fullName, email,
+          schoolId, studentNumber: number, ...studentNameParts(input.fullName),
+          fullName: input.fullName, email,
           courseProgram: input.courseProgram, yearLevel: input.yearLevel
         }});
         await tx.auditEvent.create({ data: { actorId: manager.id, action: "created student directory record from class roster", entity: "student-directory", entityId: schoolId + "/" + number } });
@@ -189,7 +192,7 @@ export async function PATCH(request: Request, { params }: Context) {
         if (await tx.user.findFirst({ where: { schoolId, email: { equals: email, mode: "insensitive" } }, select: { id: true } })) throw new Error("EMAIL_IN_USE");
         await tx.studentDirectory.update({
           where: { schoolId_studentNumber: { schoolId, studentNumber: input.studentNumber } },
-          data: { email, ...(input.fullName ? { fullName: input.fullName } : {}), ...(input.courseProgram ? { courseProgram: input.courseProgram } : {}), ...(input.yearLevel ? { yearLevel: input.yearLevel } : {}) }
+          data: { email, ...(input.fullName ? { fullName: input.fullName, ...studentNameParts(input.fullName) } : {}), ...(input.courseProgram ? { courseProgram: input.courseProgram } : {}), ...(input.yearLevel ? { yearLevel: input.yearLevel } : {}) }
         });
         await tx.auditEvent.create({ data: { actorId: manager.id, action: "updated student directory details", entity: "student-directory", entityId: `${schoolId}/${input.studentNumber}` } });
         return { changed: true };
