@@ -145,7 +145,6 @@ export async function PATCH(request: Request, { params }: Context) {
   const role = roster === "teachers" ? "TEACHER" : "STUDENT";
   const accountType = roster === "teachers" ? "teacher" : "student";
   const email = input.email.toLowerCase();
-  const updatedAt = "updatedAt" in input ? new Date(input.updatedAt) : null;
 
   const throttle = await checkAuthThrottle(request, `tenant-account-edit:${manager.id}`, 5, undefined, "identity");
   if (!throttle.allowed) return NextResponse.json({ error: "Too many password attempts. Try again in 15 minutes." }, { status: 429 });
@@ -185,7 +184,7 @@ export async function PATCH(request: Request, { params }: Context) {
         const [entry] = await tx.$queryRaw<{ email: string }[]>`
           SELECT "email" FROM "StudentDirectory"
           WHERE "schoolId" = ${schoolId} AND "studentNumber" = ${input.studentNumber}
-            AND "updatedAt" = ${updatedAt} FOR UPDATE
+            AND "updatedAt" = ${new Date(input.updatedAt)} FOR UPDATE
         `;
         if (!entry || await tx.user.findFirst({ where: { schoolId, studentNumber: input.studentNumber }, select: { id: true } })) return null;
         if (entry.email === email && !input.fullName && !input.courseProgram && !input.yearLevel) return { changed: false };
@@ -199,7 +198,7 @@ export async function PATCH(request: Request, { params }: Context) {
       }
 
       const account = await tx.user.findUnique({
-        where: { id: input.accountId, schoolId, role, updatedAt },
+        where: { id: input.accountId, schoolId, role, updatedAt: new Date(input.updatedAt) },
         select: { id: true, email: true, emailVerifiedAt: true, tenantManagerEmail: true, isSchoolAdmin: true }
       });
       if (!account) return null;
@@ -218,7 +217,7 @@ export async function PATCH(request: Request, { params }: Context) {
 
       const now = new Date();
       const updated = await tx.user.updateMany({
-        where: { id: account.id, schoolId, role, updatedAt },
+        where: { id: account.id, schoolId, role, updatedAt: new Date(input.updatedAt) },
         data: { email, emailVerifiedAt: input.verified ? now : null, emailIdentityChangedAt: now, ...(role === "STUDENT" && input.fullName ? { fullName: input.fullName, courseProgram: input.courseProgram, yearLevel: input.yearLevel } : {}) }
       });
       if (updated.count !== 1) return null;
