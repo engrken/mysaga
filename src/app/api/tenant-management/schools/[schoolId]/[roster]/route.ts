@@ -13,6 +13,8 @@ type RosterEntry = {
   studentNumber: string | null;
   fullName: string;
   email: string | null;
+  courseProgram?: string | null;
+  yearLevel?: string | null;
   status: "VERIFIED" | "UNVERIFIED" | "NO_ACCOUNT" | "CLASS_ONLY";
   updatedAt: Date | null;
 };
@@ -73,7 +75,7 @@ export async function GET(request: Request, { params }: Context) {
       SELECT "id", "studentNumber", "fullName", "email", "emailVerifiedAt", "updatedAt"
       FROM "User" WHERE "schoolId" = ${schoolId} AND "role" = 'STUDENT'
     ), directory AS (
-      SELECT "studentNumber", "fullName", "email", "updatedAt"
+      SELECT "studentNumber", "fullName", "email", "courseProgram", "yearLevel", "updatedAt"
       FROM "StudentDirectory" WHERE "schoolId" = ${schoolId}
     ), class_students AS (
       SELECT DISTINCT ON (upper(btrim(e."studentNumber")))
@@ -83,15 +85,15 @@ export async function GET(request: Request, { params }: Context) {
       ORDER BY upper(btrim(e."studentNumber")), e."createdAt" DESC, e."id"
     ), roster AS (
       SELECT 'account:' || a."id" AS "key", a."id" AS "accountId", a."studentNumber",
-        a."fullName", a."email", a."updatedAt",
+        a."fullName", a."email", NULL::text AS "courseProgram", NULL::text AS "yearLevel", a."updatedAt",
         CASE WHEN a."emailVerifiedAt" IS NULL THEN 'UNVERIFIED' ELSE 'VERIFIED' END AS "status"
       FROM accounts a
       UNION ALL
       SELECT 'directory:' || d."studentNumber", NULL, d."studentNumber",
-        d."fullName", d."email", d."updatedAt", 'NO_ACCOUNT'
+        d."fullName", d."email", d."courseProgram", d."yearLevel", d."updatedAt", 'NO_ACCOUNT'
       FROM directory d WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a."studentNumber" = d."studentNumber")
       UNION ALL
-      SELECT 'class:' || c."studentNumber", NULL, c."studentNumber", c."fullName", NULL, NULL, 'CLASS_ONLY'
+      SELECT 'class:' || c."studentNumber", NULL, c."studentNumber", c."fullName", NULL, NULL::text, NULL::text, NULL, 'CLASS_ONLY'
       FROM class_students c
       WHERE NOT EXISTS (SELECT 1 FROM directory d WHERE upper(btrim(d."studentNumber")) = c."studentNumber")
         AND NOT EXISTS (SELECT 1 FROM accounts a WHERE upper(btrim(a."studentNumber")) = c."studentNumber")
@@ -109,11 +111,15 @@ export async function GET(request: Request, { params }: Context) {
 const changeDetails = z.object({
   email: z.string().trim().email().max(200),
   updatedAt: z.iso.datetime(),
+  fullName: z.string().trim().min(2).max(200).optional(),
+  courseProgram: z.string().trim().min(1).max(120).optional(),
+  yearLevel: z.string().trim().min(1).max(40).optional(),
   currentPassword: z.string().min(1).max(100)
 });
 const changeSchema = z.discriminatedUnion("kind", [
   changeDetails.extend({ kind: z.literal("ACCOUNT"), accountId: z.string().min(1).max(100), verified: z.boolean() }),
-  changeDetails.extend({ kind: z.literal("DIRECTORY"), studentNumber: z.string().min(1).max(40) })
+  changeDetails.extend({ kind: z.literal("DIRECTORY"), studentNumber: z.string().min(1).max(40) }),
+  z.object({ kind: z.literal("CLASS_ONLY"), studentNumber: z.string().trim().min(1).max(40), email: z.string().trim().email().max(200), fullName: z.string().trim().min(2).max(200), courseProgram: z.string().trim().min(1).max(120), yearLevel: z.string().trim().min(1).max(40), currentPassword: z.string().min(1).max(100) })
 ]);
 
 export async function PATCH(request: Request, { params }: Context) {
@@ -130,7 +136,7 @@ export async function PATCH(request: Request, { params }: Context) {
   const role = roster === "teachers" ? "TEACHER" : "STUDENT";
   const accountType = roster === "teachers" ? "teacher" : "student";
   const email = input.email.toLowerCase();
-  const updatedAt = new Date(input.updatedAt);
+  const updatedAt = "updatedAt" in input ? new Date(input.updatedAt) : null;
 
   const throttle = await checkAuthThrottle(request, `tenant-account-edit:${manager.id}`, 5, undefined, "identity");
   if (!throttle.allowed) return NextResponse.json({ error: "Too many password attempts. Try again in 15 minutes." }, { status: 429 });
@@ -145,6 +151,33 @@ export async function PATCH(request: Request, { params }: Context) {
 
   try {
     const result = await prisma.$transaction(async tx => {
+      if (input.kind === "CLASS_ONLY") {
+        if (roster !== "students") return null;
+        const number = input.studentNumber.trim();
+        const classRecord = await tx.enrollment.findFirst({
+          where: { studentNumber: number, subject: { schoolId } },
+          select: { id: true }
+        });
+        if (!classRecord) return null;
+        if (await tx.studentDirectory.findFirst({ where: { schoolId, studentNumber: number }, select: { studentNumber: true } })
+          || await tx.user.findFirst({ where: { schoolId, studentNumber: number }, select: { id: true } })) return null;
+        if (await tx.user.findFirst({ where: { schoolId, email: { equals: email, mode: "insensitive" } }, select: { id: true } })
+          || await tx.studentDirectory.findFirst({ where: { schoolId, email: { equals: email, mode: "insensitive" } }, select: { studentNumber: true } })) throw new Error("EMAIL_IN_USE");
+        const comma = input.fullName.split(",");
+        const words = input.fullName.trim().split(/\\s+/);
+        const lastName = comma.length > 1 ? comma[0].trim() : words[words.length - 1];
+        const firstAndMiddle = comma.length > 1 ? comma.slice(1).join(",").trim() : words.slice(0, -1).join(" ") || input.fullName.trim();
+        const firstParts = firstAndMiddle.split(/\\s+/);
+        await tx.studentDirectory.create({ data: {
+          schoolId, studentNumber: number, firstName: firstParts[0],
+          middleName: firstParts.length > 1 ? firstParts.slice(1).join(" ") : null,
+          lastName, fullName: input.fullName, email,
+          courseProgram: input.courseProgram, yearLevel: input.yearLevel
+        }});
+        await tx.auditEvent.create({ data: { actorId: manager.id, action: "created student directory record from class roster", entity: "student-directory", entityId: schoolId + "/" + number } });
+        return { changed: true };
+      }
+
       if (input.kind === "DIRECTORY") {
         const [entry] = await tx.$queryRaw<{ email: string }[]>`
           SELECT "email" FROM "StudentDirectory"
@@ -152,13 +185,13 @@ export async function PATCH(request: Request, { params }: Context) {
             AND "updatedAt" = ${updatedAt} FOR UPDATE
         `;
         if (!entry || await tx.user.findFirst({ where: { schoolId, studentNumber: input.studentNumber }, select: { id: true } })) return null;
-        if (entry.email === email) return { changed: false };
+        if (entry.email === email && !input.fullName && !input.courseProgram && !input.yearLevel) return { changed: false };
         if (await tx.user.findFirst({ where: { schoolId, email: { equals: email, mode: "insensitive" } }, select: { id: true } })) throw new Error("EMAIL_IN_USE");
         await tx.studentDirectory.update({
           where: { schoolId_studentNumber: { schoolId, studentNumber: input.studentNumber } },
-          data: { email }
+          data: { email, ...(input.fullName ? { fullName: input.fullName } : {}), ...(input.courseProgram ? { courseProgram: input.courseProgram } : {}), ...(input.yearLevel ? { yearLevel: input.yearLevel } : {}) }
         });
-        await tx.auditEvent.create({ data: { actorId: manager.id, action: "updated student directory email", entity: "student-directory", entityId: `${schoolId}/${input.studentNumber}` } });
+        await tx.auditEvent.create({ data: { actorId: manager.id, action: "updated student directory details", entity: "student-directory", entityId: `${schoolId}/${input.studentNumber}` } });
         return { changed: true };
       }
 
@@ -174,7 +207,7 @@ export async function PATCH(request: Request, { params }: Context) {
       }
       const emailChanged = account.email !== email;
       const verificationChanged = (account.emailVerifiedAt !== null) !== input.verified;
-      if (!emailChanged && !verificationChanged) return { changed: false };
+      if (!emailChanged && !verificationChanged && !(role === "STUDENT" && input.fullName)) return { changed: false };
       if (emailChanged && await tx.user.findFirst({
         where: { schoolId, id: { not: account.id }, email: { equals: email, mode: "insensitive" } },
         select: { id: true }
@@ -183,7 +216,7 @@ export async function PATCH(request: Request, { params }: Context) {
       const now = new Date();
       const updated = await tx.user.updateMany({
         where: { id: account.id, schoolId, role, updatedAt },
-        data: { email, emailVerifiedAt: input.verified ? now : null, emailIdentityChangedAt: now }
+        data: { email, emailVerifiedAt: input.verified ? now : null, emailIdentityChangedAt: now, ...(role === "STUDENT" && input.fullName ? { fullName: input.fullName, courseProgram: input.courseProgram, yearLevel: input.yearLevel } : {}) }
       });
       if (updated.count !== 1) return null;
       await tx.passwordResetToken.deleteMany({ where: { userId: account.id } });
