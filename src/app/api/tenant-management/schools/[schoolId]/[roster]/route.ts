@@ -72,7 +72,7 @@ export async function GET(request: Request, { params }: Context) {
 
   const rows = await prisma.$queryRaw<RosterEntry[]>`
     WITH accounts AS (
-      SELECT "id", "studentNumber", "fullName", "email", "emailVerifiedAt", "updatedAt"
+      SELECT "id", "studentNumber", "fullName", "email", "courseProgram", "yearLevel", "emailVerifiedAt", "updatedAt"
       FROM "User" WHERE "schoolId" = ${schoolId} AND "role" = 'STUDENT'
     ), directory AS (
       SELECT "studentNumber", "fullName", "email", "courseProgram", "yearLevel", "updatedAt"
@@ -85,7 +85,7 @@ export async function GET(request: Request, { params }: Context) {
       ORDER BY upper(btrim(e."studentNumber")), e."createdAt" DESC, e."id"
     ), roster AS (
       SELECT 'account:' || a."id" AS "key", a."id" AS "accountId", a."studentNumber",
-        a."fullName", a."email", NULL::text AS "courseProgram", NULL::text AS "yearLevel", a."updatedAt",
+        a."fullName", a."email", a."courseProgram", a."yearLevel", a."updatedAt",
         CASE WHEN a."emailVerifiedAt" IS NULL THEN 'UNVERIFIED' ELSE 'VERIFIED' END AS "status"
       FROM accounts a
       UNION ALL
