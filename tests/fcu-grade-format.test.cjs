@@ -653,14 +653,17 @@ test("Record Scores export dynamically merges institutional, metadata, category,
     assert.ok(rowXml, 'signature spacer row ' + rowNumber + ' exists');
     assert.doesNotMatch(rowXml, /<t[^>]*>[^<]+<\/t>/, 'signature spacer row ' + rowNumber + ' is blank');
   }
-  for (const cell of ["A23", "L23", "A24", "L24"]) {
-    assert.match(sheet, new RegExp('<c r="' + cell + '" s="17"'));
+  for (const cell of ["A23", "L23"]) {
+    assert.match(sheet, new RegExp('<c r="' + cell + '" s="8"'));
+  }
+  for (const cell of ["A24", "L24"]) {
+    assert.match(sheet, new RegExp('<c r="' + cell + '" s="9"'));
   }
   assert.match(sheet, /<c r="A23"[^>]*>.*?TEACHER EXAMPLE/s);
   assert.match(sheet, /<c r="L23"[^>]*>.*?DEAN EXAMPLE/s);
   assert.match(sheet, /<c r="A24"[^>]*>.*?Instructor/s);
   assert.match(sheet, /<c r="L24"[^>]*>.*?Dean/s);
-  assert.match(styles, /<cellXfs count="18">/);
+  assert.match(styles, /<cellXfs count="20">/);
   assert.match(sheet, /Submitted by:/);
   assert.match(sheet, /Noted:/);
   assert.match(sheet, /TEACHER EXAMPLE/);
