@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.12.0-beta.1",
+    "date": "2026-11-24",
+    "kind": "feature",
+    "changes": [
+      "Enhanced the public read-only demo with a local Class Chats simulation so visitors can explore chat workflows without connecting to live Google Chat.",
+      "Enabled tenant managers to edit class-only student records, including student program and year details.",
+      "Moved grading-sheet signatory names and positions into individual teacher profiles, with validation before export and a backfill for existing teacher accounts."
+    ]
+  },
+  {
     "version": "0.11.0-beta.1",
     "date": "2026-11-22",
     "kind": "feature",
