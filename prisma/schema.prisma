@@ -49,6 +49,8 @@ model School {
   address               String?
   departmentName        String?
   deanName              String?
+  notedByName           String?
+  notedByPosition       String?
   isoHeaderConfig       String?
   privacyController     String?
   privacyContactEmail   String?
@@ -101,6 +103,7 @@ model User {
   role                    Role
   schoolId                String
   fullName                String
+  positionTitle           String?
   profileImagePath        String?
   studentNumber           String?
   facultyId               String?
