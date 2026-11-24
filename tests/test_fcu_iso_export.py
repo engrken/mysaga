@@ -53,8 +53,8 @@ class FcuIsoExportTests(unittest.TestCase):
                 "semester": "First Semester",
                 "academicYear": "2026-2027",
                 "sectionName": "BSECE 4",
-                "teacherName": "Kenneth Mark D. Bulquerin",
-                "notedByName": "prof. Dean Example",
+                "teacherName": "A different teacher from shared metadata",
+                "notedByName": "A different shared school signatory",
             },
             "headers": [
                 "NO.",
@@ -192,7 +192,7 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertEqual(sheet["E12"].number_format, "0.00%")
         self.assertAlmostEqual(sheet["F12"].value, 0.9025)
         self.assertEqual(sheet["F12"].number_format, "0.00%")
-        self.assertEqual(sheet["A18"].value, "KENNETH MARK D. BULQUERIN")
+        self.assertEqual(sheet["A18"].value, "DR. TEACHER EXAMPLE")
         self.assertEqual(sheet["E18"].value, "PROF. DEAN EXAMPLE")
         self.assertIn("A14:D14", {str(item) for item in sheet.merged_cells.ranges})
         self.assertIn("E14:H14", {str(item) for item in sheet.merged_cells.ranges})
@@ -252,7 +252,7 @@ class FcuIsoExportTests(unittest.TestCase):
             self.assertIn(f"H{row_number}:N{row_number}", merged)
         self.assertEqual(sheet["A14"].value, "Submitted by:")
         self.assertEqual(sheet["H14"].value, "Noted:")
-        self.assertEqual(sheet["A18"].value, "KENNETH MARK D. BULQUERIN")
+        self.assertEqual(sheet["A18"].value, "DR. TEACHER EXAMPLE")
         self.assertEqual(sheet["H18"].value, "PROF. DEAN EXAMPLE")
         self.assertEqual(sheet["M2"].value, "Effectivity:")
         self.assertEqual(sheet["N2"].value, "October 1, 2025")
