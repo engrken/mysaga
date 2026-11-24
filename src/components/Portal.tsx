@@ -1147,7 +1147,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>([]); const [copyFromId, setCopyFromId] = useState(""); const [rosterText, setRosterText] = useState(""); const [rosterFileName, setRosterFileName] = useState(""); const [categoryName, setCategoryName] = useState(""); const [categoryParent, setCategoryParent] = useState(""); const [categoryWeight, setCategoryWeight] = useState("50"); const [categoryOpen, setCategoryOpen] = useState(false);
   const [lectureCourseWeight, setLectureCourseWeight] = useState("60"); const [laboratoryCourseWeight, setLaboratoryCourseWeight] = useState("40");
   const [gradingSetupType, setGradingSetupType] = useState<"SINGLE" | "COMBINED">("SINGLE"); const [singleGroupType, setSingleGroupType] = useState<"LECTURE" | "LABORATORY">("LECTURE");
-  const [theme, setTheme] = useState<"light" | "dark">("light"); const [academicYear, setAcademicYear] = useState("2026-2027"); const [calendarSystem, setCalendarSystem] = useState<"SEMESTER" | "TRIMESTER">("SEMESTER"); const [activeTerm, setActiveTerm] = useState("1st Semester"); const [academicPeriodReady, setAcademicPeriodReady] = useState(false); const academicYears = [...Array.from({length: 10}, (_, index) => 2016 + index), ...Array.from({length: 10}, (_, index) => 2026 + index)].map(start => `${start}-${start + 1}`).sort((a,b) => b.localeCompare(a)); const [schoolYearFilter, setSchoolYearFilter] = useState("All School Years"); const [termFilter, setTermFilter] = useState("All Terms"); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | "iso-grades" | null>(null); const [deanName, setDeanName] = useState(user.school.deanName || ""); const [gradeExcelExporting, setGradeExcelExporting] = useState<"generic" | "iso" | null>(null);
+  const [theme, setTheme] = useState<"light" | "dark">("light"); const [academicYear, setAcademicYear] = useState("2026-2027"); const [calendarSystem, setCalendarSystem] = useState<"SEMESTER" | "TRIMESTER">("SEMESTER"); const [activeTerm, setActiveTerm] = useState("1st Semester"); const [academicPeriodReady, setAcademicPeriodReady] = useState(false); const academicYears = [...Array.from({length: 10}, (_, index) => 2016 + index), ...Array.from({length: 10}, (_, index) => 2026 + index)].map(start => `${start}-${start + 1}`).sort((a,b) => b.localeCompare(a)); const [schoolYearFilter, setSchoolYearFilter] = useState("All School Years"); const [termFilter, setTermFilter] = useState("All Terms"); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | "iso-grades" | null>(null); const [notedByName, setNotedByName] = useState(user.school.notedByName || user.school.deanName || ""); const [teacherPosition, setTeacherPosition] = useState(user.positionTitle || "Instructor"); const [notedByPosition, setNotedByPosition] = useState(user.school.notedByPosition || "Dean"); const [gradeExcelExporting, setGradeExcelExporting] = useState<"generic" | "iso" | null>(null);
   const [schoolAddress, setSchoolAddress] = useState(user.school.address || "");
   const [departmentName, setDepartmentName] = useState(user.school.departmentName || "");
   const [isoHeaderConfig, setIsoHeaderConfig] = useState<IsoHeaderConfig>(() => readIsoHeaderConfig(user.school.name, user.school.slug, user.school.isoHeaderConfig));
@@ -1885,12 +1885,25 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   async function saveComponentsAsDefault() {
     if (!componentDraft.length || componentDraft.some(item => !item.name.trim())) { setErr("Select at least one valid Grading Setup category."); return; }
     await run(async () => {
-      await api("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName: profileName, facultyId: profileFacultyId, schoolAddress, departmentName, deanName, defaultGradeSheetComponents: componentDraft }) });
+      await api("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName: profileName, facultyId: profileFacultyId, positionTitle: teacherPosition, schoolAddress, departmentName, notedByName, notedByPosition, defaultGradeSheetComponents: componentDraft }) });
       setGradeSheetComponents(componentDraft);
       router.refresh();
     }, "Saved as your default grading sheet components.");
   }
   function printClass(mode: "roster" | "grades") { setPrintMode(mode); }
+  function ensureSignatoriesConfigured() {
+    const missing = [
+      !user.fullName.trim() ? "your profile name" : "",
+      !teacherPosition.trim() ? "Submitted by position / title" : "",
+      !notedByName.trim() ? "Noted by name" : "",
+      !notedByPosition.trim() ? "Noted by position / title" : ""
+    ].filter(Boolean);
+    if (!missing.length) return true;
+    setErr("Complete the required grading-sheet signatory details in Profile Information before exporting: " + missing.join(", ") + ".");
+    setNotice("");
+    setTab("profile");
+    return false;
+  }
   function ensureGenericHeaderConfigured() {
     if (departmentName.trim()) return true;
     setErr("Your generic grading-sheet header is incomplete. Add your College / Department name under Profile information, save your profile, then try the export again.");
@@ -1908,12 +1921,13 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     return false;
   }
   function printFinalGradesPdf(format: "generic" | "iso" = "generic") {
+    if (!ensureSignatoriesConfigured()) return;
     if (format === "generic" && !ensureGenericHeaderConfigured()) return;
     if (format === "iso" && !ensureIsoHeaderConfigured()) return;
     setErr("");
     setPrintMode(format === "iso" ? "iso-grades" : "grades");
   }
-  async function saveProfile(e: FormEvent<HTMLFormElement>) { e.preventDefault(); await run(async () => { await api("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName: profileName, ...(teacher ? { facultyId: profileFacultyId, schoolAddress, departmentName, deanName, isoHeaderConfig } : {}) }) }); router.refresh(); }, "Profile updated."); }
+  async function saveProfile(e: FormEvent<HTMLFormElement>) { e.preventDefault(); await run(async () => { await api("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName: profileName, ...(teacher ? { facultyId: profileFacultyId, positionTitle: teacherPosition, schoolAddress, departmentName, notedByName, notedByPosition, isoHeaderConfig } : {}) }) }); router.refresh(); }, "Profile updated."); }
   async function requestPasswordOtp() { await run(async () => { const result = await api("/api/profile/security-otp", { method: "POST", body: JSON.stringify({ purpose: "PASSWORD_CHANGE", currentPassword: passwordCurrent }) }); setPasswordOtpSent(true); setPasswordOtp(""); setNotice(result.message); }, ""); }
   async function changePassword(e: FormEvent<HTMLFormElement>) { e.preventDefault(); if (passwordNew !== passwordConfirm) { setErr("The new passwords do not match."); return; } await run(async () => { await api("/api/profile/password", { method: "POST", body: JSON.stringify({ currentPassword: passwordCurrent, newPassword: passwordNew, code: passwordOtp }) }); setPasswordCurrent(""); setPasswordNew(""); setPasswordConfirm(""); setPasswordOtp(""); setPasswordOtpSent(false); window.setTimeout(() => { void logout(); }, 1200); }, "Password changed. Signing you out; sign in again with your new password."); }
   async function uploadProfileImage(kind: "profile" | "school-logo" | "department-logo", file?: File) {
@@ -2085,7 +2099,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     return gradeHeaderCanvasBytes(canvas);
   }
   async function exportIsoGradesExcel() {
-    if (!detail || gradeExcelExporting || !ensureIsoHeaderConfigured()) return;
+    if (!detail || gradeExcelExporting || !ensureSignatoriesConfigured() || !ensureIsoHeaderConfigured()) return;
     setGradeExcelExporting("iso");
     setErr("");
     try {
@@ -2098,6 +2112,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           componentNames: gradeSheetComponents.map(item => item.name),
+          teacherPosition,
+          notedByName,
+          notedByPosition,
           logoPngBase64
         })
       });
@@ -2130,7 +2147,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     }
   }
   async function exportGrades() {
-    if (!detail || gradeExcelExporting || !ensureGenericHeaderConfigured()) return;
+    if (!detail || gradeExcelExporting || !ensureSignatoriesConfigured() || !ensureGenericHeaderConfigured()) return;
     setGradeExcelExporting("generic");
     setErr("");
     try {
@@ -2142,7 +2159,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         detail,
         detail.categories,
         user.fullName,
-        deanName.trim(),
+        teacherPosition.trim(),
+        notedByName.trim(),
+        notedByPosition.trim(),
         gradeSheetComponents,
         headerPng
       );
@@ -2155,7 +2174,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     }
   }
   function exportRecordScoresExcel() {
-    if (!detail) return;
+    if (!detail || !ensureSignatoriesConfigured()) return;
     downloadGradeSheetXlsx(
       `${detail.code.replace(/[^a-z0-9-_]+/gi, "-")}-record-scores.xlsx`,
       "Record Scores",
@@ -2164,7 +2183,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       user.school.address || "",
       user.school.departmentName || user.school.name,
       user.fullName,
-      (user.school.deanName || deanName).trim(),
+      teacherPosition.trim(),
+      notedByName.trim(),
+      notedByPosition.trim(),
       gradeSheetComponents,
       scorebookAssessments
     );
@@ -2488,8 +2509,14 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <textarea className="form-control" id="profileSchoolAddress" value={schoolAddress} onChange={event => setSchoolAddress(event.target.value)} maxLength={300} rows={2} placeholder="Complete school or campus address"/>
           <label className="form-label mt-3" htmlFor="profileDepartmentName">College / Department name</label>
           <input className="form-control" id="profileDepartmentName" value={departmentName} onChange={event => setDepartmentName(event.target.value)} maxLength={160} placeholder="College or department name"/>
-          <label className="form-label mt-3" htmlFor="profileDeanName">Dean’s name</label>
-          <input className="form-control" id="profileDeanName" value={deanName} onChange={event => setDeanName(event.target.value)} maxLength={120} placeholder="Dean’s full name"/>
+          <h3 className="mt-4">Grading sheet signatories</h3>
+          <p className="muted small">Submitted by uses your profile name. Your position is personal to your faculty account; the Noted by name and position are shared school-wide. Set the Noted by signatory to your superior when the instructor is also the Dean.</p>
+          <label className="form-label mt-3" htmlFor="profileTeacherPosition">Submitted by position / title</label>
+          <input className="form-control" id="profileTeacherPosition" value={teacherPosition} onChange={event => setTeacherPosition(event.target.value)} maxLength={120} placeholder="Instructor" required/>
+          <label className="form-label mt-3" htmlFor="profileNotedByName">Noted by name</label>
+          <input className="form-control" id="profileNotedByName" value={notedByName} onChange={event => setNotedByName(event.target.value)} maxLength={120} placeholder="Dean or approving superior’s full name" required/>
+          <label className="form-label mt-3" htmlFor="profileNotedByPosition">Noted by position / title</label>
+          <input className="form-control" id="profileNotedByPosition" value={notedByPosition} onChange={event => setNotedByPosition(event.target.value)} maxLength={120} placeholder="Dean or VP Academic Affairs" required/>
           <h3 className="mt-4">ISO document header</h3>
           <p className="muted small">These ISO document-control details are shared by this school only. FCU is prefilled with its supplied form details; other schools can enter their own header information here.</p>
           <div className="row g-3">
@@ -2988,8 +3015,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           })}</tbody>
         </table>
         <div className="print-signatures">
-          <div>Submitted by:<p><u>{user.fullName}</u><small>TEACHER&apos;S SIGNATURE OVER PRINTED NAME</small></p></div>
-          <div>Noted:<p><u>{deanName || " "}</u><small>DEAN&apos;S SIGNATURE OVER PRINTED NAME</small></p></div>
+          <div>Submitted by:<div className="signature-space" aria-hidden="true"/><p><strong className="signature-name">{user.fullName}</strong><small className="signature-position">{teacherPosition.trim()}</small></p></div>
+          <div>Noted:<div className="signature-space" aria-hidden="true"/><p><strong className="signature-name">{notedByName.trim()}</strong><small className="signature-position">{notedByPosition.trim()}</small></p></div>
         </div>
       </article>}
       {teacher && visibilityManagerQuery !== null && <GradeVisibilityManager subjects={subjects} initialQuery={visibilityManagerQuery} onClose={() => setVisibilityManagerQuery(null)} onChanged={(subjectIds, visible) => { const ids = new Set(subjectIds); setSubjects(current => current.map(subject => ids.has(subject.id) ? { ...subject, isPublished: visible } : subject)); setDetail(current => current && ids.has(current.id) ? { ...current, isPublished: visible } : current); }} />}
