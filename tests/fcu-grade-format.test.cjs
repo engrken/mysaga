@@ -488,7 +488,7 @@ test("Record Scores Excel export mirrors the full grouped scorebook and saved si
     ],
     gradeBands: [{ minPercent: 75, finalGrade: "2.25", remarks: "PASSED" }]
   };
-  context.generateGeneric("record-scores.xlsx", "Record Scores", detail, "Example University", "123 College Road", "COLLEGE OF ENGINEERING", "Teacher One", "Dean Two", [{ name: "Quizzes", percentage: 30 }, { name: "Major Exam", percentage: 50 }]);
+  context.generateGeneric("record-scores.xlsx", "Record Scores", detail, "Example University", "123 College Road", "COLLEGE OF ENGINEERING", "Teacher One", "Instructor", "Dean Two", "Dean", [{ name: "Quizzes", percentage: 30 }, { name: "Major Exam", percentage: 50 }]);
   const files = Object.fromEntries(saved.map(file => [file.name, file.content]));
   const sheet = files["xl/worksheets/sheet1.xml"];
   assert.match(sheet, /Example University/);
@@ -661,17 +661,14 @@ test("Record Scores export dynamically merges institutional, metadata, category,
     assert.ok(rowXml, 'signature spacer row ' + rowNumber + ' exists');
     assert.doesNotMatch(rowXml, /<t[^>]*>[^<]+<\/t>/, 'signature spacer row ' + rowNumber + ' is blank');
   }
-  for (const cell of ["A23", "L23"]) {
-    assert.match(sheet, new RegExp('<c r="' + cell + '" s="8"'));
-  }
-  for (const cell of ["A24", "L24"]) {
-    assert.match(sheet, new RegExp('<c r="' + cell + '" s="9"'));
+  for (const cell of ["A23", "L23", "A24", "L24"]) {
+    assert.match(sheet, new RegExp('<c r="' + cell + '" s="17"'));
   }
   assert.match(sheet, /<c r="A23"[^>]*>.*?TEACHER EXAMPLE/s);
   assert.match(sheet, /<c r="L23"[^>]*>.*?DEAN EXAMPLE/s);
   assert.match(sheet, /<c r="A24"[^>]*>.*?Instructor/s);
   assert.match(sheet, /<c r="L24"[^>]*>.*?Dean/s);
-  assert.match(styles, /<cellXfs count="20">/);
+  assert.match(styles, /<cellXfs count="18">/);
   assert.match(sheet, /Submitted by:/);
   assert.match(sheet, /Noted:/);
   assert.match(sheet, /TEACHER EXAMPLE/);
@@ -709,7 +706,7 @@ test("generic grading sheet supports a class with no assessment items without in
   };
   vm.runInNewContext(compiledGeneric + "\nthis.generateGeneric = downloadGradeSheetXlsx;", context);
   const detail = { code:"X",title:"No Assessments",classId:"A",term:"1st",academicYear:"2026",categories:[],assessments:[],enrollments:[],gradeBands:[] };
-  context.generateGeneric("empty.xlsx","Grading Sheet",detail,"School","Address","DEPARTMENT OF ENGINEERING","Teacher","");
+  context.generateGeneric("empty.xlsx","Grading Sheet",detail,"School","Address","DEPARTMENT OF ENGINEERING","Teacher","Instructor","Dean","Dean");
   const sheet = saved.find(file => file.name === "xl/worksheets/sheet1.xml").content;
   assert.match(sheet, /<col min="2" max="2"/);
   assert.match(sheet, /orientation="landscape"/);
