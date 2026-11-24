@@ -18,8 +18,7 @@ FROM "School" AS school
 WHERE teacher."schoolId" = school."id"
   AND teacher."role" = 'TEACHER';
 
--- Signatories are now personal teacher-profile data, not school-wide data.
-ALTER TABLE "School"
-  DROP COLUMN "notedByName",
-  DROP COLUMN "notedByPosition",
-  DROP COLUMN "deanName";
+-- Keep the legacy School columns for this rollout. The currently serving
+-- production application still selects School.deanName while Vercel builds
+-- and promotes this profile-based version. Remove these unused columns in a
+-- later migration after this version is live in production.
