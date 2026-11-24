@@ -7,12 +7,6 @@ import { todayManila } from "@/lib/tenant-operations";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function dayAfter(date: Date) {
-  const next = new Date(date);
-  next.setUTCDate(next.getUTCDate() + 1);
-  return next;
-}
-
 function cognixEndpoint() {
   const raw = process.env.COGNIX_API_URL?.trim();
   const token = process.env.COGNIX_API_KEY?.trim();
@@ -111,6 +105,7 @@ export async function POST() {
         {
           error: typeof result?.error === "string" ? result.error : "cognix_unavailable",
           message: "COGNIX could not complete this request. No SAGA records were changed.",
+          gatewayStatus: typeof result?.gatewayStatus === "number" ? result.gatewayStatus : null,
         },
         { status: response.status === 503 ? 503 : 502 },
       );
