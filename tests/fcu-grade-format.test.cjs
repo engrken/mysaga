@@ -329,6 +329,8 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(endpoint, /header: configuredHeader\.header/);
   assert.doesNotMatch(endpoint, /teacherName: configuredHeader\.header|notedByName: configuredHeader\.header/);
   assert.match(source, /function ensureSignatoriesConfigured\(\)/);
+  assert.match(source, /const unsavedChanges =/);
+  assert.match(source, /Save your Profile Information changes before exporting/);
   assert.match(source, /if \(!ensureSignatoriesConfigured\(\)\) return;/);
   assert.match(source, /!ensureSignatoriesConfigured\(\) \|\| !ensureGenericHeaderConfigured\(\)/);
   assert.match(source, /!ensureSignatoriesConfigured\(\) \|\| !ensureIsoHeaderConfigured\(\)/);
