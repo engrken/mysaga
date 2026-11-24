@@ -7,9 +7,12 @@ import { normalizeFacultyId } from "@/lib/account-identifiers";
 const schema = z.object({
   fullName: z.string().trim().min(2).max(120),
   facultyId: z.string().trim().max(40).optional(),
+  positionTitle: z.string().trim().min(1).max(120).optional(),
   schoolAddress: z.string().trim().max(300).optional(),
   departmentName: z.string().trim().max(160).optional(),
   deanName: z.string().trim().max(120).optional(),
+  notedByName: z.string().trim().min(1).max(120).optional(),
+  notedByPosition: z.string().trim().min(1).max(120).optional(),
   isoHeaderConfig: z.object({
     organizationAddress: z.string().trim().max(300),
     formName: z.string().trim().max(120),
@@ -32,7 +35,7 @@ export async function PATCH(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Enter a valid full name and Faculty ID." }, { status: 400 });
   if (parsed.data.defaultGradeSheetComponents && new Set(parsed.data.defaultGradeSheetComponents.map(item => item.name.toLocaleLowerCase())).size !== parsed.data.defaultGradeSheetComponents.length) return NextResponse.json({ error: "Default grading categories must be unique." }, { status: 400 });
 
-  if ((parsed.data.facultyId !== undefined || parsed.data.schoolAddress !== undefined || parsed.data.departmentName !== undefined || parsed.data.deanName !== undefined || parsed.data.isoHeaderConfig !== undefined || parsed.data.defaultGradeSheetComponents !== undefined) && user.role !== "TEACHER") {
+  if ((parsed.data.facultyId !== undefined || parsed.data.positionTitle !== undefined || parsed.data.schoolAddress !== undefined || parsed.data.departmentName !== undefined || parsed.data.deanName !== undefined || parsed.data.notedByName !== undefined || parsed.data.notedByPosition !== undefined || parsed.data.isoHeaderConfig !== undefined || parsed.data.defaultGradeSheetComponents !== undefined) && user.role !== "TEACHER") {
     return NextResponse.json({ error: "Only faculty accounts can edit faculty and school letterhead details." }, { status: 403 });
   }
   const facultyId = parsed.data.facultyId === undefined
@@ -58,7 +61,8 @@ export async function PATCH(request: Request) {
         where: { id: user.id, schoolId: user.schoolId },
         data: {
           fullName: parsed.data.fullName,
-          ...(facultyId !== undefined ? { facultyId } : {})
+          ...(facultyId !== undefined ? { facultyId } : {}),
+          ...(parsed.data.positionTitle !== undefined ? { positionTitle: parsed.data.positionTitle || null } : {})
         }
       });
       if (result.count && changedFacultyId) await tx.auditEvent.create({
@@ -70,12 +74,16 @@ export async function PATCH(request: Request) {
         }
       });
       if (result.count && parsed.data.defaultGradeSheetComponents !== undefined) await tx.user.update({ where: { id: user.id }, data: { defaultGradeSheetComponents: JSON.stringify(parsed.data.defaultGradeSheetComponents) } });
-      if (result.count && (parsed.data.schoolAddress !== undefined || parsed.data.departmentName !== undefined || parsed.data.deanName !== undefined || parsed.data.isoHeaderConfig !== undefined)) await tx.school.update({
+      if (result.count && (parsed.data.schoolAddress !== undefined || parsed.data.departmentName !== undefined || parsed.data.deanName !== undefined || parsed.data.notedByName !== undefined || parsed.data.notedByPosition !== undefined || parsed.data.isoHeaderConfig !== undefined)) await tx.school.update({
         where: { id: user.schoolId },
         data: {
           ...(parsed.data.schoolAddress !== undefined ? { address: parsed.data.schoolAddress || null } : {}),
           ...(parsed.data.departmentName !== undefined ? { departmentName: parsed.data.departmentName || null } : {}),
-          ...(parsed.data.deanName !== undefined ? { deanName: parsed.data.deanName || null } : {}),
+          ...(parsed.data.deanName !== undefined || parsed.data.notedByName !== undefined ? {
+            deanName: (parsed.data.notedByName ?? parsed.data.deanName) || null,
+            notedByName: (parsed.data.notedByName ?? parsed.data.deanName) || null
+          } : {}),
+          ...(parsed.data.notedByPosition !== undefined ? { notedByPosition: parsed.data.notedByPosition || null } : {}),
           ...(parsed.data.isoHeaderConfig !== undefined ? { isoHeaderConfig: JSON.stringify(parsed.data.isoHeaderConfig) } : {})
         }
       });
