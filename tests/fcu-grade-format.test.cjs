@@ -312,6 +312,14 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.doesNotMatch(endpoint, /Number\(\(contribution \/ 100\)\.toFixed\(6\)\)|effectiveTotalPercent/);
   assert.match(endpoint, /teacherName: configuredHeader\.header\.submittedBy/);
   assert.match(endpoint, /notedByName: configuredHeader\.header\.notedByName/);
+  assert.match(endpoint, /notedByName: z\.string\(\)\.trim\(\)\.min\(1\)/);
+  assert.match(source, /function ensureSignatoriesConfigured\(\)/);
+  assert.match(source, /if \(!ensureSignatoriesConfigured\(\)\) return;/);
+  assert.match(source, /!ensureSignatoriesConfigured\(\) \|\| !ensureGenericHeaderConfigured\(\)/);
+  assert.match(source, /!ensureSignatoriesConfigured\(\) \|\| !ensureIsoHeaderConfigured\(\)/);
+  assert.match(source, /className="signature-space"/);
+  assert.match(source, /className="signature-position"/);
+  assert.doesNotMatch(source, /print-signatures u \{[^}]*border-bottom/s);
   assert.match(endpoint, /process\.env\.VERCEL_PROJECT_PRODUCTION_URL/, "production calls use the stable project domain");
   assert.match(endpoint, /process\.env\.VERCEL_ENV === "production"/, "the routing choice distinguishes production from previews");
   assert.match(endpoint, /productionHost \|\| deploymentHost/, "production prefers the stable production host");
