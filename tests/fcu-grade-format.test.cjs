@@ -320,7 +320,7 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(prismaSchema, /model User \{[\s\S]*?notedByName\s+String\?[\s\S]*?notedByPosition\s+String\?/);
   assert.doesNotMatch(prismaSchema.slice(prismaSchema.indexOf("model School"), prismaSchema.indexOf("model TenantPayment")), /notedByName|notedByPosition|deanName/);
   assert.match(signatoryMigration, /UPDATE "User" AS teacher[\s\S]*teacher\."schoolId" = school\."id"[\s\S]*teacher\."role" = 'TEACHER'/);
-  assert.match(signatoryMigration, /DROP COLUMN "notedByName"[\s\S]*DROP COLUMN "notedByPosition"[\s\S]*DROP COLUMN "deanName"/);
+  assert.doesNotMatch(signatoryMigration, /ALTER TABLE "School"\s+DROP COLUMN/i, "retain legacy columns until the new production version has replaced the currently serving app");
   assert.doesNotMatch(endpoint, /normalizeSignatureName\([^)]*,\s*"ENGR\."\)/, "profile titles must not be forced");
   assert.match(endpoint, /function resolveClassId\(/);
   assert.match(endpoint, /classId: resolveClassId\(subject\)/);
