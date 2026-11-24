@@ -35,7 +35,6 @@ SIGNING_CONTEXT = b"SAGA-ISO-EXPORT-v1\n"
 
 THIN_SIDE = Side(style="thin", color="FF000000")
 THIN_BORDER = Border(left=THIN_SIDE, right=THIN_SIDE, top=THIN_SIDE, bottom=THIN_SIDE)
-BOTTOM_BORDER = Border(bottom=THIN_SIDE)
 MEDIUM_SIDE = Side(style="medium", color="FF000000")
 METADATA_BOTTOM_BORDER = Border(bottom=MEDIUM_SIDE)
 NO_BORDER = Border()
@@ -134,10 +133,11 @@ def build_iso_workbook(payload: dict) -> bytes:
     header_fields = (
         "organizationName", "organizationAddress", "formName", "formNo",
         "effectivity", "issuingOffice", "revisionNo", "eomsTitle",
-        "affiliationLine1", "affiliationLine2", "submittedBy", "deanName",
+        "affiliationLine1", "affiliationLine2", "submittedBy", "teacherPosition",
+        "notedByName", "notedByPosition",
     )
     clean_header = {key: _safe_text(header.get(key, "")) for key in header_fields}
-    required_fields = header_fields[:10]
+    required_fields = header_fields
     if any(not clean_header[key].strip() for key in required_fields):
         raise ValueError("Complete all ISO document-control fields before exporting.")
 
@@ -352,13 +352,12 @@ def build_iso_workbook(payload: dict) -> bytes:
     worksheet.column_dimensions[get_column_letter(metadata_label_column)].width = 18
     worksheet.column_dimensions[get_column_letter(metadata_value_column)].width = 22
 
-    # Signature block: labels, three blank signing rows, then centered printed names and captions.
+    # Signature block: headings, blank signing space, then centered printed names and positions.
     data_end_row = 11 + len(rows)
     signature_label_row = data_end_row + 2
     signature_space_rows = range(signature_label_row + 1, signature_label_row + 4)
-    signature_rule_row = signature_label_row + 3
     signature_name_row = signature_label_row + 4
-    signature_role_row = signature_label_row + 5
+    signature_position_row = signature_label_row + 5
     left_end = max(1, column_count // 2)
     right_start = left_end + 1
     last_column = get_column_letter(column_count)
@@ -377,16 +376,13 @@ def build_iso_workbook(payload: dict) -> bytes:
         signature_range(signature_label_row, right_start_letter, last_column),
     )
     for row_number in signature_space_rows:
-        border = BOTTOM_BORDER if row_number == signature_rule_row else None
         _merge_with_border(
             worksheet,
             signature_range(row_number, "A", left_end_letter),
-            border,
         )
         _merge_with_border(
             worksheet,
             signature_range(row_number, right_start_letter, last_column),
-            border,
         )
     _merge_with_border(
         worksheet,
@@ -398,27 +394,27 @@ def build_iso_workbook(payload: dict) -> bytes:
     )
     _merge_with_border(
         worksheet,
-        signature_range(signature_role_row, "A", left_end_letter),
+        signature_range(signature_position_row, "A", left_end_letter),
     )
     _merge_with_border(
         worksheet,
-        signature_range(signature_role_row, right_start_letter, last_column),
+        signature_range(signature_position_row, right_start_letter, last_column),
     )
 
     _set_literal(worksheet.cell(signature_label_row, 1), "Submitted by:")
     _set_literal(worksheet.cell(signature_label_row, right_start), "Noted:")
-    teacher_name = _normalize_signature_name(class_metadata.get("teacherName") or clean_header["submittedBy"])
-    dean_name = _normalize_signature_name(class_metadata.get("deanName") or clean_header["deanName"])
+    teacher_name = _normalize_signature_name(clean_header["submittedBy"])
+    noted_by_name = _normalize_signature_name(clean_header["notedByName"])
     _set_literal(worksheet.cell(signature_name_row, 1), teacher_name)
-    _set_literal(worksheet.cell(signature_name_row, right_start), dean_name)
-    _set_literal(worksheet.cell(signature_role_row, 1), "SIGNATURE OVER PRINTED NAME / DATE")
-    _set_literal(worksheet.cell(signature_role_row, right_start), "SIGNATURE OVER PRINTED NAME / DATE")
+    _set_literal(worksheet.cell(signature_name_row, right_start), noted_by_name)
+    _set_literal(worksheet.cell(signature_position_row, 1), clean_header["teacherPosition"])
+    _set_literal(worksheet.cell(signature_position_row, right_start), clean_header["notedByPosition"])
 
     worksheet.row_dimensions[signature_label_row].height = 20
     for row_number in signature_space_rows:
         worksheet.row_dimensions[row_number].height = 22
     worksheet.row_dimensions[signature_name_row].height = 24
-    worksheet.row_dimensions[signature_role_row].height = 22
+    worksheet.row_dimensions[signature_position_row].height = 20
     for coordinate in (
         worksheet.cell(signature_label_row, 1).coordinate,
         worksheet.cell(signature_label_row, right_start).coordinate,
@@ -428,13 +424,17 @@ def build_iso_workbook(payload: dict) -> bytes:
     for coordinate in (
         worksheet.cell(signature_name_row, 1).coordinate,
         worksheet.cell(signature_name_row, right_start).coordinate,
-        worksheet.cell(signature_role_row, 1).coordinate,
-        worksheet.cell(signature_role_row, right_start).coordinate,
     ):
         worksheet[coordinate].font = Font(name="Arial", size=10, bold=True)
         worksheet[coordinate].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    for coordinate in (
+        worksheet.cell(signature_position_row, 1).coordinate,
+        worksheet.cell(signature_position_row, right_start).coordinate,
+    ):
+        worksheet[coordinate].font = Font(name="Arial", size=9)
+        worksheet[coordinate].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-    worksheet.print_area = "A1:{0}{1}".format(last_column, signature_role_row)
+    worksheet.print_area = "A1:{0}{1}".format(last_column, signature_position_row)
     workbook.properties.title = "FCU-EOMS-RO-006-F Collegiate Grading Sheet"
     workbook.properties.subject = "Educational Organization Management System"
     workbook.properties.creator = clean_header["organizationName"]

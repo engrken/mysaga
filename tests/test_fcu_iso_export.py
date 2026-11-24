@@ -41,7 +41,9 @@ class FcuIsoExportTests(unittest.TestCase):
                 "affiliationLine1": "Member: Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)",
                 "affiliationLine2": "Member: Association of Christian Schools, Colleges in Asia (ACUCA)",
                 "submittedBy": "Dr. Teacher Example",
-                "deanName": "Prof. Dean Example",
+                "teacherPosition": "Instructor",
+                "notedByName": "Prof. Dean Example",
+                "notedByPosition": "Dean",
             },
             "class": {
                 "courseCode": "ECE-16",
@@ -51,8 +53,8 @@ class FcuIsoExportTests(unittest.TestCase):
                 "semester": "First Semester",
                 "academicYear": "2026-2027",
                 "sectionName": "BSECE 4",
-                "teacherName": "Kenneth Mark D. Bulquerin",
-                "deanName": "prof. Dean Example",
+                "teacherName": "A different teacher from shared metadata",
+                "notedByName": "A different shared school signatory",
             },
             "headers": [
                 "NO.",
@@ -190,7 +192,7 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertEqual(sheet["E12"].number_format, "0.00%")
         self.assertAlmostEqual(sheet["F12"].value, 0.9025)
         self.assertEqual(sheet["F12"].number_format, "0.00%")
-        self.assertEqual(sheet["A18"].value, "KENNETH MARK D. BULQUERIN")
+        self.assertEqual(sheet["A18"].value, "DR. TEACHER EXAMPLE")
         self.assertEqual(sheet["E18"].value, "PROF. DEAN EXAMPLE")
         self.assertIn("A14:D14", {str(item) for item in sheet.merged_cells.ranges})
         self.assertIn("E14:H14", {str(item) for item in sheet.merged_cells.ranges})
@@ -204,11 +206,15 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertIn("E18:H18", {str(item) for item in sheet.merged_cells.ranges})
         self.assertIn("A19:D19", {str(item) for item in sheet.merged_cells.ranges})
         self.assertIn("E19:H19", {str(item) for item in sheet.merged_cells.ranges})
-        self.assertEqual(sheet["A19"].value, "SIGNATURE OVER PRINTED NAME / DATE")
-        self.assertEqual(sheet["E19"].value, "SIGNATURE OVER PRINTED NAME / DATE")
-        for coordinate in ("A18", "E18", "A19", "E19"):
+        self.assertEqual(sheet["A19"].value, "Instructor")
+        self.assertEqual(sheet["E19"].value, "Dean")
+        for coordinate in ("A18", "E18"):
             self.assertEqual(sheet[coordinate].font.sz, 10)
             self.assertTrue(sheet[coordinate].font.bold)
+            self.assertEqual(sheet[coordinate].alignment.horizontal, "center")
+        for coordinate in ("A19", "E19"):
+            self.assertEqual(sheet[coordinate].font.sz, 9)
+            self.assertFalse(sheet[coordinate].font.bold)
             self.assertEqual(sheet[coordinate].alignment.horizontal, "center")
         self.assertNotIn("Student Number", [sheet.cell(11, col).value for col in range(1, sheet.max_column + 1)])
 
@@ -221,8 +227,8 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertEqual(sheet.column_dimensions["H"].width, 22)
         self.assertEqual(sheet["A14"].value, "Submitted by:")
         self.assertEqual(sheet["E14"].value, "Noted:")
-        self.assertEqual(sheet["A17"].border.bottom.style, "thin")
-        self.assertEqual(sheet["E17"].border.bottom.style, "thin")
+        self.assertIsNone(sheet["A17"].border.bottom.style)
+        self.assertIsNone(sheet["E17"].border.bottom.style)
         self.assertEqual(sheet.freeze_panes, "A12")
         self.assertEqual(sheet.print_title_rows, "11:11")
 
@@ -246,7 +252,7 @@ class FcuIsoExportTests(unittest.TestCase):
             self.assertIn(f"H{row_number}:N{row_number}", merged)
         self.assertEqual(sheet["A14"].value, "Submitted by:")
         self.assertEqual(sheet["H14"].value, "Noted:")
-        self.assertEqual(sheet["A18"].value, "KENNETH MARK D. BULQUERIN")
+        self.assertEqual(sheet["A18"].value, "DR. TEACHER EXAMPLE")
         self.assertEqual(sheet["H18"].value, "PROF. DEAN EXAMPLE")
         self.assertEqual(sheet["M2"].value, "Effectivity:")
         self.assertEqual(sheet["N2"].value, "October 1, 2025")

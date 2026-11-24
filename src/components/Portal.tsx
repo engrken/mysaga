@@ -29,7 +29,7 @@ import { absenceDates, attendanceDays as orderedAttendanceDays, attendanceRiskSu
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 import { buildWorkbookPages, workbookWidths } from "@/lib/scorebook-layout";
 
-type User = { id: string; role: string; fullName: string; email: string; isDemo?: boolean; isTenantManager?: boolean; isSchoolAdmin?: boolean; emailDeliveryEnabled?: boolean; profileImagePath: string | null; facultyId?: string | null; defaultGradeSheetComponents?: string | null; courseProgram?: string | null; yearLevel?: string | null; school: { id: string; slug: string; name: string; shortName: string; portalTitle: string; logoText: string; logoPath: string | null; departmentLogoPath: string | null; primaryColor: string; address: string | null; departmentName: string | null; deanName: string | null; isoHeaderConfig: string | null } };
+type User = { id: string; role: string; fullName: string; positionTitle: string | null; notedByName: string | null; notedByPosition: string | null; email: string; isDemo?: boolean; isTenantManager?: boolean; isSchoolAdmin?: boolean; emailDeliveryEnabled?: boolean; profileImagePath: string | null; facultyId?: string | null; defaultGradeSheetComponents?: string | null; courseProgram?: string | null; yearLevel?: string | null; school: { id: string; slug: string; name: string; shortName: string; portalTitle: string; logoText: string; logoPath: string | null; departmentLogoPath: string | null; primaryColor: string; address: string | null; departmentName: string | null; isoHeaderConfig: string | null } };
 type WorkbookChange = { subjectId: string; enrollmentId: string; assessmentId: string; points: number | null; remark: "EXCUSED" | "ABSENT" | "DID_NOT_SUBMIT" | null };
 type AttendanceMark = { subjectId: string; enrollmentId: string; assessmentId: string; remark: "PRESENT" | "LATE" | "ABSENT" | "EXCUSED" | null };
 type Subject = { id: string; classId: string | null; code: string; title: string; term: string; academicYear: string; schedule: string | null; courseYear: string | null; gradeSheetComponents?: string | null; isPublished: boolean; gradeStatus: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; _count?: { enrollments: number } };
@@ -473,7 +473,7 @@ function gradeSheetComponentContribution(detail: Detail, enrollment: Enrollment,
 function downloadGradeSheetXlsx(
   filename: string, sheetName: string, detail: Detail,
   schoolName: string, schoolAddress: string, departmentName: string,
-  teacherName: string, deanName: string,
+  teacherName: string, teacherPosition: string, notedByName: string, notedByPosition: string,
   components: GradeSheetComponent[] = [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }],
   assessmentOrder?: Assessment[]
 ) {
@@ -734,11 +734,11 @@ function downloadGradeSheetXlsx(
   addRow([]);
   addRow([
     { col: 0, value: teacherName.trim().toLocaleUpperCase(), style: 17 },
-    { col: rightStartColumn - 1, value: deanName.trim().toLocaleUpperCase(), style: 17 }
+    { col: rightStartColumn - 1, value: notedByName.trim().toLocaleUpperCase(), style: 17 }
   ]);
   addRow([
-    { col: 0, value: "SIGNATURE OVER PRINTED NAME / DATE", style: 17 },
-    { col: rightStartColumn - 1, value: "SIGNATURE OVER PRINTED NAME / DATE", style: 17 }
+    { col: 0, value: teacherPosition.trim(), style: 17 },
+    { col: rightStartColumn - 1, value: notedByPosition.trim(), style: 17 }
   ]);
   for (let rowNumber = signatureLabelRow; rowNumber <= signatureRoleRow; rowNumber++) {
     mergedRanges.push("A" + rowNumber + ":" + leftEnd + rowNumber, rightStart + rowNumber + ":" + last + rowNumber);
@@ -832,7 +832,7 @@ function downloadGradeSheetXlsx(
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail: Detail, categories: Category[], teacherName: string, deanName: string, components: GradeSheetComponent[], headerPng: Uint8Array) {
+async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail: Detail, categories: Category[], teacherName: string, teacherPosition: string, notedByName: string, notedByPosition: string, components: GradeSheetComponent[], headerPng: Uint8Array) {
   const componentCategoryPath = (category: Category) => {
     const names = [category.name];
     let parent = categories.find(item => item.id === category.parentId);
@@ -918,16 +918,20 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
 
   row([]);
   const signatureRow = cells.length + 1;
+  const signatureNameRow = signatureRow + 4;
+  const signaturePositionRow = signatureRow + 5;
   const split = Math.max(1, Math.floor((columnCount - 1) / 2));
   row([{ col: 0, value: "Submitted by:", style: 2 }, { col: split + 1, value: "Noted:", style: 2 }]);
   row([]);
+  row([]);
+  row([]);
   row([
-    { col: 0, value: { runs: [{ text: teacherName.toLocaleUpperCase(), underline: true }] }, style: 2 },
-    { col: split + 1, value: { runs: [{ text: (deanName || "____________________________").toLocaleUpperCase(), underline: true }] }, style: 2 }
+    { col: 0, value: teacherName.toLocaleUpperCase(), style: 8 },
+    { col: split + 1, value: notedByName.toLocaleUpperCase(), style: 8 }
   ]);
   row([
-    { col: 0, value: "TEACHER'S SIGNATURE OVER PRINTED NAME", style: 2 },
-    { col: split + 1, value: "DEAN'S SIGNATURE OVER PRINTED NAME", style: 2 }
+    { col: 0, value: teacherPosition.trim(), style: 9 },
+    { col: split + 1, value: notedByPosition.trim(), style: 9 }
   ]);
 
   const xmlRows = cells.map((values, rowIndex) => {
@@ -948,6 +952,7 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     const height = rowIndex < 9 ? ' ht="15.5" customHeight="1"'
       : rowIndex === 14 ? ' ht="32" customHeight="1"'
       : rowIndex >= 16 && rowIndex < 16 + detail.enrollments.length ? ' ht="20" customHeight="1"'
+      : rowIndex + 1 === signatureNameRow || rowIndex + 1 === signaturePositionRow ? ' ht="20" customHeight="1"'
       : ' ht="18" customHeight="1"';
     return '<row r="' + rowNumber + '"' + height + '>' + xmlCells + '</row>';
   }).join("");
@@ -955,10 +960,10 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
   const signatureRanges = [
     "A" + signatureRow + ":" + excelColumn(split) + signatureRow,
     excelColumn(split + 1) + signatureRow + ":" + last + signatureRow,
-    "A" + (signatureRow + 2) + ":" + excelColumn(split) + (signatureRow + 2),
-    excelColumn(split + 1) + (signatureRow + 2) + ":" + last + (signatureRow + 2),
-    "A" + (signatureRow + 3) + ":" + excelColumn(split) + (signatureRow + 3),
-    excelColumn(split + 1) + (signatureRow + 3) + ":" + last + (signatureRow + 3)
+    "A" + signatureNameRow + ":" + excelColumn(split) + signatureNameRow,
+    excelColumn(split + 1) + signatureNameRow + ":" + last + signatureNameRow,
+    "A" + signaturePositionRow + ":" + excelColumn(split) + signaturePositionRow,
+    excelColumn(split + 1) + signaturePositionRow + ":" + last + signaturePositionRow
   ];
   const merges = ["A1:" + last + "9", "A11:" + last + "11", "A12:" + last + "12", "A13:" + last + "13", "A14:" + last + "14", ...signatureRanges];
   const mergeXml = merges.map(range => '<mergeCell ref="' + range + '"/>').join("");
@@ -985,7 +990,7 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF0F8"/><bgColor indexed="64"/></patternFill></fill></fills>' +
     '<borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="dotted"/><right style="dotted"/><top/><bottom style="dotted"/><diagonal/></border><border><left/><right/><top style="dashed"/><bottom style="dashed"/><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="8">' +
+    '<cellXfs count="10">' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
     '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
     '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
@@ -994,6 +999,8 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
     '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
   const safeSheetName = sheetName.replace(/[\\/?*\[\]:]/g, " ").slice(0, 31) || "FCU Grades";
   const files = [
@@ -1140,7 +1147,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>([]); const [copyFromId, setCopyFromId] = useState(""); const [rosterText, setRosterText] = useState(""); const [rosterFileName, setRosterFileName] = useState(""); const [categoryName, setCategoryName] = useState(""); const [categoryParent, setCategoryParent] = useState(""); const [categoryWeight, setCategoryWeight] = useState("50"); const [categoryOpen, setCategoryOpen] = useState(false);
   const [lectureCourseWeight, setLectureCourseWeight] = useState("60"); const [laboratoryCourseWeight, setLaboratoryCourseWeight] = useState("40");
   const [gradingSetupType, setGradingSetupType] = useState<"SINGLE" | "COMBINED">("SINGLE"); const [singleGroupType, setSingleGroupType] = useState<"LECTURE" | "LABORATORY">("LECTURE");
-  const [theme, setTheme] = useState<"light" | "dark">("light"); const [academicYear, setAcademicYear] = useState("2026-2027"); const [calendarSystem, setCalendarSystem] = useState<"SEMESTER" | "TRIMESTER">("SEMESTER"); const [activeTerm, setActiveTerm] = useState("1st Semester"); const [academicPeriodReady, setAcademicPeriodReady] = useState(false); const academicYears = [...Array.from({length: 10}, (_, index) => 2016 + index), ...Array.from({length: 10}, (_, index) => 2026 + index)].map(start => `${start}-${start + 1}`).sort((a,b) => b.localeCompare(a)); const [schoolYearFilter, setSchoolYearFilter] = useState("All School Years"); const [termFilter, setTermFilter] = useState("All Terms"); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | "iso-grades" | null>(null); const [deanName, setDeanName] = useState(user.school.deanName || ""); const [gradeExcelExporting, setGradeExcelExporting] = useState<"generic" | "iso" | null>(null);
+  const [theme, setTheme] = useState<"light" | "dark">("light"); const [academicYear, setAcademicYear] = useState("2026-2027"); const [calendarSystem, setCalendarSystem] = useState<"SEMESTER" | "TRIMESTER">("SEMESTER"); const [activeTerm, setActiveTerm] = useState("1st Semester"); const [academicPeriodReady, setAcademicPeriodReady] = useState(false); const academicYears = [...Array.from({length: 10}, (_, index) => 2016 + index), ...Array.from({length: 10}, (_, index) => 2026 + index)].map(start => `${start}-${start + 1}`).sort((a,b) => b.localeCompare(a)); const [schoolYearFilter, setSchoolYearFilter] = useState("All School Years"); const [termFilter, setTermFilter] = useState("All Terms"); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | "iso-grades" | null>(null); const [notedByName, setNotedByName] = useState(user.notedByName || ""); const [teacherPosition, setTeacherPosition] = useState(user.positionTitle || ""); const [notedByPosition, setNotedByPosition] = useState(user.notedByPosition || ""); const [gradeExcelExporting, setGradeExcelExporting] = useState<"generic" | "iso" | null>(null);
   const [schoolAddress, setSchoolAddress] = useState(user.school.address || "");
   const [departmentName, setDepartmentName] = useState(user.school.departmentName || "");
   const [isoHeaderConfig, setIsoHeaderConfig] = useState<IsoHeaderConfig>(() => readIsoHeaderConfig(user.school.name, user.school.slug, user.school.isoHeaderConfig));
@@ -1878,12 +1885,39 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   async function saveComponentsAsDefault() {
     if (!componentDraft.length || componentDraft.some(item => !item.name.trim())) { setErr("Select at least one valid Grading Setup category."); return; }
     await run(async () => {
-      await api("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName: profileName, facultyId: profileFacultyId, schoolAddress, departmentName, deanName, defaultGradeSheetComponents: componentDraft }) });
+      await api("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName: profileName, facultyId: profileFacultyId, schoolAddress, departmentName, defaultGradeSheetComponents: componentDraft }) });
       setGradeSheetComponents(componentDraft);
       router.refresh();
     }, "Saved as your default grading sheet components.");
   }
   function printClass(mode: "roster" | "grades") { setPrintMode(mode); }
+  function ensureSignatoriesConfigured() {
+    const missing = [
+      !user.fullName.trim() ? "your profile name" : "",
+      !teacherPosition.trim() ? "Submitted by position / title" : "",
+      !notedByName.trim() ? "Noted by name" : "",
+      !notedByPosition.trim() ? "Noted by position / title" : ""
+    ].filter(Boolean);
+    if (missing.length) {
+      setErr("Complete the required grading-sheet signatory details in Profile Information before exporting: " + missing.join(", ") + ".");
+      setNotice("");
+      setTab("profile");
+      return false;
+    }
+    const unsavedChanges = [
+      profileName.trim() !== user.fullName.trim(),
+      teacherPosition.trim() !== (user.positionTitle || "").trim(),
+      notedByName.trim() !== (user.notedByName || "").trim(),
+      notedByPosition.trim() !== (user.notedByPosition || "").trim()
+    ].some(Boolean);
+    if (unsavedChanges) {
+      setErr("Save your Profile Information changes before exporting so every grading-sheet format uses your saved signatories.");
+      setNotice("");
+      setTab("profile");
+      return false;
+    }
+    return true;
+  }
   function ensureGenericHeaderConfigured() {
     if (departmentName.trim()) return true;
     setErr("Your generic grading-sheet header is incomplete. Add your College / Department name under Profile information, save your profile, then try the export again.");
@@ -1901,12 +1935,13 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     return false;
   }
   function printFinalGradesPdf(format: "generic" | "iso" = "generic") {
+    if (!ensureSignatoriesConfigured()) return;
     if (format === "generic" && !ensureGenericHeaderConfigured()) return;
     if (format === "iso" && !ensureIsoHeaderConfigured()) return;
     setErr("");
     setPrintMode(format === "iso" ? "iso-grades" : "grades");
   }
-  async function saveProfile(e: FormEvent<HTMLFormElement>) { e.preventDefault(); await run(async () => { await api("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName: profileName, ...(teacher ? { facultyId: profileFacultyId, schoolAddress, departmentName, deanName, isoHeaderConfig } : {}) }) }); router.refresh(); }, "Profile updated."); }
+  async function saveProfile(e: FormEvent<HTMLFormElement>) { e.preventDefault(); await run(async () => { await api("/api/profile", { method: "PATCH", body: JSON.stringify({ fullName: profileName, ...(teacher ? { facultyId: profileFacultyId, positionTitle: teacherPosition, schoolAddress, departmentName, notedByName, notedByPosition, isoHeaderConfig } : {}) }) }); router.refresh(); }, "Profile updated."); }
   async function requestPasswordOtp() { await run(async () => { const result = await api("/api/profile/security-otp", { method: "POST", body: JSON.stringify({ purpose: "PASSWORD_CHANGE", currentPassword: passwordCurrent }) }); setPasswordOtpSent(true); setPasswordOtp(""); setNotice(result.message); }, ""); }
   async function changePassword(e: FormEvent<HTMLFormElement>) { e.preventDefault(); if (passwordNew !== passwordConfirm) { setErr("The new passwords do not match."); return; } await run(async () => { await api("/api/profile/password", { method: "POST", body: JSON.stringify({ currentPassword: passwordCurrent, newPassword: passwordNew, code: passwordOtp }) }); setPasswordCurrent(""); setPasswordNew(""); setPasswordConfirm(""); setPasswordOtp(""); setPasswordOtpSent(false); window.setTimeout(() => { void logout(); }, 1200); }, "Password changed. Signing you out; sign in again with your new password."); }
   async function uploadProfileImage(kind: "profile" | "school-logo" | "department-logo", file?: File) {
@@ -2078,7 +2113,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     return gradeHeaderCanvasBytes(canvas);
   }
   async function exportIsoGradesExcel() {
-    if (!detail || gradeExcelExporting || !ensureIsoHeaderConfigured()) return;
+    if (!detail || gradeExcelExporting || !ensureSignatoriesConfigured() || !ensureIsoHeaderConfigured()) return;
     setGradeExcelExporting("iso");
     setErr("");
     try {
@@ -2123,7 +2158,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     }
   }
   async function exportGrades() {
-    if (!detail || gradeExcelExporting || !ensureGenericHeaderConfigured()) return;
+    if (!detail || gradeExcelExporting || !ensureSignatoriesConfigured() || !ensureGenericHeaderConfigured()) return;
     setGradeExcelExporting("generic");
     setErr("");
     try {
@@ -2135,7 +2170,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         detail,
         detail.categories,
         user.fullName,
-        deanName.trim(),
+        teacherPosition.trim(),
+        notedByName.trim(),
+        notedByPosition.trim(),
         gradeSheetComponents,
         headerPng
       );
@@ -2148,7 +2185,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     }
   }
   function exportRecordScoresExcel() {
-    if (!detail) return;
+    if (!detail || !ensureSignatoriesConfigured()) return;
     downloadGradeSheetXlsx(
       `${detail.code.replace(/[^a-z0-9-_]+/gi, "-")}-record-scores.xlsx`,
       "Record Scores",
@@ -2157,7 +2194,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       user.school.address || "",
       user.school.departmentName || user.school.name,
       user.fullName,
-      (user.school.deanName || deanName).trim(),
+      teacherPosition.trim(),
+      notedByName.trim(),
+      notedByPosition.trim(),
       gradeSheetComponents,
       scorebookAssessments
     );
@@ -2481,8 +2520,14 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <textarea className="form-control" id="profileSchoolAddress" value={schoolAddress} onChange={event => setSchoolAddress(event.target.value)} maxLength={300} rows={2} placeholder="Complete school or campus address"/>
           <label className="form-label mt-3" htmlFor="profileDepartmentName">College / Department name</label>
           <input className="form-control" id="profileDepartmentName" value={departmentName} onChange={event => setDepartmentName(event.target.value)} maxLength={160} placeholder="College or department name"/>
-          <label className="form-label mt-3" htmlFor="profileDeanName">Dean’s name</label>
-          <input className="form-control" id="profileDeanName" value={deanName} onChange={event => setDeanName(event.target.value)} maxLength={120} placeholder="Dean’s full name"/>
+          <h3 className="mt-4">Grading sheet signatories</h3>
+          <p className="muted small">All signatory details are personal to your teacher profile. Set your own Noted by name and position to the superior who reviews your grading sheets.</p>
+          <label className="form-label mt-3" htmlFor="profileTeacherPosition">Submitted by position / title</label>
+          <input className="form-control" id="profileTeacherPosition" value={teacherPosition} onChange={event => setTeacherPosition(event.target.value)} maxLength={120} placeholder="Instructor" required/>
+          <label className="form-label mt-3" htmlFor="profileNotedByName">Noted by name</label>
+          <input className="form-control" id="profileNotedByName" value={notedByName} onChange={event => setNotedByName(event.target.value)} maxLength={120} placeholder="Dean or approving superior’s full name" required/>
+          <label className="form-label mt-3" htmlFor="profileNotedByPosition">Noted by position / title</label>
+          <input className="form-control" id="profileNotedByPosition" value={notedByPosition} onChange={event => setNotedByPosition(event.target.value)} maxLength={120} placeholder="Dean or VP Academic Affairs" required/>
           <h3 className="mt-4">ISO document header</h3>
           <p className="muted small">These ISO document-control details are shared by this school only. FCU is prefilled with its supplied form details; other schools can enter their own header information here.</p>
           <div className="row g-3">
@@ -2709,7 +2754,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
             <div className="scorebook-legend"><span><b>Excused</b> removes an item from its category denominator.</span><span><b>Absent / Did not submit</b> records zero raw points (the configured transmutation base still applies to academic assessments).</span><span><b>Blank</b> is pending, not zero. Equivalent columns show weighted percentages within the parent Lecture/Laboratory component; the final grade also applies its course weight.</span><span>Attendance sessions are recorded in the Attendance tab, not as assessment scores.</span></div>
           </section>}
           {classSection === "analytics" && <section className="class-analytics"><div className="surface analytics-heading"><span className="eyebrow">CLASS INSIGHTS</span><h2>{detail.code} performance</h2><p className="muted">{detail.title} · {detail.term} {detail.academicYear}. INC, NP, and DROPPED records are excluded from numeric averages.</p></div><div className="analytics-stat-grid"><article className="surface analytics-stat"><small>CLASS AVERAGE</small><strong>{analytics.average == null ? "—" : analytics.average.toFixed(2)+"%"}</strong><span>{analytics.graded.length} scored students</span></article><article className="surface analytics-stat"><small>PASSING</small><strong>{analytics.passing}</strong><span>75% and above</span></article><article className="surface analytics-stat analytics-warning"><small>AT RISK</small><strong>{analytics.atRisk}</strong><span>60%–74.99%</span></article><article className="surface analytics-stat analytics-danger"><small>BELOW 60%</small><strong>{analytics.failing}</strong><span>Needs follow-up</span></article><article className="surface analytics-stat analytics-danger"><small>ATTENDANCE DANGER OF FAILING</small><strong>{analytics.attendanceDanger}</strong><span>More than 20% absent days</span></article></div><div className="analytics-panels"><section className="surface analytics-panel"><h3>Grade distribution</h3><p className="muted">Current computed course percentages.</p>{analytics.bands.map(band=><div className="distribution-row" key={band.label}><span>{band.label}</span><div className="progress"><div className="progress-bar" style={{width:analytics.graded.length ? (band.count/analytics.graded.length*100)+"%" : "0%"}}/></div><b>{band.count}</b></div>)}</section><section className="surface analytics-panel"><h3>Leading students</h3><p className="muted">Highest computed percentages.</p>{analytics.graded.length ? [...analytics.graded].sort((a,b)=>(b.finalPercent??0)-(a.finalPercent??0)).slice(0,5).map((student,index)=><div className="leader-row" key={student.id}><span>{index+1}</span><b>{student.studentName}</b><strong>{student.finalPercent?.toFixed(2)}%</strong></div>) : <div className="inline-empty">Scores will appear here after they are entered.</div>}</section><section className="surface analytics-panel analytics-risk-list"><h3>Students to review</h3><p className="muted">Students below the 75% passing threshold.</p>{analytics.graded.filter(student=>(student.finalPercent??0)<75).sort((a,b)=>(a.finalPercent??0)-(b.finalPercent??0)).map(student=><div className="leader-row" key={student.id}><span className="risk-dot">!</span><b>{student.studentName}</b><strong>{student.finalPercent?.toFixed(2)}%</strong></div>)}{!analytics.graded.some(student=>(student.finalPercent??0)<75)&&<div className="inline-empty">No scored students are currently below 75%.</div>}</section></div></section>}
-          {classSection === "final" && <section id="class-section-final" className="surface final-grades-page"><span className="print-only">{detail.code}: {detail.title} · {detail.term} {detail.academicYear}</span><div className="section-heading"><div><span className="eyebrow">GRADE SUBMISSION</span><h2>Final grades</h2><p className="muted">Review and submit provisional results. After official school-record submission, confirm the Registrar status.</p></div><div className="final-grade-tools"><label className="grading-sheet-dean-field">Dean&apos;s Name (for grading sheet)<input className="form-control form-control-sm" value={deanName} onChange={event=>setDeanName(event.target.value)} placeholder="Enter Dean&apos;s name"/></label><button className="btn btn-outline-secondary" onClick={()=>{setComponentDraft(gradeSheetComponents.map(item=>({...item})));setComponentEditorOpen(true);}}>Edit Components</button><details className="iso-export-menu generic-export-menu"><summary className="btn btn-outline-primary" onClick={event => { if (!ensureGenericHeaderConfigured()) event.preventDefault(); }}>Export / Save Generic Grading Sheet <span aria-hidden="true">▾</span></summary><div className="iso-export-options" role="group" aria-label="Generic grading sheet export formats"><button type="button" className="iso-export-option" onClick={event => { printFinalGradesPdf("generic"); event.currentTarget.closest("details")?.removeAttribute("open"); }}><span className="iso-export-option-icon pdf" aria-hidden="true">PDF</span><span><strong>Save / Print Generic PDF</strong><small>Print-ready grading sheet</small></span></button><button type="button" className="iso-export-option" onClick={() => { void exportGrades(); }} disabled={gradeExcelExporting !== null} aria-busy={gradeExcelExporting === "generic"}><span className="iso-export-option-icon xlsx" aria-hidden="true">XLSX</span><span><strong>{gradeExcelExporting === "generic" ? <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"/>Generating Excel file…</> : "Download Generic Excel Sheet"}</strong><small>{gradeExcelExporting === "generic" ? "Building workbook and preparing download" : "Editable spreadsheet"}</small></span></button></div></details><details className="iso-export-menu"><summary className="btn btn-outline-primary" onClick={event => { if (!ensureIsoHeaderConfigured()) event.preventDefault(); }}>Export / Save ISO Grading Sheet <span aria-hidden="true">▾</span></summary><div className="iso-export-options" role="group" aria-label="ISO grading sheet export formats"><button type="button" className="iso-export-option" onClick={event => { printFinalGradesPdf("iso"); event.currentTarget.closest("details")?.removeAttribute("open"); }}><span className="iso-export-option-icon pdf" aria-hidden="true">PDF</span><span><strong>Save / Print ISO PDF</strong><small>Print-ready official record</small></span></button><button type="button" className="iso-export-option" onClick={() => { void exportIsoGradesExcel(); }} disabled={gradeExcelExporting !== null} aria-busy={gradeExcelExporting === "iso"}><span className="iso-export-option-icon xlsx" aria-hidden="true">XLSX</span><span><strong>{gradeExcelExporting === "iso" ? <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"/>Preparing download…</> : "Download ISO Excel Sheet"}</strong><small>{gradeExcelExporting === "iso" ? "Generating workbook and preparing download" : "Editable spreadsheet"}</small></span></button></div></details>{detail.gradeStatus !== "DRAFT" && <button className="btn btn-outline-danger" onClick={recallSubmittedGrades} disabled={busy}>Recall grades</button>}{detail.gradeStatus === "VERIFIED" && <button className="btn btn-primary" onClick={emailVerifiedGrades} disabled={busy}>✉ Email verified grades</button>}</div></div>{componentEditorOpen && <div className="modal-backdrop-custom" onMouseDown={event=>{if(event.target===event.currentTarget)setComponentEditorOpen(false);}}><div className="modal-card component-editor-modal"><button className="modal-x" onClick={()=>setComponentEditorOpen(false)}>×</button><span className="eyebrow">GRADING SHEET LAYOUT</span><h2>Edit Components</h2><p className="muted">Choose one or more categories or subcategories from this class Grading Setup. Each component summarizes that category’s Assessment items; its weight is read from Grading Setup and is display-only. These selections never change computed grades.</p>{componentDraft.map((item,index)=><div className="row g-2 align-items-center mb-2" key={item.name}><div className="col"><label className="form-label">Component {index+1}</label><input className="form-control" value={item.name} readOnly/></div><div className="col-4"><label className="form-label">Grading Setup weight</label><div className="form-control bg-light">{item.percentage.toFixed(2)}%</div></div><div className="col-auto"><button type="button" className="btn btn-outline-danger btn-sm" onClick={()=>setComponentDraft(current=>current.filter(value=>value.name!==item.name))} aria-label={"Remove "+item.name}>Remove</button></div></div>)}<div className="d-flex flex-wrap gap-2 align-items-end border-top mt-3 pt-3"><label className="form-label flex-grow-1">Add category or subcategory from Grading Setup<select className="form-select" value="" onChange={event=>{const category=detail?.categories.find(value=>value.id===event.target.value);if(category){const component={name:categoryPath(category,detail?.categories||[]),percentage:Number(localCategoryWeight(category).toFixed(2))};setComponentDraft(current=>current.some(item=>item.name.toLocaleLowerCase()===component.name.toLocaleLowerCase())?current:[...current,component]);}}}><option value="">Choose a category or subcategory…</option>{orderedCategoryTree(detail.categories).filter(category=>categoryHasGradingAssessments(category,detail.categories,detail.assessments)&&!componentDraft.some(item=>item.name.toLocaleLowerCase()===categoryPath(category,detail.categories).toLocaleLowerCase())).map(category=><option key={category.id} value={category.id}>{categoryPath(category,detail.categories)} · {localCategoryWeight(category).toFixed(2)}%</option>)}</select></label><b>Selected weight: {componentDraft.reduce((sum,item)=>sum+Number(item.percentage||0),0).toFixed(2)}%</b></div><div className="d-flex flex-wrap justify-content-end gap-2 mt-3"><button className="btn btn-outline-secondary" onClick={()=>setComponentEditorOpen(false)}>Cancel</button><button className="btn btn-outline-primary" onClick={saveComponentsAsDefault} disabled={busy}>Save as My Default</button><button className="btn btn-primary" onClick={saveComponentsForClass} disabled={busy || !detail || componentDraft.length===0}>Save for This Class</button></div></div></div>}<div className={`grade-notice ${detail.gradeStatus === "VERIFIED" ? "final" : detail.gradeStatus === "SUBMITTED" ? "provisional" : "draft"}`}>{detail.gradeStatus === "VERIFIED" ? "The teacher confirmed official submission to the Registrar. This record is final and locked until recalled for correction." : detail.gradeStatus === "SUBMITTED" ? `Submitted ${detail.submittedAt ? new Date(detail.submittedAt).toLocaleString() : ""}. Student visibility is controlled separately; visible grades remain provisional until the teacher confirms submission to the Registrar.` : detail.isPublished ? "This grade record is a draft but student viewing is enabled. Grades have not been submitted or verified to the Registrar and may change." : "This class record is still a draft and is hidden from students."}</div>{submissionProblems.length>0 && detail.gradeStatus!=="VERIFIED" && <div className="alert alert-warning py-2"><b>Before submission:</b><ul className="mb-0 mt-1">{submissionProblems.map(problem=><li key={problem}>{problem}</li>)}</ul></div>}<div className="final-grades-summary"><span>Overall weights <b>{detail.categories.filter(c=>!c.parentId).reduce((sum,c)=>sum+c.weight,0).toFixed(2)}%</b></span><span>Students <b>{detail.enrollments.length}</b></span><span>Assessment items <b>{detail.assessments.length}</b></span></div><div className="table-scroll"><table className="table grade-table"><thead><tr><th>STUDENT NAME</th><th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th>{detail.gradeStatus === "VERIFIED" && <th>GRADE HISTORY</th>}</tr></thead><tbody>{filteredEnrollments.map(en=>{const band=detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>en.finalPercent!==null&&en.finalPercent>=item.minPercent);return <tr key={en.id}><td>{en.studentName}</td><td>{en.finalPercent===null?"—":`${en.finalPercent.toFixed(2)}%`}</td><td>{en.finalGradeOverride||band?.finalGrade||"—"}{en.finalGradeOverride&&<small className="d-block text-primary">Manually changed</small>}</td><td>{en.remarks||band?.remarks||"Not yet graded"}</td>{detail.gradeStatus === "VERIFIED" && <td><button className="btn btn-outline-primary btn-sm" onClick={()=>{setGradeChangeEnrollmentId(en.id);setGradeChangeGrade(en.finalGradeOverride||"AUTO");setGradeChangeRemark(en.remarks||"AUTO");setGradeChangeReason("")}}>Change / history ({en.gradeChangeCount ?? 0})</button></td>}</tr>})}</tbody></table></div>{detail.gradeStatus === "DRAFT" && <button className="btn btn-success mt-3" onClick={submitGrades} disabled={busy||submissionProblems.length>0}>Submit grades to students</button>}{detail.gradeStatus === "SUBMITTED" && <button className="btn btn-primary mt-3" onClick={verifyGrades} disabled={busy}>Verified to Registrar</button>}{detail.gradeStatus === "VERIFIED" && <div className="grade-notice final mt-3">Verified to Registrar · {detail.verifiedAt ? new Date(detail.verifiedAt).toLocaleString() : "Confirmed"}</div>}<p className="privacy-note text-start mt-3">Student visibility is separate from submission: open Manage grade visibility to show or hide results, including drafts. Submitting locks the class record but does not change visibility. Teacher verification records a confirmation of Registrar submission; final and official grades are published by the school’s official student portal. Recall reopens the record and hides it until you make it visible again.</p></section>}
+          {classSection === "final" && <section id="class-section-final" className="surface final-grades-page"><span className="print-only">{detail.code}: {detail.title} · {detail.term} {detail.academicYear}</span><div className="section-heading"><div><span className="eyebrow">GRADE SUBMISSION</span><h2>Final grades</h2><p className="muted">Review and submit provisional results. After official school-record submission, confirm the Registrar status.</p></div><div className="final-grade-tools"><button className="btn btn-outline-secondary" onClick={()=>{setComponentDraft(gradeSheetComponents.map(item=>({...item})));setComponentEditorOpen(true);}}>Edit Components</button><details className="iso-export-menu generic-export-menu"><summary className="btn btn-outline-primary" onClick={event => { if (!ensureGenericHeaderConfigured()) event.preventDefault(); }}>Export / Save Generic Grading Sheet <span aria-hidden="true">▾</span></summary><div className="iso-export-options" role="group" aria-label="Generic grading sheet export formats"><button type="button" className="iso-export-option" onClick={event => { printFinalGradesPdf("generic"); event.currentTarget.closest("details")?.removeAttribute("open"); }}><span className="iso-export-option-icon pdf" aria-hidden="true">PDF</span><span><strong>Save / Print Generic PDF</strong><small>Print-ready grading sheet</small></span></button><button type="button" className="iso-export-option" onClick={() => { void exportGrades(); }} disabled={gradeExcelExporting !== null} aria-busy={gradeExcelExporting === "generic"}><span className="iso-export-option-icon xlsx" aria-hidden="true">XLSX</span><span><strong>{gradeExcelExporting === "generic" ? <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"/>Generating Excel file…</> : "Download Generic Excel Sheet"}</strong><small>{gradeExcelExporting === "generic" ? "Building workbook and preparing download" : "Editable spreadsheet"}</small></span></button></div></details><details className="iso-export-menu"><summary className="btn btn-outline-primary" onClick={event => { if (!ensureIsoHeaderConfigured()) event.preventDefault(); }}>Export / Save ISO Grading Sheet <span aria-hidden="true">▾</span></summary><div className="iso-export-options" role="group" aria-label="ISO grading sheet export formats"><button type="button" className="iso-export-option" onClick={event => { printFinalGradesPdf("iso"); event.currentTarget.closest("details")?.removeAttribute("open"); }}><span className="iso-export-option-icon pdf" aria-hidden="true">PDF</span><span><strong>Save / Print ISO PDF</strong><small>Print-ready official record</small></span></button><button type="button" className="iso-export-option" onClick={() => { void exportIsoGradesExcel(); }} disabled={gradeExcelExporting !== null} aria-busy={gradeExcelExporting === "iso"}><span className="iso-export-option-icon xlsx" aria-hidden="true">XLSX</span><span><strong>{gradeExcelExporting === "iso" ? <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"/>Preparing download…</> : "Download ISO Excel Sheet"}</strong><small>{gradeExcelExporting === "iso" ? "Generating workbook and preparing download" : "Editable spreadsheet"}</small></span></button></div></details>{detail.gradeStatus !== "DRAFT" && <button className="btn btn-outline-danger" onClick={recallSubmittedGrades} disabled={busy}>Recall grades</button>}{detail.gradeStatus === "VERIFIED" && <button className="btn btn-primary" onClick={emailVerifiedGrades} disabled={busy}>✉ Email verified grades</button>}</div></div>{componentEditorOpen && <div className="modal-backdrop-custom" onMouseDown={event=>{if(event.target===event.currentTarget)setComponentEditorOpen(false);}}><div className="modal-card component-editor-modal"><button className="modal-x" onClick={()=>setComponentEditorOpen(false)}>×</button><span className="eyebrow">GRADING SHEET LAYOUT</span><h2>Edit Components</h2><p className="muted">Choose one or more categories or subcategories from this class Grading Setup. Each component summarizes that category’s Assessment items; its weight is read from Grading Setup and is display-only. These selections never change computed grades.</p>{componentDraft.map((item,index)=><div className="row g-2 align-items-center mb-2" key={item.name}><div className="col"><label className="form-label">Component {index+1}</label><input className="form-control" value={item.name} readOnly/></div><div className="col-4"><label className="form-label">Grading Setup weight</label><div className="form-control bg-light">{item.percentage.toFixed(2)}%</div></div><div className="col-auto"><button type="button" className="btn btn-outline-danger btn-sm" onClick={()=>setComponentDraft(current=>current.filter(value=>value.name!==item.name))} aria-label={"Remove "+item.name}>Remove</button></div></div>)}<div className="d-flex flex-wrap gap-2 align-items-end border-top mt-3 pt-3"><label className="form-label flex-grow-1">Add category or subcategory from Grading Setup<select className="form-select" value="" onChange={event=>{const category=detail?.categories.find(value=>value.id===event.target.value);if(category){const component={name:categoryPath(category,detail?.categories||[]),percentage:Number(localCategoryWeight(category).toFixed(2))};setComponentDraft(current=>current.some(item=>item.name.toLocaleLowerCase()===component.name.toLocaleLowerCase())?current:[...current,component]);}}}><option value="">Choose a category or subcategory…</option>{orderedCategoryTree(detail.categories).filter(category=>categoryHasGradingAssessments(category,detail.categories,detail.assessments)&&!componentDraft.some(item=>item.name.toLocaleLowerCase()===categoryPath(category,detail.categories).toLocaleLowerCase())).map(category=><option key={category.id} value={category.id}>{categoryPath(category,detail.categories)} · {localCategoryWeight(category).toFixed(2)}%</option>)}</select></label><b>Selected weight: {componentDraft.reduce((sum,item)=>sum+Number(item.percentage||0),0).toFixed(2)}%</b></div><div className="d-flex flex-wrap justify-content-end gap-2 mt-3"><button className="btn btn-outline-secondary" onClick={()=>setComponentEditorOpen(false)}>Cancel</button><button className="btn btn-outline-primary" onClick={saveComponentsAsDefault} disabled={busy}>Save as My Default</button><button className="btn btn-primary" onClick={saveComponentsForClass} disabled={busy || !detail || componentDraft.length===0}>Save for This Class</button></div></div></div>}<div className={`grade-notice ${detail.gradeStatus === "VERIFIED" ? "final" : detail.gradeStatus === "SUBMITTED" ? "provisional" : "draft"}`}>{detail.gradeStatus === "VERIFIED" ? "The teacher confirmed official submission to the Registrar. This record is final and locked until recalled for correction." : detail.gradeStatus === "SUBMITTED" ? `Submitted ${detail.submittedAt ? new Date(detail.submittedAt).toLocaleString() : ""}. Student visibility is controlled separately; visible grades remain provisional until the teacher confirms submission to the Registrar.` : detail.isPublished ? "This grade record is a draft but student viewing is enabled. Grades have not been submitted or verified to the Registrar and may change." : "This class record is still a draft and is hidden from students."}</div>{submissionProblems.length>0 && detail.gradeStatus!=="VERIFIED" && <div className="alert alert-warning py-2"><b>Before submission:</b><ul className="mb-0 mt-1">{submissionProblems.map(problem=><li key={problem}>{problem}</li>)}</ul></div>}<div className="final-grades-summary"><span>Overall weights <b>{detail.categories.filter(c=>!c.parentId).reduce((sum,c)=>sum+c.weight,0).toFixed(2)}%</b></span><span>Students <b>{detail.enrollments.length}</b></span><span>Assessment items <b>{detail.assessments.length}</b></span></div><div className="table-scroll"><table className="table grade-table"><thead><tr><th>STUDENT NAME</th><th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th>{detail.gradeStatus === "VERIFIED" && <th>GRADE HISTORY</th>}</tr></thead><tbody>{filteredEnrollments.map(en=>{const band=detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>en.finalPercent!==null&&en.finalPercent>=item.minPercent);return <tr key={en.id}><td>{en.studentName}</td><td>{en.finalPercent===null?"—":`${en.finalPercent.toFixed(2)}%`}</td><td>{en.finalGradeOverride||band?.finalGrade||"—"}{en.finalGradeOverride&&<small className="d-block text-primary">Manually changed</small>}</td><td>{en.remarks||band?.remarks||"Not yet graded"}</td>{detail.gradeStatus === "VERIFIED" && <td><button className="btn btn-outline-primary btn-sm" onClick={()=>{setGradeChangeEnrollmentId(en.id);setGradeChangeGrade(en.finalGradeOverride||"AUTO");setGradeChangeRemark(en.remarks||"AUTO");setGradeChangeReason("")}}>Change / history ({en.gradeChangeCount ?? 0})</button></td>}</tr>})}</tbody></table></div>{detail.gradeStatus === "DRAFT" && <button className="btn btn-success mt-3" onClick={submitGrades} disabled={busy||submissionProblems.length>0}>Submit grades to students</button>}{detail.gradeStatus === "SUBMITTED" && <button className="btn btn-primary mt-3" onClick={verifyGrades} disabled={busy}>Verified to Registrar</button>}{detail.gradeStatus === "VERIFIED" && <div className="grade-notice final mt-3">Verified to Registrar · {detail.verifiedAt ? new Date(detail.verifiedAt).toLocaleString() : "Confirmed"}</div>}<p className="privacy-note text-start mt-3">Student visibility is separate from submission: open Manage grade visibility to show or hide results, including drafts. Submitting locks the class record but does not change visibility. Teacher verification records a confirmation of Registrar submission; final and official grades are published by the school’s official student portal. Recall reopens the record and hides it until you make it visible again.</p></section>}
         </>}
       </>}</> : <>{tab === "overview" && <>
         <section className="student-welcome student-overview-hero">
@@ -2896,9 +2941,10 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           .generic-print-grade-table small { display:block; font-weight:400; font-size:6.5pt; }
           .generic-print-sheet .print-signatures { display:grid; grid-template-columns:1fr 1fr; gap:50px; margin-top:24px; break-inside:avoid; page-break-inside:avoid; font-size:8pt; }
           .generic-print-sheet .print-signatures>div { min-height:60px; }
-          .generic-print-sheet .print-signatures p { margin:24px 0 0; text-align:center; }
-          .generic-print-sheet .print-signatures u { display:block; text-decoration:none; border-bottom:1px solid #000; min-height:14px; }
-          .generic-print-sheet .print-signatures small { display:block; margin-top:3px; font-size:6.5pt; }
+          .generic-print-sheet .print-signatures p { margin:0; text-align:center; }
+          .generic-print-sheet .print-signatures .signature-space { height:56px; }
+          .generic-print-sheet .print-signatures .signature-name { display:block; font-weight:700; }
+          .generic-print-sheet .print-signatures .signature-position { display:block; margin-top:3px; font-size:7pt; }
           .iso-print-header-table { width:100%; border:1px solid black!important; border-collapse:collapse!important; table-layout:fixed; font-size:7.4pt; line-height:1.15; }
           .iso-print-header-table td { border:1px solid black!important; padding:5px 6px!important; vertical-align:middle; }
           .iso-print-seal-cell { text-align:center; vertical-align:middle!important; }
@@ -2981,8 +3027,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           })}</tbody>
         </table>
         <div className="print-signatures">
-          <div>Submitted by:<p><u>{user.fullName}</u><small>TEACHER&apos;S SIGNATURE OVER PRINTED NAME</small></p></div>
-          <div>Noted:<p><u>{deanName || " "}</u><small>DEAN&apos;S SIGNATURE OVER PRINTED NAME</small></p></div>
+          <div>Submitted by:<div className="signature-space" aria-hidden="true"/><p><strong className="signature-name">{user.fullName}</strong><small className="signature-position">{teacherPosition.trim()}</small></p></div>
+          <div>Noted:<div className="signature-space" aria-hidden="true"/><p><strong className="signature-name">{notedByName.trim()}</strong><small className="signature-position">{notedByPosition.trim()}</small></p></div>
         </div>
       </article>}
       {teacher && visibilityManagerQuery !== null && <GradeVisibilityManager subjects={subjects} initialQuery={visibilityManagerQuery} onClose={() => setVisibilityManagerQuery(null)} onChanged={(subjectIds, visible) => { const ids = new Set(subjectIds); setSubjects(current => current.map(subject => ids.has(subject.id) ? { ...subject, isPublished: visible } : subject)); setDetail(current => current && ids.has(current.id) ? { ...current, isPublished: visible } : current); }} />}

@@ -57,6 +57,12 @@ function resolveClassId(subject: any) {
 }
 
 function readHeaderConfig(teacher: any) {
+  const teacherPosition = String(teacher.positionTitle ?? "").trim().replace(/\s+/g, " ");
+  const notedByName = normalizeSignatureName(teacher.notedByName);
+  const notedByPosition = String(teacher.notedByPosition ?? "").trim().replace(/\s+/g, " ");
+  if (!String(teacher.fullName ?? "").trim() || !teacherPosition || !notedByName || !notedByPosition) {
+    return { error: "Complete all signatory details in your Profile Information before exporting." } as const;
+  }
   const isFcu = /filamer christian university/i.test(teacher.school.name) ||
     teacher.school.slug.toLocaleLowerCase() === "fcu";
   const defaults = isFcu ? FCU_DEFAULTS : {
@@ -93,7 +99,9 @@ function readHeaderConfig(teacher: any) {
       affiliationLine1: config.affiliationLine1,
       affiliationLine2: config.affiliationLine2,
       submittedBy: normalizeSignatureName(teacher.fullName),
-      deanName: normalizeSignatureName(teacher.school.deanName || "")
+      teacherPosition,
+      notedByName,
+      notedByPosition
     }
   } as const;
 }
@@ -188,8 +196,6 @@ export async function POST(request: Request, context: Context) {
       semester: subject.term,
       academicYear: subject.academicYear,
       classId: resolveClassId(subject),
-      teacherName: configuredHeader.header.submittedBy,
-      deanName: configuredHeader.header.deanName
     },
     headers,
     rows,

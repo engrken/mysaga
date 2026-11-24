@@ -48,7 +48,7 @@ async function generate(categories, enrollments, components) {
     assessments: [],
     gradeBands: [{ minPercent: 75, finalGrade: "2.00", remarks: "PASSED" }]
   };
-  await context.generateGradeFile("demo.xlsx", "FCU Grading Sheet", detail, categories, "Faculty Example", "Dean Example", components, Uint8Array.from([137, 80, 78, 71]));
+  await context.generateGradeFile("demo.xlsx", "FCU Grading Sheet", detail, categories, "Faculty Example", "Instructor", "Dean Example", "Dean", components, Uint8Array.from([137, 80, 78, 71]));
   assert.ok(saved, "xlsx files created");
   return Object.fromEntries(saved.map(file => [file.name, file.content]));
 }
@@ -236,6 +236,9 @@ test("ISO Excel export uses dynamic class metadata and omits student-number colu
 test("ISO Excel export uses the authenticated Python openpyxl generator", () => {
   const pythonSource = fs.readFileSync("api/iso_export.py", "utf8");
   const endpoint = fs.readFileSync("src/app/api/teacher/subjects/[subjectId]/iso-export/route.ts", "utf8");
+  const profileRoute = fs.readFileSync("src/app/api/profile/route.ts", "utf8");
+  const prismaSchema = fs.readFileSync("prisma/schema.prisma", "utf8");
+  const signatoryMigration = fs.readFileSync("prisma/migrations/20261124000200_teacher_profile_signatory_titles/migration.sql", "utf8");
   assert.doesNotMatch(source, /function downloadIsoXlsx\(/, "the handwritten ISO OOXML writer is removed");
   assert.match(source, /renderIsoExcelSealPng\(\)/);
   assert.doesNotMatch(source, /renderIsoExcelLogoBlockPng/);
@@ -281,8 +284,13 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(pythonSource, /def _normalize_signature_name/);
   assert.match(pythonSource, /signature_space_rows = range\(signature_label_row \+ 1, signature_label_row \+ 4\)/);
   assert.match(pythonSource, /signature_name_row = signature_label_row \+ 4/);
-  assert.match(pythonSource, /signature_role_row = signature_label_row \+ 5/);
-  assert.match(pythonSource, /"SIGNATURE OVER PRINTED NAME \/ DATE"/);
+  assert.match(pythonSource, /signature_position_row = signature_label_row \+ 5/);
+  assert.match(pythonSource, /clean_header\["teacherPosition"\]/);
+  assert.match(pythonSource, /clean_header\["notedByPosition"\]/);
+  assert.match(pythonSource, /teacher_name = _normalize_signature_name\(clean_header\["submittedBy"\]\)/);
+  assert.match(pythonSource, /noted_by_name = _normalize_signature_name\(clean_header\["notedByName"\]\)/);
+  assert.doesNotMatch(pythonSource, /class_metadata\.get\("(?:teacherName|notedByName)"/);
+  assert.doesNotMatch(pythonSource, /^\s*BOTTOM_BORDER\s*=|signature_rule_row/m);
   assert.match(pythonSource, /Font\(name="Arial", size=10, bold=True\)/);
   assert.match(pythonSource, /Alignment\(horizontal="center", vertical="center", wrap_text=True\)/);
   assert.match(pythonSource, /merge_cells\("A5:\{0\}5"\.format\(last_column_letter\)\)/);
@@ -298,14 +306,41 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(endpoint, /createHmac\("sha256", secret\)/);
   assert.match(endpoint, /function normalizeSignatureName\(/);
   assert.match(endpoint, /submittedBy: normalizeSignatureName\(teacher\.fullName\)/);
-  assert.match(endpoint, /deanName: normalizeSignatureName\(teacher\.school\.deanName \|\| ""\)/);
+  assert.match(endpoint, /function readHeaderConfig\(teacher: any\)/);
+  assert.match(endpoint, /normalizeSignatureName\(teacher\.notedByName\)/);
+  assert.match(endpoint, /teacher\.positionTitle/);
+  assert.match(endpoint, /teacher\.notedByPosition/);
+  assert.match(endpoint, /const configuredHeader = readHeaderConfig\(teacher\)/);
+  assert.doesNotMatch(endpoint, /signatories:|parsed\.data\.notedByName|parsed\.data\.teacherPosition/);
+  assert.match(profileRoute, /notedByName: z\.string\(\)\.trim\(\)\.min\(1\)/);
+  assert.match(profileRoute, /notedByPosition: z\.string\(\)\.trim\(\)\.min\(1\)/);
+  assert.match(profileRoute, /notedByName: parsed\.data\.notedByName/);
+  assert.match(profileRoute, /notedByPosition: parsed\.data\.notedByPosition/);
+  assert.doesNotMatch(profileRoute, /tx\.school\.update\([\s\S]*notedByName/);
+  assert.match(prismaSchema, /model User \{[\s\S]*?notedByName\s+String\?[\s\S]*?notedByPosition\s+String\?/);
+  assert.doesNotMatch(prismaSchema.slice(prismaSchema.indexOf("model School"), prismaSchema.indexOf("model TenantPayment")), /notedByName|notedByPosition|deanName/);
+  assert.match(signatoryMigration, /UPDATE "User" AS teacher[\s\S]*teacher\."schoolId" = school\."id"[\s\S]*teacher\."role" = 'TEACHER'/);
+  assert.doesNotMatch(signatoryMigration, /ALTER TABLE "School"\s+DROP COLUMN/i, "retain legacy columns until the new production version has replaced the currently serving app");
   assert.doesNotMatch(endpoint, /normalizeSignatureName\([^)]*,\s*"ENGR\."\)/, "profile titles must not be forced");
   assert.match(endpoint, /function resolveClassId\(/);
   assert.match(endpoint, /classId: resolveClassId\(subject\)/);
   assert.doesNotMatch(endpoint, /resolveSectionName|hasUnenteredMajorCategories|sectionName:/);
   assert.doesNotMatch(endpoint, /Number\(\(contribution \/ 100\)\.toFixed\(6\)\)|effectiveTotalPercent/);
-  assert.match(endpoint, /teacherName: configuredHeader\.header\.submittedBy/);
-  assert.match(endpoint, /deanName: configuredHeader\.header\.deanName/);
+  assert.match(endpoint, /header: configuredHeader\.header/);
+  assert.doesNotMatch(endpoint, /teacherName: configuredHeader\.header|notedByName: configuredHeader\.header/);
+  assert.match(source, /function ensureSignatoriesConfigured\(\)/);
+  assert.match(source, /const unsavedChanges =/);
+  assert.match(source, /Save your Profile Information changes before exporting/);
+  assert.match(source, /if \(!ensureSignatoriesConfigured\(\)\) return;/);
+  assert.match(source, /!ensureSignatoriesConfigured\(\) \|\| !ensureGenericHeaderConfigured\(\)/);
+  assert.match(source, /!ensureSignatoriesConfigured\(\) \|\| !ensureIsoHeaderConfigured\(\)/);
+  assert.match(source, /className="signature-space"/);
+  assert.match(source, /className="signature-position"/);
+  assert.match(source, /useState\(user\.notedByName \|\| ""\)/);
+  assert.match(source, /useState\(user\.positionTitle \|\| ""\)/);
+  assert.match(source, /useState\(user\.notedByPosition \|\| ""\)/);
+  assert.doesNotMatch(source, /school\.notedByName|school\.notedByPosition/);
+  assert.doesNotMatch(source, /print-signatures u \{[^}]*border-bottom/s);
   assert.match(endpoint, /process\.env\.VERCEL_PROJECT_PRODUCTION_URL/, "production calls use the stable project domain");
   assert.match(endpoint, /process\.env\.VERCEL_ENV === "production"/, "the routing choice distinguishes production from previews");
   assert.match(endpoint, /productionHost \|\| deploymentHost/, "production prefers the stable production host");
@@ -474,7 +509,7 @@ test("Record Scores Excel export mirrors the full grouped scorebook and saved si
     ],
     gradeBands: [{ minPercent: 75, finalGrade: "2.25", remarks: "PASSED" }]
   };
-  context.generateGeneric("record-scores.xlsx", "Record Scores", detail, "Example University", "123 College Road", "COLLEGE OF ENGINEERING", "Teacher One", "Dean Two", [{ name: "Quizzes", percentage: 30 }, { name: "Major Exam", percentage: 50 }]);
+  context.generateGeneric("record-scores.xlsx", "Record Scores", detail, "Example University", "123 College Road", "COLLEGE OF ENGINEERING", "Teacher One", "Instructor", "Dean Two", "Dean", [{ name: "Quizzes", percentage: 30 }, { name: "Major Exam", percentage: 50 }]);
   const files = Object.fromEntries(saved.map(file => [file.name, file.content]));
   const sheet = files["xl/worksheets/sheet1.xml"];
   assert.match(sheet, /Example University/);
@@ -528,8 +563,11 @@ test("Record Scores Excel export mirrors the full grouped scorebook and saved si
   for (const cell of ["A25", "F25", "A26", "F26"]) {
     assert.match(sheet, new RegExp('<c r="' + cell + '" s="17"'));
   }
-  assert.match(sheet, /<c r="A26"[^>]*>.*?SIGNATURE OVER PRINTED NAME \/ DATE/s);
-  assert.match(sheet, /<c r="F26"[^>]*>.*?SIGNATURE OVER PRINTED NAME \/ DATE/s);
+  assert.match(sheet, /<c r="A25"[^>]*>.*?TEACHER ONE/s);
+  assert.match(sheet, /<c r="F25"[^>]*>.*?DEAN TWO/s);
+  assert.match(sheet, /<c r="A26"[^>]*>.*?Instructor/s);
+  assert.match(sheet, /<c r="F26"[^>]*>.*?Dean/s);
+  assert.doesNotMatch(sheet, /SIGNATURE OVER PRINTED NAME \/ DATE/);
   assert.doesNotMatch(sheet, /Teacher&apos;s Signature over Printed Name|Dean&apos;s Signature over Printed Name/);
   assert.match(sheet, /orientation="landscape" fitToWidth="1"/);
   assert.match(sheet, /<pane ySplit="17" topLeftCell="A18"/);
@@ -593,7 +631,7 @@ test("Record Scores export dynamically merges institutional, metadata, category,
     "record-scores.xlsx", "Record Scores", detail,
     "FILAMER CHRISTIAN UNIVERSITY, INC.",
     "Roxas Avenue, Roxas City, Capiz, Philippines",
-    "COLLEGE OF ENGINEERING", "Teacher Example", "Dean Example",
+    "COLLEGE OF ENGINEERING", "Teacher Example", "Instructor", "Dean Example", "Dean",
     [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }],
     assessments
   );
@@ -649,13 +687,15 @@ test("Record Scores export dynamically merges institutional, metadata, category,
   }
   assert.match(sheet, /<c r="A23"[^>]*>.*?TEACHER EXAMPLE/s);
   assert.match(sheet, /<c r="L23"[^>]*>.*?DEAN EXAMPLE/s);
-  assert.match(sheet, /<c r="A24"[^>]*>.*?SIGNATURE OVER PRINTED NAME \/ DATE/s);
-  assert.match(sheet, /<c r="L24"[^>]*>.*?SIGNATURE OVER PRINTED NAME \/ DATE/s);
+  assert.match(sheet, /<c r="A24"[^>]*>.*?Instructor/s);
+  assert.match(sheet, /<c r="L24"[^>]*>.*?Dean/s);
   assert.match(styles, /<cellXfs count="18">/);
   assert.match(sheet, /Submitted by:/);
   assert.match(sheet, /Noted:/);
   assert.match(sheet, /TEACHER EXAMPLE/);
   assert.match(sheet, /DEAN EXAMPLE/);
+  assert.match(sheet, /Instructor/);
+  assert.match(sheet, /Dean/);
   assert.match(sheet, /<pane ySplit="17" topLeftCell="A18"/);
   assert.match(sheet, /<c r="A1" s="11"/);
   assert.match(sheet, /<c r="A2" s="12"/);
@@ -687,7 +727,7 @@ test("generic grading sheet supports a class with no assessment items without in
   };
   vm.runInNewContext(compiledGeneric + "\nthis.generateGeneric = downloadGradeSheetXlsx;", context);
   const detail = { code:"X",title:"No Assessments",classId:"A",term:"1st",academicYear:"2026",categories:[],assessments:[],enrollments:[],gradeBands:[] };
-  context.generateGeneric("empty.xlsx","Grading Sheet",detail,"School","Address","DEPARTMENT OF ENGINEERING","Teacher","");
+  context.generateGeneric("empty.xlsx","Grading Sheet",detail,"School","Address","DEPARTMENT OF ENGINEERING","Teacher","Instructor","Dean","Dean");
   const sheet = saved.find(file => file.name === "xl/worksheets/sheet1.xml").content;
   assert.match(sheet, /<col min="2" max="2"/);
   assert.match(sheet, /orientation="landscape"/);
