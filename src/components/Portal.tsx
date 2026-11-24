@@ -1898,11 +1898,25 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       !notedByName.trim() ? "Noted by name" : "",
       !notedByPosition.trim() ? "Noted by position / title" : ""
     ].filter(Boolean);
-    if (!missing.length) return true;
-    setErr("Complete the required grading-sheet signatory details in Profile Information before exporting: " + missing.join(", ") + ".");
-    setNotice("");
-    setTab("profile");
-    return false;
+    if (missing.length) {
+      setErr("Complete the required grading-sheet signatory details in Profile Information before exporting: " + missing.join(", ") + ".");
+      setNotice("");
+      setTab("profile");
+      return false;
+    }
+    const unsavedChanges = [
+      profileName.trim() !== user.fullName.trim(),
+      teacherPosition.trim() !== (user.positionTitle || "").trim(),
+      notedByName.trim() !== (user.notedByName || "").trim(),
+      notedByPosition.trim() !== (user.notedByPosition || "").trim()
+    ].some(Boolean);
+    if (unsavedChanges) {
+      setErr("Save your Profile Information changes before exporting so every grading-sheet format uses your saved signatories.");
+      setNotice("");
+      setTab("profile");
+      return false;
+    }
+    return true;
   }
   function ensureGenericHeaderConfigured() {
     if (departmentName.trim()) return true;
