@@ -287,6 +287,9 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(pythonSource, /signature_position_row = signature_label_row \+ 5/);
   assert.match(pythonSource, /clean_header\["teacherPosition"\]/);
   assert.match(pythonSource, /clean_header\["notedByPosition"\]/);
+  assert.match(pythonSource, /teacher_name = _normalize_signature_name\(clean_header\["submittedBy"\]\)/);
+  assert.match(pythonSource, /noted_by_name = _normalize_signature_name\(clean_header\["notedByName"\]\)/);
+  assert.doesNotMatch(pythonSource, /class_metadata\.get\("(?:teacherName|notedByName)"/);
   assert.doesNotMatch(pythonSource, /^\s*BOTTOM_BORDER\s*=|signature_rule_row/m);
   assert.match(pythonSource, /Font\(name="Arial", size=10, bold=True\)/);
   assert.match(pythonSource, /Alignment\(horizontal="center", vertical="center", wrap_text=True\)/);
