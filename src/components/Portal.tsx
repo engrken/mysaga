@@ -29,7 +29,7 @@ import { absenceDates, attendanceDays as orderedAttendanceDays, attendanceRiskSu
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 import { buildWorkbookPages, workbookWidths } from "@/lib/scorebook-layout";
 
-type User = { id: string; role: string; fullName: string; email: string; isDemo?: boolean; isTenantManager?: boolean; isSchoolAdmin?: boolean; emailDeliveryEnabled?: boolean; profileImagePath: string | null; facultyId?: string | null; defaultGradeSheetComponents?: string | null; courseProgram?: string | null; yearLevel?: string | null; school: { id: string; slug: string; name: string; shortName: string; portalTitle: string; logoText: string; logoPath: string | null; departmentLogoPath: string | null; primaryColor: string; address: string | null; departmentName: string | null; deanName: string | null; isoHeaderConfig: string | null } };
+type User = { id: string; role: string; fullName: string; positionTitle: string | null; email: string; isDemo?: boolean; isTenantManager?: boolean; isSchoolAdmin?: boolean; emailDeliveryEnabled?: boolean; profileImagePath: string | null; facultyId?: string | null; defaultGradeSheetComponents?: string | null; courseProgram?: string | null; yearLevel?: string | null; school: { id: string; slug: string; name: string; shortName: string; portalTitle: string; logoText: string; logoPath: string | null; departmentLogoPath: string | null; primaryColor: string; address: string | null; departmentName: string | null; deanName: string | null; notedByName: string | null; notedByPosition: string | null; isoHeaderConfig: string | null } };
 type WorkbookChange = { subjectId: string; enrollmentId: string; assessmentId: string; points: number | null; remark: "EXCUSED" | "ABSENT" | "DID_NOT_SUBMIT" | null };
 type AttendanceMark = { subjectId: string; enrollmentId: string; assessmentId: string; remark: "PRESENT" | "LATE" | "ABSENT" | "EXCUSED" | null };
 type Subject = { id: string; classId: string | null; code: string; title: string; term: string; academicYear: string; schedule: string | null; courseYear: string | null; gradeSheetComponents?: string | null; isPublished: boolean; gradeStatus: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; _count?: { enrollments: number } };
@@ -473,7 +473,7 @@ function gradeSheetComponentContribution(detail: Detail, enrollment: Enrollment,
 function downloadGradeSheetXlsx(
   filename: string, sheetName: string, detail: Detail,
   schoolName: string, schoolAddress: string, departmentName: string,
-  teacherName: string, deanName: string,
+  teacherName: string, teacherPosition: string, notedByName: string, notedByPosition: string,
   components: GradeSheetComponent[] = [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }],
   assessmentOrder?: Assessment[]
 ) {
@@ -734,11 +734,11 @@ function downloadGradeSheetXlsx(
   addRow([]);
   addRow([
     { col: 0, value: teacherName.trim().toLocaleUpperCase(), style: 17 },
-    { col: rightStartColumn - 1, value: deanName.trim().toLocaleUpperCase(), style: 17 }
+    { col: rightStartColumn - 1, value: notedByName.trim().toLocaleUpperCase(), style: 17 }
   ]);
   addRow([
-    { col: 0, value: "SIGNATURE OVER PRINTED NAME / DATE", style: 17 },
-    { col: rightStartColumn - 1, value: "SIGNATURE OVER PRINTED NAME / DATE", style: 17 }
+    { col: 0, value: teacherPosition.trim(), style: 17 },
+    { col: rightStartColumn - 1, value: notedByPosition.trim(), style: 17 }
   ]);
   for (let rowNumber = signatureLabelRow; rowNumber <= signatureRoleRow; rowNumber++) {
     mergedRanges.push("A" + rowNumber + ":" + leftEnd + rowNumber, rightStart + rowNumber + ":" + last + rowNumber);
@@ -832,7 +832,7 @@ function downloadGradeSheetXlsx(
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail: Detail, categories: Category[], teacherName: string, deanName: string, components: GradeSheetComponent[], headerPng: Uint8Array) {
+async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail: Detail, categories: Category[], teacherName: string, teacherPosition: string, notedByName: string, notedByPosition: string, components: GradeSheetComponent[], headerPng: Uint8Array) {
   const componentCategoryPath = (category: Category) => {
     const names = [category.name];
     let parent = categories.find(item => item.id === category.parentId);
@@ -918,16 +918,20 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
 
   row([]);
   const signatureRow = cells.length + 1;
+  const signatureNameRow = signatureRow + 4;
+  const signaturePositionRow = signatureRow + 5;
   const split = Math.max(1, Math.floor((columnCount - 1) / 2));
   row([{ col: 0, value: "Submitted by:", style: 2 }, { col: split + 1, value: "Noted:", style: 2 }]);
   row([]);
+  row([]);
+  row([]);
   row([
-    { col: 0, value: { runs: [{ text: teacherName.toLocaleUpperCase(), underline: true }] }, style: 2 },
-    { col: split + 1, value: { runs: [{ text: (deanName || "____________________________").toLocaleUpperCase(), underline: true }] }, style: 2 }
+    { col: 0, value: teacherName.toLocaleUpperCase(), style: 8 },
+    { col: split + 1, value: notedByName.toLocaleUpperCase(), style: 8 }
   ]);
   row([
-    { col: 0, value: "TEACHER'S SIGNATURE OVER PRINTED NAME", style: 2 },
-    { col: split + 1, value: "DEAN'S SIGNATURE OVER PRINTED NAME", style: 2 }
+    { col: 0, value: teacherPosition.trim(), style: 9 },
+    { col: split + 1, value: notedByPosition.trim(), style: 9 }
   ]);
 
   const xmlRows = cells.map((values, rowIndex) => {
@@ -948,6 +952,7 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     const height = rowIndex < 9 ? ' ht="15.5" customHeight="1"'
       : rowIndex === 14 ? ' ht="32" customHeight="1"'
       : rowIndex >= 16 && rowIndex < 16 + detail.enrollments.length ? ' ht="20" customHeight="1"'
+      : rowIndex + 1 === signatureNameRow || rowIndex + 1 === signaturePositionRow ? ' ht="20" customHeight="1"'
       : ' ht="18" customHeight="1"';
     return '<row r="' + rowNumber + '"' + height + '>' + xmlCells + '</row>';
   }).join("");
@@ -955,10 +960,10 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
   const signatureRanges = [
     "A" + signatureRow + ":" + excelColumn(split) + signatureRow,
     excelColumn(split + 1) + signatureRow + ":" + last + signatureRow,
-    "A" + (signatureRow + 2) + ":" + excelColumn(split) + (signatureRow + 2),
-    excelColumn(split + 1) + (signatureRow + 2) + ":" + last + (signatureRow + 2),
-    "A" + (signatureRow + 3) + ":" + excelColumn(split) + (signatureRow + 3),
-    excelColumn(split + 1) + (signatureRow + 3) + ":" + last + (signatureRow + 3)
+    "A" + signatureNameRow + ":" + excelColumn(split) + signatureNameRow,
+    excelColumn(split + 1) + signatureNameRow + ":" + last + signatureNameRow,
+    "A" + signaturePositionRow + ":" + excelColumn(split) + signaturePositionRow,
+    excelColumn(split + 1) + signaturePositionRow + ":" + last + signaturePositionRow
   ];
   const merges = ["A1:" + last + "9", "A11:" + last + "11", "A12:" + last + "12", "A13:" + last + "13", "A14:" + last + "14", ...signatureRanges];
   const mergeXml = merges.map(range => '<mergeCell ref="' + range + '"/>').join("");
