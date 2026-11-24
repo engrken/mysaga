@@ -1351,7 +1351,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         setCognixTestMessage("The SAGA connection reached its configuration check, but COGNIX is not ready to return an AI summary yet. No changes were made.");
       } else {
         setCognixTestState("error");
-        setCognixTestMessage(response.status === 401 ? "Your current session is not authorized for this teacher-only test. Sign in with your teacher account and try again." : `Connection test did not complete (HTTP ${response.status}${typeof data.gatewayStatus === "number" ? `; gateway HTTP ${data.gatewayStatus}` : data.error ? `; ${data.error}`}). No changes were made.`);
+        const gatewayDetail = typeof data.gatewayStatus === "number" ? `; gateway HTTP ${data.gatewayStatus}` : "";
+        const errorDetail = typeof data.error === "string" ? `; ${data.error}` : "";
+        setCognixTestMessage(response.status === 401 ? "Your current session is not authorized for this teacher-only test. Sign in with your teacher account and try again." : `Connection test did not complete (HTTP ${response.status}${gatewayDetail || errorDetail}). No changes were made.`);
       }
     } catch {
       setCognixTestState("error"); setCognixTestMessage("Could not reach the SAGA connection endpoint. Check your connection and try again.");
