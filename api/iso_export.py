@@ -403,8 +403,8 @@ def build_iso_workbook(payload: dict) -> bytes:
 
     _set_literal(worksheet.cell(signature_label_row, 1), "Submitted by:")
     _set_literal(worksheet.cell(signature_label_row, right_start), "Noted:")
-    teacher_name = _normalize_signature_name(class_metadata.get("teacherName") or clean_header["submittedBy"])
-    noted_by_name = _normalize_signature_name(class_metadata.get("notedByName") or clean_header["notedByName"])
+    teacher_name = _normalize_signature_name(clean_header["submittedBy"])
+    noted_by_name = _normalize_signature_name(clean_header["notedByName"])
     _set_literal(worksheet.cell(signature_name_row, 1), teacher_name)
     _set_literal(worksheet.cell(signature_name_row, right_start), noted_by_name)
     _set_literal(worksheet.cell(signature_position_row, 1), clean_header["teacherPosition"])
