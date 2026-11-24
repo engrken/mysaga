@@ -18,6 +18,9 @@ type CategoryLike = {
 
 const requestSchema = z.object({
   componentNames: z.array(z.string().trim().min(1).max(120)).max(40),
+  teacherPosition: z.string().trim().min(1).max(120),
+  notedByName: z.string().trim().min(1).max(120),
+  notedByPosition: z.string().trim().min(1).max(120),
   logoPngBase64: z.string().min(8).max(500_000)
 });
 
@@ -56,7 +59,7 @@ function resolveClassId(subject: any) {
   return classId;
 }
 
-function readHeaderConfig(teacher: any) {
+function readHeaderConfig(teacher: any, signatories: { teacherPosition: string; notedByName: string; notedByPosition: string }) {
   const isFcu = /filamer christian university/i.test(teacher.school.name) ||
     teacher.school.slug.toLocaleLowerCase() === "fcu";
   const defaults = isFcu ? FCU_DEFAULTS : {
@@ -93,7 +96,9 @@ function readHeaderConfig(teacher: any) {
       affiliationLine1: config.affiliationLine1,
       affiliationLine2: config.affiliationLine2,
       submittedBy: normalizeSignatureName(teacher.fullName),
-      deanName: normalizeSignatureName(teacher.school.deanName || "")
+      teacherPosition: signatories.teacherPosition.trim().replace(/\s+/g, " "),
+      notedByName: normalizeSignatureName(signatories.notedByName),
+      notedByPosition: signatories.notedByPosition.trim().replace(/\s+/g, " ")
     }
   } as const;
 }
@@ -127,7 +132,7 @@ export async function POST(request: Request, context: Context) {
   });
   if (!subject) return NextResponse.json({ error: "Subject not found." }, { status: 404 });
 
-  const configuredHeader = readHeaderConfig(teacher);
+  const configuredHeader = readHeaderConfig(teacher, parsed.data);
   if ("error" in configuredHeader) {
     return NextResponse.json({ error: configuredHeader.error }, { status: 409 });
   }
@@ -189,7 +194,7 @@ export async function POST(request: Request, context: Context) {
       academicYear: subject.academicYear,
       classId: resolveClassId(subject),
       teacherName: configuredHeader.header.submittedBy,
-      deanName: configuredHeader.header.deanName
+      notedByName: configuredHeader.header.notedByName
     },
     headers,
     rows,
