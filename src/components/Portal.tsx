@@ -2930,9 +2930,10 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           .generic-print-grade-table small { display:block; font-weight:400; font-size:6.5pt; }
           .generic-print-sheet .print-signatures { display:grid; grid-template-columns:1fr 1fr; gap:50px; margin-top:24px; break-inside:avoid; page-break-inside:avoid; font-size:8pt; }
           .generic-print-sheet .print-signatures>div { min-height:60px; }
-          .generic-print-sheet .print-signatures p { margin:24px 0 0; text-align:center; }
-          .generic-print-sheet .print-signatures u { display:block; text-decoration:none; border-bottom:1px solid #000; min-height:14px; }
-          .generic-print-sheet .print-signatures small { display:block; margin-top:3px; font-size:6.5pt; }
+          .generic-print-sheet .print-signatures p { margin:0; text-align:center; }
+          .generic-print-sheet .print-signatures .signature-space { height:56px; }
+          .generic-print-sheet .print-signatures .signature-name { display:block; font-weight:700; }
+          .generic-print-sheet .print-signatures .signature-position { display:block; margin-top:3px; font-size:7pt; }
           .iso-print-header-table { width:100%; border:1px solid black!important; border-collapse:collapse!important; table-layout:fixed; font-size:7.4pt; line-height:1.15; }
           .iso-print-header-table td { border:1px solid black!important; padding:5px 6px!important; vertical-align:middle; }
           .iso-print-seal-cell { text-align:center; vertical-align:middle!important; }
