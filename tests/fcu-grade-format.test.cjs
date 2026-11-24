@@ -323,8 +323,8 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(endpoint, /classId: resolveClassId\(subject\)/);
   assert.doesNotMatch(endpoint, /resolveSectionName|hasUnenteredMajorCategories|sectionName:/);
   assert.doesNotMatch(endpoint, /Number\(\(contribution \/ 100\)\.toFixed\(6\)\)|effectiveTotalPercent/);
-  assert.match(endpoint, /teacherName: configuredHeader\.header\.submittedBy/);
-  assert.match(endpoint, /notedByName: configuredHeader\.header\.notedByName/);
+  assert.match(endpoint, /header: configuredHeader\.header/);
+  assert.doesNotMatch(endpoint, /teacherName: configuredHeader\.header|notedByName: configuredHeader\.header/);
   assert.match(source, /function ensureSignatoriesConfigured\(\)/);
   assert.match(source, /if \(!ensureSignatoriesConfigured\(\)\) return;/);
   assert.match(source, /!ensureSignatoriesConfigured\(\) \|\| !ensureGenericHeaderConfigured\(\)/);
@@ -332,7 +332,8 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(source, /className="signature-space"/);
   assert.match(source, /className="signature-position"/);
   assert.match(source, /useState\(user\.notedByName \|\| ""\)/);
-  assert.match(source, /useState\(user\.notedByPosition \|\| "Dean"\)/);
+  assert.match(source, /useState\(user\.positionTitle \|\| ""\)/);
+  assert.match(source, /useState\(user\.notedByPosition \|\| ""\)/);
   assert.doesNotMatch(source, /school\.notedByName|school\.notedByPosition/);
   assert.doesNotMatch(source, /print-signatures u \{[^}]*border-bottom/s);
   assert.match(endpoint, /process\.env\.VERCEL_PROJECT_PRODUCTION_URL/, "production calls use the stable project domain");
