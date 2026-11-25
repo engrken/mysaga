@@ -23,7 +23,7 @@ const RecentActivitySubmissions = dynamic(() => import("./ClassActivities").then
 const StudentActivities = dynamic(() => import("./ClassActivities").then(module => module.StudentActivities));
 const ClassChatsHub = dynamic(() => import("./ClassChatsHub"));
 import { calculateCategoryPercent, calculateFinal, calculateGradeBreakdown, convertRawPercent, remainingChildAllocation } from "@/lib/grades";
-import { classWorkspaceHref, resolveClassRoute, resolveClassSelection, parseClassWorkspaceQuery, type ClassSection } from "@/lib/class-navigation";
+import { classWorkspaceHref, resolveClassRoute, parseClassWorkspaceQuery, type ClassSection } from "@/lib/class-navigation";
 import { todayManila } from "@/lib/tenant-operations";
 import { absenceDates, attendanceDays as orderedAttendanceDays, attendanceRiskSummary, consecutiveLateAbsences, CONVERTED_LATE_LABEL, droppingAbsenceStreak, DROPPING_ABSENCE_THRESHOLD, EARLY_ABSENCE_PERCENT, HIGH_RISK_ABSENCE_PERCENT, type AbsenceDate, type AbsenceStreak } from "@/lib/attendance";
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
@@ -1147,7 +1147,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>([]); const [copyFromId, setCopyFromId] = useState(""); const [rosterText, setRosterText] = useState(""); const [rosterFileName, setRosterFileName] = useState(""); const [categoryName, setCategoryName] = useState(""); const [categoryParent, setCategoryParent] = useState(""); const [categoryWeight, setCategoryWeight] = useState("50"); const [categoryOpen, setCategoryOpen] = useState(false);
   const [lectureCourseWeight, setLectureCourseWeight] = useState("60"); const [laboratoryCourseWeight, setLaboratoryCourseWeight] = useState("40");
   const [gradingSetupType, setGradingSetupType] = useState<"SINGLE" | "COMBINED">("SINGLE"); const [singleGroupType, setSingleGroupType] = useState<"LECTURE" | "LABORATORY">("LECTURE");
-  const [theme, setTheme] = useState<"light" | "dark">("light"); const [academicYear, setAcademicYear] = useState("2026-2027"); const [calendarSystem, setCalendarSystem] = useState<"SEMESTER" | "TRIMESTER">("SEMESTER"); const [activeTerm, setActiveTerm] = useState("1st Semester"); const [academicPeriodReady, setAcademicPeriodReady] = useState(false); const academicYears = [...Array.from({length: 10}, (_, index) => 2016 + index), ...Array.from({length: 10}, (_, index) => 2026 + index)].map(start => `${start}-${start + 1}`).sort((a,b) => b.localeCompare(a)); const [schoolYearFilter, setSchoolYearFilter] = useState("All School Years"); const [termFilter, setTermFilter] = useState("All Terms"); const [classDirectoryQuery, setClassDirectoryQuery] = useState(""); const [sidebarClassQuery, setSidebarClassQuery] = useState(""); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | "iso-grades" | null>(null); const [notedByName, setNotedByName] = useState(user.notedByName || ""); const [teacherPosition, setTeacherPosition] = useState(user.positionTitle || ""); const [notedByPosition, setNotedByPosition] = useState(user.notedByPosition || ""); const [gradeExcelExporting, setGradeExcelExporting] = useState<"generic" | "iso" | null>(null);
+  const [theme, setTheme] = useState<"light" | "dark">("light"); const [academicYear, setAcademicYear] = useState("2026-2027"); const [calendarSystem, setCalendarSystem] = useState<"SEMESTER" | "TRIMESTER">("SEMESTER"); const [activeTerm, setActiveTerm] = useState("1st Semester"); const [academicPeriodReady, setAcademicPeriodReady] = useState(false); const academicYears = [...Array.from({length: 10}, (_, index) => 2016 + index), ...Array.from({length: 10}, (_, index) => 2026 + index)].map(start => `${start}-${start + 1}`).sort((a,b) => b.localeCompare(a)); const [classDirectoryQuery, setClassDirectoryQuery] = useState(""); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | "iso-grades" | null>(null); const [notedByName, setNotedByName] = useState(user.notedByName || ""); const [teacherPosition, setTeacherPosition] = useState(user.positionTitle || ""); const [notedByPosition, setNotedByPosition] = useState(user.notedByPosition || ""); const [gradeExcelExporting, setGradeExcelExporting] = useState<"generic" | "iso" | null>(null);
   const [schoolAddress, setSchoolAddress] = useState(user.school.address || "");
   const [departmentName, setDepartmentName] = useState(user.school.departmentName || "");
   const [isoHeaderConfig, setIsoHeaderConfig] = useState<IsoHeaderConfig>(() => readIsoHeaderConfig(user.school.name, user.school.slug, user.school.isoHeaderConfig));
@@ -1173,10 +1173,10 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [gradeSheetComponents, setGradeSheetComponents] = useState<GradeSheetComponent[]>(defaultGradeSheetComponents);
   const [componentDraft, setComponentDraft] = useState<GradeSheetComponent[]>(defaultGradeSheetComponents);
   const [componentEditorOpen, setComponentEditorOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false); const [classNavOpen, setClassNavOpen] = useState(false); const [onboardingOpen, setOnboardingOpen] = useState(false); const [helpOpen, setHelpOpen] = useState(false); const [helpInitialTab, setHelpInitialTab] = useState<"quick" | "faq" | "student" | "faculty">("quick"); const [subjectPage, setSubjectPage] = useState(1); const [classPage, setClassPage] = useState(1); const [rosterPage, setRosterPage] = useState(1);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false); const [onboardingOpen, setOnboardingOpen] = useState(false); const [helpOpen, setHelpOpen] = useState(false); const [helpInitialTab, setHelpInitialTab] = useState<"quick" | "faq" | "student" | "faculty">("quick"); const [subjectPage, setSubjectPage] = useState(1); const [classPage, setClassPage] = useState(1); const [rosterPage, setRosterPage] = useState(1);
   const [studentLookupQuery, setStudentLookupQuery] = useState(""); const [studentLookupMatches, setStudentLookupMatches] = useState<StudentSearchMatch[]>([]); const [studentLookupBusy, setStudentLookupBusy] = useState(false); const [classStudentFilter, setClassStudentFilter] = useState(initialClassStudent);
   const [lookupSchoolYearFilter, setLookupSchoolYearFilter] = useState("All School Years"); const [lookupTermFilter, setLookupTermFilter] = useState("All Terms");
-  const [studentGradeQuery, setStudentGradeQuery] = useState(""); const [studentYearFilter, setStudentYearFilter] = useState("All School Years"); const [studentTermFilter, setStudentTermFilter] = useState("All Terms");
+  const [studentGradeQuery, setStudentGradeQuery] = useState("");
   const [studentGradeDetails, setStudentGradeDetails] = useState<Record<string, Grade>>({});
   const studentGradeRequests = useRef<Map<string, Promise<Grade | null>>>(new Map());
   const studentGradeGenerationRef = useRef(0);
@@ -1261,7 +1261,6 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       setClassStudentFilter("");
       setAttendanceQuickOpenId("");
       setTab("classes");
-      setClassNavOpen(true);
       const href = classWorkspaceHref(user.school.slug);
       if (window.location.pathname + window.location.search !== href) router.push(href, { scroll: false });
       return;
@@ -1280,16 +1279,11 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       navigatePage("classes");
       return;
     }
-    // When opening a class directly from the sidebar or Overview, the filters
-    // must not hide that class before its details are loaded.
-    if (schoolYearFilter !== "All School Years" && schoolYearFilter !== subject.academicYear) setSchoolYearFilter(subject.academicYear);
-    if (termFilter !== "All Terms" && termFilter !== subject.term) setTermFilter(subject.term);
     setClassStudentFilter(options.student || "");
     setActiveId(subjectId);
     setClassSection(section);
     setAttendanceQuickOpenId(options.attendanceToday ? subjectId : "");
     setTab("classes");
-    setClassNavOpen(true);
     const href = classWorkspaceHref(user.school.slug, subjectId, section, options, subjects);
     // We already have the teacher-scoped class catalog and mounted portal.
     // Native history is supported by the Next.js App Router; avoid a second
@@ -1349,7 +1343,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     window.addEventListener("popstate", syncFromHistory);
     return () => window.removeEventListener("popstate", syncFromHistory);
   }, [teacher, subjects, user.school.slug]);
-  async function loadSubjects() { const d = await api("/api/teacher/subjects"); setSubjects(d.subjects); setOverviewRefresh(value => value + 1); }
+  async function loadSubjects() { const d = await api(`/api/teacher/subjects?academicYear=${encodeURIComponent(academicYear)}&term=${encodeURIComponent(activeTerm)}`); setSubjects(d.subjects); setOverviewRefresh(value => value + 1); }
   async function loadDetail(id = activeId) {
     if (!id) { setDetail(null); loadedClassRef.current = null; return; }
     setLoadingDetail(true);
@@ -1468,7 +1462,6 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   useEffect(() => { if (academicPeriodReady) window.localStorage.setItem(`saga-academic-period:${user.id}`, JSON.stringify({ academicYear, calendarSystem, term: activeTerm })); }, [academicPeriodReady, user.id, academicYear, calendarSystem, activeTerm]);
   useEffect(() => { if (window.localStorage.getItem(onboardingStorageKey) !== "done") setOnboardingOpen(true); }, [onboardingStorageKey]);
   useEffect(() => { setSidebarCollapsed(window.localStorage.getItem("saga-sidebar-collapsed") === "true"); }, []);
-  useEffect(() => { if (teacher && tab === "classes") setClassNavOpen(true); }, [teacher, tab]);
   const activeClassAvailable = subjects.some(subject => subject.id === activeId);
   useEffect(() => {
     // Do not load a full class record while the user is on Overview.
@@ -1505,15 +1498,17 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   useEffect(() => { setCopyFromId(""); }, [activeId]);
   useEffect(() => {
     if (!teacher || loading || tab !== "classes" || !activeId) return;
-    const selectedId = resolveClassSelection(subjects, activeId, schoolYearFilter, termFilter);
-    if (selectedId === activeId) return;
-    setActiveId(selectedId);
+    if (subjects.some(subject => subject.id === activeId)) return;
+    // A period change returns to the active-period directory instead of
+    // silently opening a different class.
+    setActiveId("");
     setDetail(null);
+    loadedClassRef.current = null;
     setClassSection("setup");
     setClassStudentFilter("");
     setAttendanceQuickOpenId("");
-    router.replace(classWorkspaceHref(user.school.slug, selectedId, "setup", undefined, subjects), { scroll: false });
-  }, [teacher, loading, tab, subjects, activeId, schoolYearFilter, termFilter, router, user.school.slug]);
+    router.replace(classWorkspaceHref(user.school.slug), { scroll: false });
+  }, [teacher, loading, tab, subjects, activeId, router, user.school.slug]);
   useEffect(() => {
     if (!printMode) return;
     let cancelled = false;
@@ -1531,30 +1526,6 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     if (!response.ok) throw new Error("Could not sign out.");
     router.replace("/login");
     router.refresh();
-  }
-  function toggleClassNav() {
-    // Expanding My Classes must NEVER navigate or select the first class.
-    // Desktop users can hover; touch devices explicitly tap to expand.
-    if (sidebarCollapsed) {
-      setSidebarCollapsed(false);
-      window.localStorage.setItem("saga-sidebar-collapsed", "false");
-      setClassNavOpen(true);
-      return;
-    }
-    setClassNavOpen(open => !open);
-  }
-  function revealClassesOnHover() {
-    if (teacher && !sidebarCollapsed && window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
-      setClassNavOpen(true);
-    }
-  }
-  function hideClassesOnMouseLeave() {
-    if (teacher && !sidebarCollapsed && window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
-      setClassNavOpen(false);
-    }
-  }
-  function openSidebarClass(subjectId: string) {
-    openClass(subjectId, "setup");
   }
   function openStudentSearchMatch(match: StudentSearchMatch) {
     openClass(match.class.id, "record", { student: match.enrollmentId });
@@ -2520,14 +2491,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     </div>;
   };
 
-  return <div className={`portal-layout ${sidebarCollapsed ? "sidebar-collapsed" : ""}`} data-bs-theme={theme} data-saga-role={teacher ? "teacher" : "student"} style={{"--school-primary": user.school.primaryColor} as import("react").CSSProperties}><aside className={`sidebar ${classNavOpen && !sidebarCollapsed ? "sidebar-classes-expanded" : ""}`}><button type="button" className="sidebar-pin-toggle" aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => { const next = !sidebarCollapsed; setSidebarCollapsed(next); window.localStorage.setItem("saga-sidebar-collapsed", String(next)); }}><span aria-hidden="true">{sidebarCollapsed ? "☰" : "◧"}</span><span className="sidebar-toggle-label">{sidebarCollapsed ? "Expand menu" : "Collapse menu"}</span></button><a className="sidebar-brand" href={`/${encodeURIComponent(user.school.slug)}/overview`} aria-label={`${user.school.shortName} SAGA Portal overview`}><img className="sidebar-app-mark" src="/favicon.svg" alt="" width="38" height="38"/><span><strong>{user.school.shortName}</strong><small>SAGA PORTAL</small></span></a><div className="sidebar-label">WORKSPACE</div><button className={`side-link ${tab === "overview" ? "selected" : ""}`} onClick={() => navigatePage("overview")}><span className="nav-glyph">▦</span>Overview</button><button type="button" className={`side-link ${tab === "chats" ? "selected" : ""}`} onClick={() => navigatePage("chats")}><span className="nav-glyph">▣</span><span className="sidebar-nav-text">Class chats</span></button>{teacher && <div className="sidebar-nav-group" onMouseEnter={revealClassesOnHover} onMouseLeave={hideClassesOnMouseLeave} onKeyDown={event => { if (event.key === "Escape") { setClassNavOpen(false); } }}><button type="button" className={`side-link sidebar-classes-toggle ${tab === "classes" ? "selected" : ""}`} aria-expanded={classNavOpen} aria-controls="sidebar-class-list" aria-label="Expand My Classes menu without opening a class" onClick={toggleClassNav}><span className="nav-glyph">▤</span><span className="sidebar-nav-text">My classes</span><span className="sidebar-nav-caret" aria-hidden="true">{classNavOpen ? "⌄" : "›"}</span></button>{classNavOpen && !sidebarCollapsed && <div className="sidebar-class-list" id="sidebar-class-list">
-        <div className="sidebar-class-list-heading"><span>QUICK ACCESS</span><b>{subjects.length}</b></div>
-        <button type="button" className="sidebar-class-directory-link" onClick={() => navigatePage("classes")}><span>Browse all classes</span><span aria-hidden="true">→</span></button>
-        <label className="sidebar-class-search"><span className="visually-hidden">Search classes</span><input type="search" value={sidebarClassQuery} onChange={event => setSidebarClassQuery(event.target.value)} placeholder="Search code or class name" autoComplete="off"/></label>
-        {subjects.length ? sidebarClassSubjects.slice(0, 8).map(subject=><button type="button" key={subject.id} className={"sidebar-class-link " + (tab === "classes" && activeId === subject.id ? "selected" : "")} onClick={()=>openSidebarClass(subject.id)}><span className="sidebar-class-link-copy"><b>{subject.classId || subject.code}</b><small>{subject.code} · {subject.term} · {subject.academicYear}</small></span><em>{subject._count?.enrollments || 0}</em></button>) : <span className="sidebar-class-empty">No classes yet.</span>}
-        {subjects.length > 0 && !sidebarClassSubjects.length && <span className="sidebar-class-empty">No classes match that search.</span>}
-        {sidebarClassSubjects.length > 8 && <button type="button" className="sidebar-class-more" onClick={() => navigatePage("classes")}>See all {sidebarClassSubjects.length} matching classes</button>}
-      </div>}</div>}{teacher && (user.isTenantManager || user.isSchoolAdmin) && <a className="side-link text-decoration-none" href="/manage"><span className="nav-glyph">⚙</span>{user.isTenantManager ? "Tenant management" : "School administration"}</a>}{!teacher && <button type="button" className={`side-link ${tab === "simulator" ? "selected" : ""}`} onClick={() => navigatePage("simulator")} title="Try hypothetical grades without changing your records"><span className="nav-glyph">▤</span><span className="sidebar-nav-text">Grade Simulator</span></button>}<button type="button" className="side-link" title="FAQs, onboarding tour, and manuals" onClick={()=>openHelp("quick")}><span className="nav-glyph">?</span><span className="sidebar-nav-text">Help &amp; guides</span></button><div className="sidebar-bottom"><div className="privacy-mini"><span>✓</span><div><b>Private by default</b><small>Only authorized users can view grades.</small></div></div></div></aside>
+  return <div className={`portal-layout ${sidebarCollapsed ? "sidebar-collapsed" : ""}`} data-bs-theme={theme} data-saga-role={teacher ? "teacher" : "student"} style={{"--school-primary": user.school.primaryColor} as import("react").CSSProperties}><aside className="sidebar"><button type="button" className="sidebar-pin-toggle" aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => { const next = !sidebarCollapsed; setSidebarCollapsed(next); window.localStorage.setItem("saga-sidebar-collapsed", String(next)); }}><span aria-hidden="true">{sidebarCollapsed ? "☰" : "◧"}</span><span className="sidebar-toggle-label">{sidebarCollapsed ? "Expand menu" : "Collapse menu"}</span></button><a className="sidebar-brand" href={`/${encodeURIComponent(user.school.slug)}/overview`} aria-label={`${user.school.shortName} SAGA Portal overview`}><img className="sidebar-app-mark" src="/favicon.svg" alt="" width="38" height="38"/><span><strong>{user.school.shortName}</strong><small>SAGA PORTAL</small></span></a><div className="sidebar-label">WORKSPACE</div><button className={`side-link ${tab === "overview" ? "selected" : ""}`} onClick={() => navigatePage("overview")}><span className="nav-glyph">▦</span>Overview</button><button type="button" className={`side-link ${tab === "chats" ? "selected" : ""}`} onClick={() => navigatePage("chats")}><span className="nav-glyph">▣</span><span className="sidebar-nav-text">Class chats</span></button>{teacher && <button type="button" className={`side-link ${tab === "classes" ? "selected" : ""}`} onClick={() => navigatePage("classes")}><span className="nav-glyph">▤</span><span className="sidebar-nav-text">My classes</span></button>}{teacher && (user.isTenantManager || user.isSchoolAdmin) && <a className="side-link text-decoration-none" href="/manage"><span className="nav-glyph">⚙</span>{user.isTenantManager ? "Tenant management" : "School administration"}</a>}{!teacher && <button type="button" className={`side-link ${tab === "simulator" ? "selected" : ""}`} onClick={() => navigatePage("simulator")} title="Try hypothetical grades without changing your records"><span className="nav-glyph">▤</span><span className="sidebar-nav-text">Grade Simulator</span></button>}<button type="button" className="side-link" title="FAQs, onboarding tour, and manuals" onClick={()=>openHelp("quick")}><span className="nav-glyph">?</span><span className="sidebar-nav-text">Help &amp; guides</span></button><div className="sidebar-bottom"><div className="privacy-mini"><span>✓</span><div><b>Private by default</b><small>Only authorized users can view grades.</small></div></div></div></aside>
     <main className="main-area">{user.isDemo && <RealDemoBanner />}<header className="topbar"><div><div className="crumb">{teacher ? "TEACHER SPACE" : "STUDENT SPACE"}<span>/</span>{tab === "profile" ? "PROFILE" : tab === "classes" ? selectedTitle.toUpperCase() : tab === "simulator" ? "GRADE SIMULATOR" : tab === "chats" ? "CLASS CHATS" : "OVERVIEW"}</div><h1>{tab === "profile" ? "Account settings" : tab === "classes" && teacher ? selectedTitle : tab === "simulator" ? "Grade Simulator" : tab === "chats" ? "Class Chats" : teacher ? "Teaching overview" : "Academic overview"}</h1></div><div className="topbar-right"><span className="term-pill">Academic records <i>·</i> Private</span><button type="button" className="portal-help-trigger btn btn-outline-secondary btn-sm" onClick={()=>openHelp("quick")} aria-label="Open Help and guides"><span aria-hidden="true">?</span> Help</button><AccountMenu
       fullName={user.fullName}
       email={user.email}
