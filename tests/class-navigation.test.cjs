@@ -50,3 +50,15 @@ test("slugs are URL-safe and cannot cross to another class", () => {
   assert.equal(resolveClassRoute("unknown-course", subjects), null);
   assert.equal(resolveClassRoute("ece-18--class-evil", subjects), null);
 });
+
+test("teacher class directory is scoped to the active Overview academic period without sidebar quick access", () => {
+  const portal = fs.readFileSync(path.join(__dirname, "../src/components/Portal.tsx"), "utf8");
+  assert.ok(portal.includes("academicYear=${encodeURIComponent(academicYear)}&term=${encodeURIComponent(activeTerm)}"));
+  assert.doesNotMatch(portal, /QUICK ACCESS|sidebarClassQuery|classNavOpen/);
+});
+
+test("student grades use the Overview academic period without separate year and term filters", () => {
+  const portal = fs.readFileSync(path.join(__dirname, "../src/components/Portal.tsx"), "utf8");
+  assert.ok(portal.includes("view=summary&academicYear=${encodeURIComponent(academicYear)}&term=${encodeURIComponent(activeTerm)}"));
+  assert.doesNotMatch(portal, /studentYearFilter|studentTermFilter/);
+});
