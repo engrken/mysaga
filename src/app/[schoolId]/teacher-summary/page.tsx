@@ -64,7 +64,7 @@ export default async function TeacherSummaryPage({ params }: PageProps) {
   const windowLabel = dateFormat.format(windowStart) + " – " + dateFormat.format(windowLastDay);
   const insight = assignedClasses === 0
     ? "No class subjects are currently assigned to your teacher account."
-    : "You currently have " + countLabel(assignedClasses, "assigned class") + " with " + countLabel(enrollmentRecords, "enrollment record") + ". " +
+    : "You currently have " + countLabel(assignedClasses, "assigned class", "assigned classes") + " with " + countLabel(enrollmentRecords, "enrollment record") + ". " +
       countLabel(assessmentsDue, "assessment") + " are due during this seven-day window.";
 
   const nextSteps: string[] = [];
@@ -72,7 +72,7 @@ export default async function TeacherSummaryPage({ params }: PageProps) {
     nextSteps.push("Review the schedule and readiness of " + countLabel(assessmentsDue, "assessment") + " due in this window.");
   }
   if (draftClasses > 0) {
-    nextSteps.push("Review the draft grade sheets for " + countLabel(draftClasses, "class") + " when the records are ready.");
+    nextSteps.push("Review the draft grade sheets for " + countLabel(draftClasses, "class", "classes") + " when the records are ready.");
   }
   if (submittedClasses > 0) {
     nextSteps.push("Track verification progress for " + countLabel(submittedClasses, "submitted class grade sheet") + ".");
