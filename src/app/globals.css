@@ -2130,10 +2130,10 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
 }
 
 
-/* Keep the full workbook's horizontal navigation within reach while the page scrolls vertically. */
-.portal-layout .score-sheet-floating-scroll {
+/* The React portal places this viewport-fixed control outside the workbook's clipped containers. */
+.score-sheet-floating-scroll {
   position: fixed;
-  z-index: 1075;
+  z-index: 1200;
   bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   max-width: calc(100vw - 16px);
   height: 22px;
@@ -2147,35 +2147,35 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
   scrollbar-width: auto;
   scrollbar-color: #7186a8 #e9eef5;
 }
-.portal-layout .score-sheet-floating-scroll-track {
+.score-sheet-floating-scroll-track {
   height: 1px;
   pointer-events: none;
 }
-.portal-layout .score-sheet-floating-scroll::-webkit-scrollbar {
+.score-sheet-floating-scroll::-webkit-scrollbar {
   height: 12px;
 }
-.portal-layout .score-sheet-floating-scroll::-webkit-scrollbar-track {
+.score-sheet-floating-scroll::-webkit-scrollbar-track {
   border-radius: 999px;
   background: #e9eef5;
 }
-.portal-layout .score-sheet-floating-scroll::-webkit-scrollbar-thumb {
+.score-sheet-floating-scroll::-webkit-scrollbar-thumb {
   border: 2px solid #e9eef5;
   border-radius: 999px;
   background: #7186a8;
 }
-.portal-layout[data-bs-theme="dark"] .score-sheet-floating-scroll {
+.score-sheet-floating-scroll[data-bs-theme="dark"] {
   border-color: #43536c;
   background: #172235;
   box-shadow: 0 5px 18px rgba(0, 0, 0, .42);
   scrollbar-color: #7186a8 #26364d;
 }
-.portal-layout[data-bs-theme="dark"] .score-sheet-floating-scroll::-webkit-scrollbar-track {
+.score-sheet-floating-scroll[data-bs-theme="dark"]::-webkit-scrollbar-track {
   background: #26364d;
 }
-.portal-layout[data-bs-theme="dark"] .score-sheet-floating-scroll::-webkit-scrollbar-thumb {
+.score-sheet-floating-scroll[data-bs-theme="dark"]::-webkit-scrollbar-thumb {
   border-color: #26364d;
   background: #7186a8;
 }
 @media (max-width: 760px), print {
-  .portal-layout .score-sheet-floating-scroll { display: none !important; }
+  .score-sheet-floating-scroll { display: none !important; }
 }
