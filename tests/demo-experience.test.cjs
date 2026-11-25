@@ -43,7 +43,7 @@ test("authentic demo navigation and styling remain mobile and theme aware", () =
   assert.match(chooser, /actualRoleGrid/);
   assert.match(css, /@media\(max-width:760px\)\{\.actualRoleGrid/);
   assert.match(css, /data-saga-theme="dark"/);
-  assert.match(portal, /user\.isDemo && <RealDemoBanner/);
+  assert.match(portal, /<header className="portal-top-nav">[\s\S]*?<\/header>\s*\{user\.isDemo && <RealDemoBanner/);
   assert.match(realBanner, /READ-ONLY DEMO/);
 });
 
