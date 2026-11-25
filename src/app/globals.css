@@ -2130,8 +2130,10 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
 }
 
 
-/* The React portal places this viewport-fixed control outside the workbook's clipped containers. */
+/* Viewport-level scrollbar proxy for the full scorebook.
+   Its spacer width is measured in useLayoutEffect to mirror the real workbook range. */
 .score-sheet-floating-scroll {
+  box-sizing: border-box;
   position: fixed;
   z-index: 1200;
   bottom: calc(12px + env(safe-area-inset-bottom, 0px));
@@ -2144,10 +2146,14 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
   border-radius: 999px;
   background: var(--bs-tertiary-bg, #f5f8fc);
   box-shadow: 0 5px 18px rgba(15, 23, 42, .2);
-  scrollbar-width: auto;
-  scrollbar-color: #7186a8 #e9eef5;
+  scrollbar-width: thin;
+  scrollbar-color: #c3c9d1 #eef1f4;
 }
 .score-sheet-floating-scroll-track {
+  display: block;
+  box-sizing: content-box;
+  flex: none;
+  min-width: 0;
   height: 1px;
   pointer-events: none;
 }
@@ -2156,25 +2162,25 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
 }
 .score-sheet-floating-scroll::-webkit-scrollbar-track {
   border-radius: 999px;
-  background: #e9eef5;
+  background: #eef1f4;
 }
 .score-sheet-floating-scroll::-webkit-scrollbar-thumb {
-  border: 2px solid #e9eef5;
+  border: 2px solid #eef1f4;
   border-radius: 999px;
-  background: #7186a8;
+  background: #c3c9d1;
 }
 .score-sheet-floating-scroll[data-bs-theme="dark"] {
   border-color: #43536c;
   background: #172235;
   box-shadow: 0 5px 18px rgba(0, 0, 0, .42);
-  scrollbar-color: #7186a8 #26364d;
+  scrollbar-color: #64748b #26364d;
 }
 .score-sheet-floating-scroll[data-bs-theme="dark"]::-webkit-scrollbar-track {
   background: #26364d;
 }
 .score-sheet-floating-scroll[data-bs-theme="dark"]::-webkit-scrollbar-thumb {
   border-color: #26364d;
-  background: #7186a8;
+  background: #64748b;
 }
 @media (max-width: 760px), print {
   .score-sheet-floating-scroll { display: none !important; }
