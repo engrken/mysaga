@@ -39,7 +39,8 @@ test("Faculty ID accepts realistic school-issued IDs but rejects spaces and inva
 
 test("My Classes directly opens the active-period directory without a quick-access menu", () => {
   const portal = fs.readFileSync(path.join(__dirname, "../src/components/Portal.tsx"), "utf8");
-  assert.match(portal, /onClick=\{\(\) => navigatePage\("classes"\)\}/);
+  assert.match(portal, /<Link href=\{`\/\$\{encodeURIComponent\(user\.school\.slug\)\}\/classes`\} className=\{`side-link/);
+  assert.doesNotMatch(portal, /toggleClassNav|revealClassesOnHover|hideClassesOnMouseLeave|sidebar-class-list/);
   assert.doesNotMatch(portal, /toggleClassNav|revealClassesOnHover|hideClassesOnMouseLeave|QUICK ACCESS|sidebar-class-list/);
 });
 
