@@ -67,7 +67,7 @@ test("Show all layout keeps a floating horizontal scrollbar synchronized with th
  assert.ok(portal.includes('import { createPortal } from "react-dom"'));
  assert.match(portal,/scorebookFloatingScroll\.visible && scorebookView === "all" && typeof document !== "undefined" && createPortal\(/);
  assert.ok(portal.includes("document.body)"));
- assert.ok(portal.includes("[scorebookFloatingScroll.visible, scorebookFloatingScroll.scrollWidth]"));
+ assert.ok(portal.includes("[scorebookFloatingScroll.visible, scorebookFloatingScroll.left, scorebookFloatingScroll.width, scorebookFloatingScroll.scrollWidth, scorebookView]"));
  assert.ok(portal.includes("function syncHorizontalScrollProgress(source: HTMLElement, target: HTMLElement)"));
  assert.ok(portal.includes("const sourceRange = Math.max(0, source.scrollWidth - source.clientWidth)"));
  assert.ok(portal.includes("const targetRange = Math.max(0, target.scrollWidth - target.clientWidth)"));
