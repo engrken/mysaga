@@ -2806,29 +2806,30 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         </div>
         <StudentActivities readOnly={user.isDemo} academicYear={academicYear} term={activeTerm}/>
         {studentAttendanceWarnings.length > 0 && (
-          <section className="alert alert-warning" aria-labelledby="student-attendance-warning-heading" aria-live="polite">
-            <h3 className="h6" id="student-attendance-warning-heading">Attendance warning</h3>
-            <p className="mb-2">These alerts are based on your recorded attendance in each class. {DROPPING_ABSENCE_THRESHOLD} consecutive recorded absences trigger a danger of dropping warning.</p>
-            <ul className="ps-3 mb-2">
+          <section className="student-attendance-watch surface" aria-labelledby="student-attendance-warning-heading" aria-live="polite">
+            <div className="student-attendance-watch-heading">
+              <div><span className="eyebrow">ATTENDANCE MONITORING</span><h2 id="student-attendance-warning-heading">Attendance needs attention</h2><p>Alerts are based on recorded class days in this academic period. {DROPPING_ABSENCE_THRESHOLD} consecutive recorded absences trigger a danger-of-dropping warning.</p></div>
+              <span className="student-attendance-watch-count">{studentAttendanceWarnings.length} flagged</span>
+            </div>
+            <div className="student-attendance-watch-list">
               {studentAttendanceWarnings.map(grade => (
-                <li className="mb-2" key={grade.id}>
-                  <strong>{grade.code} · {grade.title}</strong>
-                  <small className="d-block">{[grade.classId, grade.term, grade.academicYear].filter(Boolean).join(" · ")}</small>
-                  {grade.attendanceWarning && <span className="d-block">
-                    High-risk attendance · {grade.attendanceWarning.percent.toFixed(1)}% absent ({grade.attendanceWarning.absent} of {grade.attendanceWarning.counted} counted class days)
-                    {grade.attendanceWarning.lateAbsences > 0 && <small className="d-block">Includes {grade.attendanceWarning.lateAbsences} from consecutive late marks</small>}
-                  </span>}
-                  {grade.droppingWarning && <DroppingWarning streak={grade.droppingWarning}/>}
-                </li>
+                <article className="student-attendance-watch-item" key={grade.id}>
+                  <div><strong>{grade.code} · {grade.title}</strong><small>{[grade.classId, grade.term, grade.academicYear].filter(Boolean).join(" · ")}</small></div>
+                  <div className="student-attendance-watch-status">
+                    {grade.attendanceWarning && <span className="student-attendance-high-risk">{grade.attendanceWarning.percent.toFixed(1)}% absent · {grade.attendanceWarning.absent}/{grade.attendanceWarning.counted} days</span>}
+                    {grade.attendanceWarning?.lateAbsences ? <small>Includes {grade.attendanceWarning.lateAbsences} absence(s) from consecutive late marks</small> : null}
+                    {grade.droppingWarning && <DroppingWarning streak={grade.droppingWarning}/>}
+                  </div>
+                </article>
               ))}
-            </ul>
-            <p className="mb-0">Review your attendance entries under My grades and contact your instructor about any discrepancies.</p>
+            </div>
+            <p className="student-attendance-watch-note">Review your recorded attendance details and contact your instructor about any discrepancy.</p>
           </section>
         )}
         <StudentClassEnrollment academicYear={academicYear} term={activeTerm} onJoined={() => { void refreshStudentGrades(); }}/>
         <section className="section-block student-grade-section">
-          <div className="section-heading student-grade-section-heading"><div><h2>My grades</h2>
-            <p className="muted">Your own course results and recorded assessment details.</p>
+          <div className="section-heading student-grade-section-heading"><div><span className="eyebrow">COURSE RECORDS</span><h2>My classes &amp; grades</h2>
+            <p className="muted">Course results and recorded assessments for {activeTerm} · {academicYear}.</p>
           </div><div className="student-grade-header-actions"><span className="private-pill">Private student view</span>
             <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => void refreshStudentGrades()} disabled={studentRefreshing || loading}>
               {studentRefreshing ? "Refreshing…" : "↻ Refresh grades"}
@@ -2837,14 +2838,11 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <div className="student-official-notice" role="note"><strong>For reference only.</strong> SAGA results may change until officially confirmed. Your school’s official student portal is the source for final and official grades.</div>
           {studentLastUpdated && <p className="student-grade-updated">Last checked {studentLastUpdated.toLocaleTimeString(undefined, {hour:"numeric",minute:"2-digit"})} · {grades.length} visible class{grades.length===1?"":"es"}</p>}
           {loading ? <div className="student-grade-loading" role="status"><span className="spinner-border spinner-border-sm" aria-hidden="true"/> Loading your grade summary…</div> : <>
-          {grades.length > 0 && <div className="student-grade-filters">
-            <label><span>Find class or instructor</span><input className="form-control" type="search" value={studentGradeQuery} onChange={event=>setStudentGradeQuery(event.target.value)} placeholder="Search code, title, or teacher" autoComplete="off"/></label>
-            <label><span>School year</span><select className="form-select" value={studentYearFilter} onChange={event=>setStudentYearFilter(event.target.value)}><option>All School Years</option>{studentGradeYears.map(year=><option key={year}>{year}</option>)}</select></label>
-            <label><span>Term</span><select className="form-select" value={studentTermFilter} onChange={event=>setStudentTermFilter(event.target.value)}><option>All Terms</option>{studentGradeTerms.map(term=><option key={term}>{term}</option>)}</select></label>
+          {grades.length > 0 && <div className="student-grade-filters student-active-period-search">
+            <label><span>Find class or instructor</span><input className="form-control" type="search" value={studentGradeQuery} onChange={event=>setStudentGradeQuery(event.target.value)} placeholder="Search course code, title, or teacher" autoComplete="off"/></label>
           </div>}
-          {grades.length > 0 && <div className="student-results-toolbar"><span>Showing <strong>{visibleGrades.length}</strong> of {grades.length} classes</span>
-            {(studentGradeQuery || studentYearFilter !== "All School Years" || studentTermFilter !== "All Terms") &&
-              <button type="button" className="btn btn-link btn-sm" onClick={() => { setStudentGradeQuery(""); setStudentYearFilter("All School Years"); setStudentTermFilter("All Terms"); }}>Clear filters</button>}
+          {grades.length > 0 && <div className="student-results-toolbar"><span>Showing <strong>{visibleGrades.length}</strong> of {grades.length} classes for the active period</span>
+            {studentGradeQuery && <button type="button" className="btn btn-link btn-sm" onClick={() => setStudentGradeQuery("")}>Clear search</button>}
           </div>}
           {grades.length ? visibleGrades.length ?
             <div className="student-grade-list">{visibleGrades.map(g => {
