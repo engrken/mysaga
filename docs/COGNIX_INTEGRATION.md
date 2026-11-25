@@ -1,67 +1,30 @@
-# COGNIX integration (SAGA)
+# COGNIX integration status (SAGA)
 
-SAGA exposes a teacher-facing entry point at `POST /api/cognix/teacher-summary`. That server-side route calls the versioned COGNIX endpoint `POST /api/v1/agent`.
+The initial SAGA-to-COGNIX teacher-summary experiment is **disabled** pending privacy review. There is currently no teacher-facing COGNIX feature in SAGA.
 
-## Security model
+## Current behavior
 
-- Requires SAGA's existing authenticated teacher session.
-- Rejects demo sessions.
-- Derives teacher and school scope from the verified session; callers cannot supply IDs or scopes.
-- Queries only subjects assigned to that teacher in that school.
-- Sends aggregate counts only: assigned subjects, enrollment records, assessments due within seven days, and grade-workflow subject counts.
-- Does not send student names, student numbers, grades, assessment scores, attendance marks, or raw database records.
-- No SAGA data is written or modified.
-- COGNIX is called only from SAGA server-side code. The browser never receives the COGNIX service token.
+The existing server-side entry point, `POST /api/cognix/teacher-summary`, is retained temporarily for a safe, explicit response to any stale caller. It:
 
-## Server environment
+- Requires SAGA's authenticated, non-demo teacher session.
+- Returns `403 capability_disabled`.
+- Does not query subjects, enrollments, assessments, or grade workflow records.
+- Does not make an outbound request to COGNIX.
+- Does not send any teacher or academic data outside SAGA.
 
-Configure these on the SAGA Vercel project:
+## Why it is disabled
 
-- `COGNIX_API_URL`: `https://cognixph.vercel.app`.
-- `COGNIX_API_KEY`: the high-entropy SAGA-to-COGNIX service credential. It must match either `COGNIX_SAGA_API_KEY` or the SAGA-only compatibility fallback `COGNIX_API_KEY` configured on COGNIX.
+The original experiment sent teacher-scoped workload aggregates to an external model endpoint. Aggregate counts can still describe an identifiable teacher's activities and are not automatically anonymous. This use case has not been established as necessary and proportionate, and the current free model endpoint is not approved for confidential production information.
 
-The endpoint fails closed with 503 when either setting is absent or the URL is not HTTPS. Do not use a `NEXT_PUBLIC_` prefix.
+## Requirements before reconsidering
 
-## Versioned request
+A future COGNIX integration must have:
 
-SAGA sends the following application-scoped contract from its server only:
+1. A specific, documented purpose that benefits from model processing.
+2. A necessity and proportionality assessment, including a local-processing alternative.
+3. An approved data contract that excludes unnecessary personal and academic information.
+4. Review of provider retention, training/improvement use, data processing terms, and deployment configuration.
+5. Appropriate notices, authorization, and approval from the responsible privacy/governance owners.
+6. Synthetic-data testing before production data is considered.
 
-    {
-      "apiVersion": "1",
-      "app": "saga",
-      "task": "teacher-summary",
-      "requestId": "saga-generated-correlation-id",
-      "input": {
-        "reportingPeriod": {
-          "start": "YYYY-MM-DD",
-          "endExclusive": "YYYY-MM-DD",
-          "timezone": "Asia/Manila"
-        },
-        "totals": {
-          "assignedSubjects": 0,
-          "enrollmentRecords": 0,
-          "assessmentsDueWithinSevenDays": 0,
-          "gradeWorkflow": {
-            "draftSubjects": 0,
-            "submittedSubjects": 0,
-            "verifiedSubjects": 0
-          }
-        }
-      }
-    }
-
-COGNIX validates the request against a strict aggregate-only schema. It does not accept caller-supplied teacher IDs, school IDs, student-level rows, grades, or attendance records.
-
-## Response
-
-A successful response uses the common COGNIX envelope with `apiVersion`, `status`, `app`, `task`, `requestId`, `answer`, `sources`, `warnings`, and model usage metadata. COGNIX also returns `summary` as a compatibility alias for the existing SAGA UI. SAGA currently forwards the complete response to its caller.
-
-Errors return a safe error code and message. SAGA does not expose the COGNIX service token to the browser.
-
-## Safety boundaries
-
-- SAGA remains authoritative for teacher authentication, school scope, and record access.
-- COGNIX receives aggregate counts only and generates a bounded text summary.
-- One model call maximum; no tool calls or write actions for this task.
-- No grade calculations, grade changes, attendance changes, or database writes.
-- A request ID is for correlation only and is not an idempotency guarantee.
+Until those requirements are satisfied, keep `COGNIX_API_URL` and `COGNIX_API_KEY` unconfigured in SAGA. Never expose a service credential to a browser.
