@@ -1917,3 +1917,111 @@ body[data-saga-theme="dark"]:has(.portal-layout[data-saga-role="student"]) .saga
 @media(max-width:1100px){.overview-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.overview-chart-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-enrollment-card{grid-column:1/-1}}
 @media(max-width:760px){.overview-hero{padding:18px 16px 15px}.overview-hero-main{align-items:flex-start;flex-direction:column;gap:13px}.overview-hero-copy h1{font-size:1.5rem}.overview-period-bar{align-items:stretch;flex-direction:column;gap:11px}.overview-period-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.overview-period-controls label{min-width:0}.overview-period-controls select{width:100%;font-size:.64rem}.overview-quick-lookup>summary{padding:10px 12px}.overview-lookup-copy small{max-width:205px}.overview-lookup-action{font-size:0}.overview-lookup-action span{font-size:.95rem}.overview-report-heading{align-items:flex-start;flex-direction:column;padding:15px}.overview-date-controls{width:100%;display:grid;grid-template-columns:1fr 1fr;padding:0;border:0}.overview-date-controls input{min-width:0;width:100%}.overview-date-controls .btn{grid-column:1/-1}.overview-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.overview-stat-card{min-height:96px;padding:12px 11px 12px 14px}.overview-stat-card strong{font-size:1.42rem}.overview-stat-card span{font-size:.6rem}.overview-watchlist-heading{align-items:flex-start}.overview-attendance-risk{padding:14px}.overview-attendance-risk-list>li{grid-template-columns:1fr 1fr;gap:9px}.overview-risk-rate{grid-column:1/-1}.overview-attendance-risk-list .btn{justify-self:start}.overview-chart-grid,.overview-upcoming-grid{grid-template-columns:1fr}.overview-enrollment-card{grid-column:auto}.overview-chart-card{min-height:220px}.overview-pie-wrap{height:145px}.overview-pie-chart{width:130px;height:130px}}
 @media(max-width:420px){.overview-period-controls{grid-template-columns:1fr 1fr}.overview-period-controls label:first-child{grid-column:1/-1}.overview-stat-grid{grid-template-columns:1fr 1fr}.overview-stat-card{min-height:88px}.overview-stat-card small{font-size:.52rem}.overview-lookup-copy small{max-width:170px}}
+
+
+/* Active-period class directory refinements */
+.class-directory-filters{grid-template-columns:minmax(0,1fr) auto;align-items:center}
+.class-directory-filters .class-directory-search{min-width:0}
+.class-directory-filter-foot{min-width:0;justify-content:flex-end}
+.class-active-period-pill{display:inline-flex;align-items:center;gap:8px;margin-top:12px;padding:7px 10px;border:1px solid #d8e4f5;border-radius:9px;background:#ffffffa8;color:#34547f}
+.class-active-period-pill>span{font-size:.53rem;font-weight:850;letter-spacing:.09em;color:#8292a8}
+.class-active-period-pill>strong{font-size:.66rem;color:#315a9c}
+.class-active-period-pill>i{font-size:.62rem;font-style:normal;color:#7889a1}
+.class-active-period-context{display:grid;gap:3px;min-width:150px;padding:8px 11px;border:1px solid #dfe8f5;border-radius:9px;background:#f7faff}
+.class-active-period-context small{font-size:.53rem;font-weight:850;letter-spacing:.08em;color:#8492a7}
+.class-active-period-context strong{font-size:.69rem;color:#345a90}
+.portal-layout[data-bs-theme="dark"] .class-active-period-pill{border-color:#344a67;background:#1b2a40;color:#c6d7f2}
+.portal-layout[data-bs-theme="dark"] .class-active-period-pill>span,.portal-layout[data-bs-theme="dark"] .class-active-period-pill>i{color:#9eacc0}
+.portal-layout[data-bs-theme="dark"] .class-active-period-pill>strong,.portal-layout[data-bs-theme="dark"] .class-active-period-context strong{color:#b9d0ff}
+.portal-layout[data-bs-theme="dark"] .class-active-period-context{border-color:#34445d;background:#172235}
+.portal-layout[data-bs-theme="dark"] .class-active-period-context small{color:#9eacc0}
+
+/* Student workspace now shares the teacher Overview visual language */
+.student-overview-hero{margin-bottom:14px}
+.student-overview-hero .overview-hero-copy h1{color:#183354}
+.student-overview-hero .overview-create-button{white-space:nowrap}
+.student-simulator-hero-button{background:#285aa9;border:0;color:#fff}
+.student-simulator-hero-button:hover{background:#214b8d;color:#fff}
+.student-simulator-hero-button span{margin-right:6px}
+.student-progress-heading{margin:20px 0 11px}
+.student-progress-heading h2{margin:3px 0;font-size:1.03rem;font-weight:800;color:#203b5c}
+.student-progress-heading p{margin:4px 0 0;font-size:.68rem}
+.student-overview-stats{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 18px}
+.student-overview-stats .overview-stat-card{min-height:107px}
+.student-overview-stats .overview-stat-card strong{font-size:1.7rem}
+.student-active-period-search{grid-template-columns:minmax(220px,440px);margin:0 0 10px}
+.student-active-period-search label{display:grid;gap:5px}
+.student-active-period-search input{min-height:38px;border-color:#dce5f1;border-radius:8px;font-size:.73rem}
+.student-grade-section{margin-top:22px}
+.student-grade-section-heading{margin-bottom:12px}
+.student-grade-section-heading h2{margin:3px 0;font-size:1.1rem;font-weight:800;color:#203b5c}
+.student-grade-section-heading p{font-size:.7rem;margin:3px 0 0}
+.student-attendance-watch{display:grid;gap:12px;margin:0 0 16px;padding:17px 19px;border:1px solid #f0dfc4;border-radius:14px;box-shadow:0 5px 16px rgba(32,58,98,.035)}
+.student-attendance-watch-heading{display:flex;align-items:center;justify-content:space-between;gap:15px}
+.student-attendance-watch-heading .eyebrow{color:#a26b20}
+.student-attendance-watch-heading h2{margin:3px 0;color:#263e5d;font-size:.95rem;font-weight:800}
+.student-attendance-watch-heading p{margin:0;color:#7d8999;font-size:.66rem}
+.student-attendance-watch-count{flex:none;padding:6px 10px;border:1px solid #f0d8b3;border-radius:30px;background:#fff8eb;color:#9b681b;font-size:.62rem;font-weight:850}
+.student-attendance-watch-list{display:grid;gap:0}
+.student-attendance-watch-item{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 0;border-top:1px solid #f1eadf}
+.student-attendance-watch-item>div:first-child{display:grid;gap:3px;min-width:0}
+.student-attendance-watch-item strong{color:#314866;font-size:.72rem}
+.student-attendance-watch-item small{color:#8a95a4;font-size:.61rem}
+.student-attendance-watch-status{display:grid;justify-items:end;gap:4px;text-align:right}
+.student-attendance-watch-status>small{font-size:.58rem;color:#8a95a4}
+.student-attendance-high-risk{padding:5px 8px;border-radius:20px;background:#fff0ed;color:#b34a45;font-size:.62rem;font-weight:800;white-space:nowrap}
+.student-attendance-watch-note{margin:0;color:#8591a1;font-size:.61rem}
+.student-activities-panel{padding:18px 20px;border-radius:14px;box-shadow:0 5px 16px rgba(32,58,98,.035)}
+.student-activities-panel h2{color:#203b5c;font-size:.93rem;font-weight:800}
+.student-activities-panel .list-group-item{padding:11px 2px;border-color:#edf1f5;font-size:.72rem}
+.student-activities-panel .list-group-item .btn-link{font-size:.72rem;font-weight:750;text-decoration:none}
+.student-activities-panel .list-group-item .btn-link:hover{text-decoration:underline}
+.student-enrollment-panel{display:grid;gap:15px;padding:19px 20px;border-radius:14px;box-shadow:0 5px 16px rgba(32,58,98,.035)}
+.student-enrollment-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.student-enrollment-header .eyebrow{color:#5274af}
+.student-enrollment-header h2{margin:3px 0;font-size:.98rem;font-weight:800;color:#203b5c}
+.student-enrollment-header p{margin:0;color:#7b899d;font-size:.67rem}
+.student-enrollment-symbol{display:grid;place-items:center;width:36px;height:36px;flex:none;border-radius:11px;background:#edf3ff;color:#426bc8;font-size:1.25rem;font-weight:800}
+.student-enrollment-layout{display:grid;grid-template-columns:minmax(250px,.85fr) minmax(0,1.4fr);gap:22px}
+.student-enrollment-join{padding:14px;border:1px solid #e3eaf4;border-radius:11px;background:#f8faff}
+.student-enrollment-form{display:grid;gap:7px}
+.student-enrollment-form>label{font-size:.66rem;font-weight:800;color:#536984}
+.student-enrollment-form-row{display:flex;align-items:center;gap:8px}
+.student-enrollment-form-row input{min-width:0;min-height:39px;font-size:.73rem;letter-spacing:.08em;font-weight:750}
+.student-enrollment-form-row .btn{flex:none;min-height:39px;font-size:.68rem;font-weight:750}
+.student-enrollment-form>small{color:#8794a6;font-size:.6rem;line-height:1.5}
+.student-enrolled-classes{min-width:0}
+.student-enrolled-classes-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
+.student-enrolled-classes-heading h3{margin:0;color:#29425f;font-size:.78rem;font-weight:800}
+.student-enrolled-classes-heading small{display:block;margin-top:3px;color:#8794a6;font-size:.6rem}
+.student-enrolled-classes-heading>span{padding:5px 8px;border-radius:20px;background:#edf3ff;color:#4266a7;font-size:.59rem;font-weight:800}
+.student-enrolled-classes-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.student-enrolled-class-card{display:flex;align-items:flex-start;gap:9px;min-width:0;padding:9px;border:1px solid #e6ebf2;border-radius:9px;background:#fff}
+.student-enrolled-class-mark{display:grid;place-items:center;width:31px;height:31px;flex:none;border-radius:9px;background:#edf3ff;color:#426bc8;font-size:.57rem;font-weight:850}
+.student-enrolled-class-card>div{display:grid;gap:3px;min-width:0}
+.student-enrolled-class-card strong{overflow:hidden;color:#304662;font-size:.63rem;text-overflow:ellipsis;white-space:nowrap}
+.student-enrolled-class-card small{color:#8793a4;font-size:.56rem}
+.student-enrolled-status{width:max-content;max-width:100%;padding:3px 6px;border-radius:20px;font-size:.52rem;font-weight:750}
+.student-enrolled-status.shared{background:#eaf7ef;color:#34845c}
+.student-enrolled-status.pending{background:#f1f3f6;color:#748197}
+.student-enrolled-empty{padding:15px;border:1px dashed #dce5f1;border-radius:9px;color:#8491a3;font-size:.65rem;line-height:1.5}
+.portal-layout[data-bs-theme="dark"] .student-progress-heading h2,.portal-layout[data-bs-theme="dark"] .student-grade-section-heading h2,.portal-layout[data-bs-theme="dark"] .student-attendance-watch-heading h2,.portal-layout[data-bs-theme="dark"] .student-activities-panel h2,.portal-layout[data-bs-theme="dark"] .student-enrollment-header h2,.portal-layout[data-bs-theme="dark"] .student-enrolled-classes-heading h3{color:#e4ebf6}
+.portal-layout[data-bs-theme="dark"] .student-overview-hero .overview-hero-copy h1{color:#e4ebf6}
+.portal-layout[data-bs-theme="dark"] .student-progress-heading p,.portal-layout[data-bs-theme="dark"] .student-grade-section-heading p,.portal-layout[data-bs-theme="dark"] .student-attendance-watch-heading p,.portal-layout[data-bs-theme="dark"] .student-attendance-watch-item small,.portal-layout[data-bs-theme="dark"] .student-attendance-watch-status>small,.portal-layout[data-bs-theme="dark"] .student-attendance-watch-note,.portal-layout[data-bs-theme="dark"] .student-enrollment-header p,.portal-layout[data-bs-theme="dark"] .student-enrollment-form>small,.portal-layout[data-bs-theme="dark"] .student-enrolled-classes-heading small,.portal-layout[data-bs-theme="dark"] .student-enrolled-class-card small{color:#9eacc0}
+.portal-layout[data-bs-theme="dark"] .student-attendance-watch{border-color:#594a39;background:#1d293a}
+.portal-layout[data-bs-theme="dark"] .student-attendance-watch-item{border-color:#35445a}
+.portal-layout[data-bs-theme="dark"] .student-attendance-watch-item strong{color:#e4ebf6}
+.portal-layout[data-bs-theme="dark"] .student-attendance-watch-count{border-color:#6a5437;background:#3b3023;color:#f2ce8e}
+.portal-layout[data-bs-theme="dark"] .student-attendance-high-risk{background:#432c30;color:#ffb6af}
+.portal-layout[data-bs-theme="dark"] .student-activities-panel .list-group-item{border-color:#34445d}
+.portal-layout[data-bs-theme="dark"] .student-enrollment-join{border-color:#34445d;background:#1b2a40}
+.portal-layout[data-bs-theme="dark"] .student-enrollment-form>label{color:#c4d2e7}
+.portal-layout[data-bs-theme="dark"] .student-enrolled-classes-heading>span{background:#263754;color:#b6d0ff}
+.portal-layout[data-bs-theme="dark"] .student-enrolled-class-card,.portal-layout[data-bs-theme="dark"] .student-enrolled-empty{border-color:#34445d;background:#1a293d}
+.portal-layout[data-bs-theme="dark"] .student-enrolled-class-card strong{color:#e4ebf6}
+.portal-layout[data-bs-theme="dark"] .student-enrolled-class-mark,.portal-layout[data-bs-theme="dark"] .student-enrollment-symbol{background:#263754;color:#a9c4ff}
+.portal-layout[data-bs-theme="dark"] .student-enrolled-status.shared{background:#183c31;color:#8dd8b2}
+.portal-layout[data-bs-theme="dark"] .student-enrolled-status.pending{background:#29384d;color:#b7c2d3}
+@media(max-width:1100px){.student-overview-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.student-enrollment-layout{grid-template-columns:1fr}.student-enrolled-classes-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.student-overview-hero .overview-hero-main{gap:12px}.student-overview-hero .overview-create-button{min-height:38px;padding:0 12px;font-size:.68rem}.student-overview-stats{gap:9px;margin-bottom:16px}.student-overview-stats .overview-stat-card{min-height:93px;padding:12px}.student-overview-stats .overview-stat-card strong{font-size:1.42rem}.student-progress-heading{align-items:flex-start;flex-direction:column;gap:3px}.student-attendance-watch{padding:14px}.student-attendance-watch-heading{align-items:flex-start}.student-attendance-watch-item{align-items:flex-start;flex-direction:column;gap:6px}.student-attendance-watch-status{justify-items:start;text-align:left}.student-activities-panel,.student-enrollment-panel{padding:14px}.student-enrollment-layout{gap:14px}.student-enrolled-classes-list{grid-template-columns:1fr}.student-enrollment-form-row{align-items:stretch;flex-direction:column}.student-enrollment-form-row .btn{width:100%}.class-directory-filters{grid-template-columns:1fr;gap:9px}.class-directory-filter-foot{justify-content:space-between}}
+@media(max-width:420px){.student-overview-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.student-attendance-watch-count{font-size:.55rem}.student-grade-section-heading{align-items:flex-start;flex-direction:column}.student-grade-header-actions{width:100%;justify-content:space-between}}
