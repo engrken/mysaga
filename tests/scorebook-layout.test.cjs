@@ -55,3 +55,20 @@ test("student name and summary column widths remain useful",()=>{
  assert.ok(w.final>=85);
  assert.ok(w.assessment>=75);
 });
+
+
+test("Show all layout keeps a floating horizontal scrollbar synchronized with the workbook",()=>{
+ const portal=fs.readFileSync(path.join(__dirname,"../src/components/Portal.tsx"),"utf8");
+ const css=fs.readFileSync(path.join(__dirname,"../src/app/globals.css"),"utf8");
+ assert.ok(portal.includes('id="score-sheet-scroll-viewport"'));
+ assert.ok(portal.includes("ref={scorebookScrollRef}"));
+ assert.ok(portal.includes("ref={scorebookFloatingScrollRef}"));
+ assert.ok(portal.includes('scorebookFloatingScroll.visible && scorebookView === "all"'));
+ assert.ok(portal.includes("floating.scrollLeft = event.currentTarget.scrollLeft"));
+ assert.ok(portal.includes("sheet.scrollLeft = event.currentTarget.scrollLeft"));
+ assert.ok(portal.includes("sheet.getBoundingClientRect()"));
+ assert.ok(portal.includes("new ResizeObserver(updateFloatingScrollbar)"));
+ assert.match(css,/\.score-sheet-floating-scroll\s*\{[^}]*position:\s*fixed/s);
+ assert.match(css,/\.score-sheet-floating-scroll-track\s*\{/);
+ assert.match(css,/@media\s*\(max-width:\s*760px\),\s*print\s*\{[^}]*\.score-sheet-floating-scroll/s);
+});

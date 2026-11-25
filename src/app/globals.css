@@ -2128,3 +2128,54 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
   .portal-top-link{padding-left:7px;padding-right:7px;font-size:.64rem}
   .portal-top-actions .account-menu-trigger{min-width:36px}
 }
+
+
+/* Keep the full workbook's horizontal navigation within reach while the page scrolls vertically. */
+.portal-layout .score-sheet-floating-scroll {
+  position: fixed;
+  z-index: 1075;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  max-width: calc(100vw - 16px);
+  height: 22px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--bs-border-color, #cbd5e1);
+  border-radius: 999px;
+  background: var(--bs-tertiary-bg, #f5f8fc);
+  box-shadow: 0 5px 18px rgba(15, 23, 42, .2);
+  scrollbar-width: auto;
+  scrollbar-color: #7186a8 #e9eef5;
+}
+.portal-layout .score-sheet-floating-scroll-track {
+  height: 1px;
+  pointer-events: none;
+}
+.portal-layout .score-sheet-floating-scroll::-webkit-scrollbar {
+  height: 12px;
+}
+.portal-layout .score-sheet-floating-scroll::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #e9eef5;
+}
+.portal-layout .score-sheet-floating-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid #e9eef5;
+  border-radius: 999px;
+  background: #7186a8;
+}
+.portal-layout[data-bs-theme="dark"] .score-sheet-floating-scroll {
+  border-color: #43536c;
+  background: #172235;
+  box-shadow: 0 5px 18px rgba(0, 0, 0, .42);
+  scrollbar-color: #7186a8 #26364d;
+}
+.portal-layout[data-bs-theme="dark"] .score-sheet-floating-scroll::-webkit-scrollbar-track {
+  background: #26364d;
+}
+.portal-layout[data-bs-theme="dark"] .score-sheet-floating-scroll::-webkit-scrollbar-thumb {
+  border-color: #26364d;
+  background: #7186a8;
+}
+@media (max-width: 760px), print {
+  .portal-layout .score-sheet-floating-scroll { display: none !important; }
+}
