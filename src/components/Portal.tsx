@@ -2894,7 +2894,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
                 </details>
               </article>;
             })}</div> :
-            <div className="empty-state student-empty"><div className="empty-icon">◎</div><h3>No classes match your search</h3><p>Try a different search or clear your search.</p><button type="button" className="btn btn-outline-primary btn-sm" onClick={()=>setStudentGradeQuery("")>Show all classes</button></div> :
+            <div className="empty-state student-empty"><div className="empty-icon">◎</div><h3>No classes match your search</h3><p>Try a different search or clear your search.</p><button type="button" className="btn btn-outline-primary btn-sm" onClick={()=>setStudentGradeQuery("")}>Show all classes</button></div> :
             <div className="empty-state student-empty"><div className="empty-icon">◎</div><h3>No visible grades yet</h3><p>Your teacher may still be entering scores, may have hidden the class, or your student number may need to be linked.</p><div className="empty-hint">If you expect to see a class, confirm your student number with your teacher.</div></div>}
           </>}
         </section>
