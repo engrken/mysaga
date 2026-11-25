@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.13.0-beta.1",
+    "date": "2026-11-25",
+    "kind": "feature",
+    "changes": [
+      "Moved the former sidebar menu into a responsive top navigation bar, with an active-period My Classes dropdown and mobile-friendly navigation controls."
+    ]
+  },
+  {
     "version": "0.12.0-beta.1",
     "date": "2026-11-24",
     "kind": "feature",

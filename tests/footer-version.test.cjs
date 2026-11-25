@@ -44,6 +44,18 @@ test("global footer uses committed version and deployment build, including priva
   assert.doesNotMatch(read("src/components/LandingPage.tsx"), /<footer className="saga-footer">/);
 });
 
+test("latest SAGA Portal update is visible in the global footer", () => {
+  const releases = JSON.parse(read("src/data/releases.json"));
+  const footer = read("src/components/SiteFooter.tsx");
+  assert.ok(footer.includes('import releases from "@/data/releases.json";'));
+  assert.ok(footer.includes("latestRelease?.changes?.[0]"));
+  assert.ok(footer.includes("latestRelease?.version"));
+  assert.match(footer, /saga-site-footer-update/);
+  assert.match(footer, /Latest update/);
+  assert.equal(releases[0].version, JSON.parse(read("package.json")).version);
+  assert.match(releases[0].changes[0], /top navigation/i);
+});
+
 test("public release history follows the shared version manifest", () => {
   const page = read("src/app/updates/page.tsx");
   assert.match(page, /releases\.map\(/);
