@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { DemoClassChatsHub } from "./DemoClassChats";
+import { isSameAcademicPeriod } from "@/lib/academic-period";
 
 type MembershipStatus = "PENDING" | "INVITED" | "MEMBER" | "REMOVED" | "FAILED";
 type ChatClass = {
@@ -31,14 +32,19 @@ function studentStatus(status: MembershipStatus | null | undefined) {
   }
 }
 
-export default function ClassChatsHub({ role, isDemo = false }: { role: "TEACHER" | "STUDENT"; isDemo?: boolean }) {
-  return isDemo ? <DemoClassChatsHub role={role} /> : <LiveClassChatsHub role={role} />;
+type ClassChatsPeriodProps = { academicYear: string; term: string; periodReady: boolean };
+
+export default function ClassChatsHub({ role, isDemo = false, academicYear, term, periodReady }: { role: "TEACHER" | "STUDENT"; isDemo?: boolean } & ClassChatsPeriodProps) {
+  return isDemo
+    ? <DemoClassChatsHub role={role} academicYear={academicYear} term={term} periodReady={periodReady} />
+    : <LiveClassChatsHub role={role} academicYear={academicYear} term={term} periodReady={periodReady} />;
 }
 
-function LiveClassChatsHub({ role }: { role: "TEACHER" | "STUDENT" }) {
+function LiveClassChatsHub({ role, academicYear, term, periodReady }: { role: "TEACHER" | "STUDENT" } & ClassChatsPeriodProps) {
   const [classes, setClasses] = useState<ChatClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const activeClasses = classes.filter(item => isSameAcademicPeriod(item, academicYear, term));
 
   useEffect(() => {
     const controller = new AbortController();
@@ -63,16 +69,16 @@ function LiveClassChatsHub({ role }: { role: "TEACHER" | "STUDENT" }) {
         <span className="eyebrow">CLASS COMMUNICATION</span>
         <h2>Class Chats</h2>
         <p className="muted">{role === "TEACHER"
-          ? "A quick launchpad for the Google Chat Spaces connected to your subjects. Manage invitations and roster synchronization from each class roster."
-          : "Open the Google Chat Spaces for your enrolled classes. Your teacher manages class invitations and membership."}</p>
+          ? "A launchpad for Google Chat Spaces connected to your subjects in the active academic period. Manage invitations and roster synchronization from each class roster."
+          : "Open Google Chat Spaces for your enrolled classes in the active academic period. Your teacher manages class invitations and membership."}</p>
       </div>
-      {!loading && !error && <span className="badge text-bg-light">{classes.length} Space{classes.length === 1 ? "" : "s"}</span>}
+      {!loading && periodReady && !error && <span className="badge text-bg-light">{activeClasses.length} active Space{activeClasses.length === 1 ? "" : "s"}</span>}
     </div>
 
-    {loading && <div className="inline-empty" role="status"><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"/>Loading your class Spaces…</div>}
+    {(loading || !periodReady) && <div className="inline-empty" role="status"><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"/>Loading your active-period class Spaces…</div>}
     {error && <div className="alert alert-warning" role="alert">{error}</div>}
 
-    {!loading && !error && classes.length === 0 && <div className="empty-state">
+    {!loading && periodReady && !error && classes.length === 0 && <div className="empty-state">
       <div className="empty-icon">▣</div>
       <h3>{role === "TEACHER" ? "No class Spaces linked yet" : "No class Spaces available yet"}</h3>
       <p>{role === "TEACHER"
@@ -81,8 +87,14 @@ function LiveClassChatsHub({ role }: { role: "TEACHER" | "STUDENT" }) {
       {role === "TEACHER" && <p className="muted small mb-0">The Class Chats page is an overview. Class roster tools remain the place to invite students, retry synchronization, and send announcements.</p>}
     </div>}
 
-    {!loading && !error && classes.length > 0 && <div className="row g-3">
-      {classes.map(item => {
+    {!loading && periodReady && !error && classes.length > 0 && activeClasses.length === 0 && <div className="empty-state">
+      <div className="empty-icon">▣</div>
+      <h3>No active class Spaces for this period</h3>
+      <p>There are no connected chats for {term} · {academicYear}. Spaces from other semesters or academic years are hidden here.</p>
+    </div>}
+
+    {!loading && periodReady && !error && activeClasses.length > 0 && <div className="row g-3">
+      {activeClasses.map(item => {
         const status = studentStatus(item.membershipStatus);
         const counts = item.membershipCounts || {};
         const joined = counts.MEMBER || 0;

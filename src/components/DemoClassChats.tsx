@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
+import { isSameAcademicPeriod } from "@/lib/academic-period";
 
 type DemoMembership = "NONE" | "PENDING" | "INVITED" | "MEMBER" | "FAILED" | "REMOVED";
 type DemoChatMessage = { id: string; author: string; text: string; time: string; announcement?: boolean };
@@ -288,13 +289,19 @@ export function DemoGoogleChatControls({
   </section>;
 }
 
-export function DemoClassChatsHub({ role }: { role: "TEACHER" | "STUDENT" }) {
+export function DemoClassChatsHub({ role, academicYear, term, periodReady }: {
+  role: "TEACHER" | "STUDENT";
+  academicYear: string;
+  term: string;
+  periodReady: boolean;
+}) {
   const { state, setState, ready, reset } = useDemoChatSandbox();
   const [openCode, setOpenCode] = useState("");
 
-  if (!ready || !state) return <section className="section-block class-chats-page"><p className="muted">Loading fictional class Spaces…</p></section>;
+  if (!ready || !state || !periodReady) return <section className="section-block class-chats-page"><p className="muted">Loading fictional class Spaces…</p></section>;
 
-  const spaces = state.classes.filter(item => item.connected);
+  const allSpaces = state.classes.filter(item => item.connected);
+  const spaces = allSpaces.filter(item => isSameAcademicPeriod(item, academicYear, term));
 
   function acceptInvitation(code: string, title: string, rosterCount: number) {
     updateClass(setState, code, title, rosterCount, item => ({
@@ -317,11 +324,11 @@ export function DemoClassChatsHub({ role }: { role: "TEACHER" | "STUDENT" }) {
         <span className="eyebrow">CLASS COMMUNICATION · FICTIONAL DATA</span>
         <h2>Class Chats</h2>
         <p className="muted">{role === "TEACHER"
-          ? "A sample launchpad for the Google Chat Spaces connected to your classes. Configure a Space and synchronize the roster from the class roster tools."
-          : "Explore sample Google Chat Spaces for your enrolled classes. Your teacher manages invitations and class membership."}</p>
+          ? "A sample launchpad for Google Chat Spaces connected to subjects in the active academic period."
+          : "Explore sample Google Chat Spaces for your enrolled classes in the active academic period."}</p>
       </div>
       <div className="d-flex flex-wrap gap-2 align-items-center">
-        <span className="badge text-bg-light">{spaces.length} sample Space{spaces.length === 1 ? "" : "s"}</span>
+        <span className="badge text-bg-light">{spaces.length} active sample Space{spaces.length === 1 ? "" : "s"}</span>
         <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => { reset(); setOpenCode(""); }}>Reset simulation</button>
       </div>
     </div>
@@ -331,7 +338,13 @@ export function DemoClassChatsHub({ role }: { role: "TEACHER" | "STUDENT" }) {
     </div>
 
     {spaces.length === 0
-      ? <div className="empty-state">
+      ? allSpaces.length > 0
+        ? <div className="empty-state">
+            <div className="empty-icon">▣</div>
+            <h3>No active sample Spaces for this period</h3>
+            <p>There are no connected sample chats for {term} · {academicYear}. Spaces from other semesters or academic years are hidden here.</p>
+          </div>
+        : <div className="empty-state">
           <div className="empty-icon">▣</div>
           <h3>{role === "TEACHER" ? "No sample Spaces linked yet" : "No sample Spaces available yet"}</h3>
           <p>{role === "TEACHER"

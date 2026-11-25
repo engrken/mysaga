@@ -2874,7 +2874,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           </>}
         </section>
       </>}</>}
-      {tab === "chats" && <ClassChatsHub role={teacher ? "TEACHER" : "STUDENT"} isDemo={user.isDemo} />}
+      {tab === "chats" && <ClassChatsHub role={teacher ? "TEACHER" : "STUDENT"} isDemo={user.isDemo} academicYear={academicYear} term={activeTerm} periodReady={academicPeriodReady} />}
       {tab === "simulator" && <section className="section-block student-simulator-page">
         <div className="student-simulator-intro">
           <span className="eyebrow">PRACTICE · PRIVATE TO YOUR ACCOUNT</span>
