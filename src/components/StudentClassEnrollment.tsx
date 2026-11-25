@@ -45,24 +45,32 @@ export default function StudentClassEnrollment({ onJoined, academicYear, term }:
     finally { setSaving(false); }
   }
 
-  return <section className="surface rounded-3 p-3 p-md-4 mb-4" aria-labelledby="student-join-title">
-    <div className="row g-3 align-items-start">
-      <div className="col-12 col-lg-5">
-        <h2 id="student-join-title" className="h5 mb-1">Join a class</h2>
-        <p className="muted small">Enter the invitation code shared by your teacher. You must be registered and verified at the same school.</p>
-        <form onSubmit={join} className="d-flex flex-wrap gap-2">
-          <input className="form-control flex-grow-1" style={{ maxWidth: 250 }} aria-label="Class invitation code" value={code} onChange={event => setCode(event.target.value.toUpperCase().slice(0, 32))} placeholder="XXXX-XXXX-XXXX" autoComplete="off" required minLength={12} maxLength={32}/>
-          <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Joining…" : "Join class"}</button>
+  return <section className="surface student-enrollment-panel mb-4" aria-labelledby="student-join-title">
+    <div className="student-enrollment-header">
+      <div><span className="eyebrow">CLASS ACCESS</span><h2 id="student-join-title">Join a class</h2><p>Use the invitation code provided by your teacher to connect your class record.</p></div>
+      <span className="student-enrollment-symbol" aria-hidden="true">＋</span>
+    </div>
+    <div className="student-enrollment-layout">
+      <div className="student-enrollment-join">
+        <form onSubmit={join} className="student-enrollment-form">
+          <label htmlFor="student-class-invitation-code">Class invitation code</label>
+          <div className="student-enrollment-form-row">
+            <input id="student-class-invitation-code" className="form-control" aria-label="Class invitation code" value={code} onChange={event => setCode(event.target.value.toUpperCase().slice(0, 32))} placeholder="XXXX-XXXX-XXXX" autoComplete="off" required minLength={12} maxLength={32}/>
+            <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Joining…" : "Join class"}</button>
+          </div>
+          <small>Make sure you are registered and verified at the same school as your instructor.</small>
         </form>
-        {error && <div className="alert alert-danger py-2 mt-2 mb-0" role="alert">{error}</div>}
-        {message && <div className="alert alert-success py-2 mt-2 mb-0" role="status">{message}</div>}
+        {error && <div className="alert alert-danger py-2 mt-3 mb-0" role="alert">{error}</div>}
+        {message && <div className="alert alert-success py-2 mt-3 mb-0" role="status">{message}</div>}
       </div>
-      <div className="col-12 col-lg-7">
-        <div className="d-flex justify-content-between align-items-center mb-2"><h3 className="h6 mb-0">My enrolled classes</h3><small className="muted">{classes.length} linked</small></div>
+      <div className="student-enrolled-classes">
+        <div className="student-enrolled-classes-heading"><div><h3>My enrolled classes</h3><small>Your connected class records for this academic period.</small></div><span>{classes.length} linked</span></div>
         {loading ? <p className="muted small mb-0" role="status">Loading your classes…</p> :
-          classes.length ? <div className="d-flex flex-column gap-2">{classes.slice(0, 15).map(item => <div key={item.id} className="border rounded-3 p-2 d-flex justify-content-between gap-2 flex-wrap"><div><strong className="d-block">{item.code} — {item.title}</strong><small className="muted">{item.term} · {item.academicYear}</small></div><small className={item.isPublished ? "text-success" : "text-secondary"}>{item.isPublished ? "Grades shared" : "Awaiting teacher grade visibility"}</small></div>)}{classes.length > 15 && <small className="muted">Showing 15 of {classes.length} classes.</small>}</div> :
-            <p className="muted small mb-0">No linked classes yet. Join with a teacher-provided code or ask your teacher to add you directly.</p>}
+          classes.length ? <div className="student-enrolled-classes-list">{classes.slice(0, 15).map(item => <article key={item.id} className="student-enrolled-class-card">
+            <span className="student-enrolled-class-mark">{item.code.slice(0, 2)}</span>
+            <div><strong>{item.code} — {item.title}</strong><small>{item.term} · {item.academicYear}</small><span className={item.isPublished ? "student-enrolled-status shared" : "student-enrolled-status pending"}>{item.isPublished ? "Grades shared" : "Waiting for grade visibility"}</span></div>
+          </article>)}{classes.length > 15 && <small className="muted">Showing 15 of {classes.length} enrolled classes.</small>}</div> :
+            <div className="student-enrolled-empty">No linked classes for this period yet. Join with a teacher-provided code or ask your teacher to add you directly.</div>}
       </div>
     </div>
   </section>;
-}
