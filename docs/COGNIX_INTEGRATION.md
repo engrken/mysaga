@@ -13,7 +13,9 @@ For each generation request, SAGA authenticates an active, non-demo teacher and 
 - Course/year label.
 - Term.
 
-The teacher also selects a learning level and resource type and supplies a short generic topic or learning competency. SAGA does not load or query enrollments, student names or identifiers, rosters, assessments, activities, scores, grades, grade-change history, or attendance for this feature. The internal subject ID is used only by SAGA to verify ownership and is not sent to COGNIX. School ID and teacher ID are not sent to COGNIX either. The request endpoint applies a 10-request-per-hour per-teacher limit.
+The teacher also selects a learning level and resource type and supplies a short generic topic or learning competency. SAGA does not load or query enrollments, student names or identifiers, rosters, assessments, activities, scores, grades, grade-change history, or attendance for this feature. The internal subject ID is used only by SAGA to verify ownership and is not sent to COGNIX.
+
+The Academic Assistant is launched from the current class workspace when a class is active. From the global assistant link, a teacher selects one of their own class subjects before generating a draft. School ID and teacher ID are not sent to COGNIX either. The request endpoint applies a 10-request-per-hour per-teacher limit.
 
 ## External model processing disclosure
 
