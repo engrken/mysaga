@@ -35,8 +35,7 @@ function studentStatus(status: MembershipStatus | null | undefined) {
 type ClassChatsPeriodProps = { academicYear: string; term: string; periodReady: boolean };
 
 export default function ClassChatsHub({ role, isDemo = false, academicYear, term, periodReady }: { role: "TEACHER" | "STUDENT"; isDemo?: boolean } & ClassChatsPeriodProps) {
-  return isDemo
-    ? <DemoClassChatsHub role={role} academicYear={academicYear} term={term} periodReady={periodReady} />
+  return isDemo ? <DemoClassChatsHub role={role} academicYear={academicYear} term={term} periodReady={periodReady} />
     : <LiveClassChatsHub role={role} academicYear={academicYear} term={term} periodReady={periodReady} />;
 }
 
