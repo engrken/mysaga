@@ -2230,9 +2230,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     downloadXlsx("class-roster-sample-format.xlsx", "Roster Sample", ["Student Name", "Student Number", "Portal Account"], [["Santos, Juan D.", "2026-0001", ""], ["Reyes, Maria C.", "2026-0002", ""]]);
   }
   const selectedTitle = useMemo(() => subjects.find(s => s.id === activeId)?.code || "My classes", [subjects, activeId]);
-  const schoolYears = useMemo(() => [...new Set(subjects.map(subject => subject.academicYear))].sort((a,b)=>b.localeCompare(a)), [subjects]);
-  const terms = useMemo(() => [...new Set(subjects.map(subject => subject.term))].sort(), [subjects]);
-  const visibleSubjects = useMemo(() => subjects.filter(subject => (schoolYearFilter === "All School Years" || subject.academicYear === schoolYearFilter) && (termFilter === "All Terms" || subject.term === termFilter)), [subjects, schoolYearFilter, termFilter]);
+  const visibleSubjects = subjects;
   const classDirectorySubjects = useMemo(() => {
     const query = classDirectoryQuery.trim().toLocaleLowerCase();
     return visibleSubjects.filter(subject => !query || (subject.classId + " " + subject.code + " " + subject.title + " " + (subject.courseYear || "")).toLocaleLowerCase().includes(query));
@@ -2243,10 +2241,6 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     visible: visibleSubjects.filter(subject => subject.isPublished).length,
     needsReview: visibleSubjects.filter(subject => subject.gradeStatus !== "VERIFIED").length
   }), [visibleSubjects]);
-  const sidebarClassSubjects = useMemo(() => {
-    const query = sidebarClassQuery.trim().toLocaleLowerCase();
-    return subjects.filter(subject => !query || (subject.classId + " " + subject.code + " " + subject.title).toLocaleLowerCase().includes(query));
-  }, [subjects, sidebarClassQuery]);
   const visibleClassCount = subjects.filter(subject => subject.isPublished).length;
   const filteredEnrollments = useMemo(() => (detail?.enrollments || []).filter(enrollment => {
     const query = classStudentFilter.trim().toLocaleLowerCase();
@@ -2309,13 +2303,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     .filter(grade => grade.attendanceWarning || grade.droppingWarning)
     .sort((a, b) => Number(!!b.droppingWarning) - Number(!!a.droppingWarning)
       || (b.attendanceWarning?.percent ?? 0) - (a.attendanceWarning?.percent ?? 0)), [grades]);
-  const studentGradeYears = useMemo(() => [...new Set(grades.map(grade => grade.academicYear))].sort((a,b)=>b.localeCompare(a)), [grades]);
-  const studentGradeTerms = useMemo(() => [...new Set(grades.map(grade => grade.term))].sort(), [grades]);
   const visibleGrades = useMemo(() => grades.filter(grade =>
-    (studentYearFilter === "All School Years" || grade.academicYear === studentYearFilter) &&
-    (studentTermFilter === "All Terms" || grade.term === studentTermFilter) &&
-    (!studentGradeQuery.trim() || `${grade.code} ${grade.title} ${grade.teacher}`.toLocaleLowerCase().includes(studentGradeQuery.trim().toLocaleLowerCase()))
-  ), [grades, studentYearFilter, studentTermFilter, studentGradeQuery]);
+    !studentGradeQuery.trim() || `${grade.code} ${grade.title} ${grade.teacher}`.toLocaleLowerCase().includes(studentGradeQuery.trim().toLocaleLowerCase())
+  ), [grades, studentGradeQuery]);
   const subjectsPerPage = 9;
   const subjectPageCount = Math.max(1, Math.ceil(classDirectorySubjects.length / subjectsPerPage));
   const pageSubjects = classDirectorySubjects.slice((subjectPage - 1) * subjectsPerPage, subjectPage * subjectsPerPage);
@@ -2325,8 +2315,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const rosterPerPage = 25;
   const rosterPageCount = Math.max(1, Math.ceil(filteredEnrollments.length / rosterPerPage));
   const pageEnrollments = filteredEnrollments.slice((rosterPage - 1) * rosterPerPage, rosterPage * rosterPerPage);
-  useEffect(() => { setSubjectPage(1); }, [schoolYearFilter, termFilter, classDirectoryQuery]);
-  useEffect(() => { setClassPage(1); }, [schoolYearFilter, termFilter]);
+  useEffect(() => { setSubjectPage(1); }, [academicYear, activeTerm, classDirectoryQuery]);
+  useEffect(() => { setClassPage(1); }, [academicYear, activeTerm]);
   useEffect(() => { const index = visibleSubjects.findIndex(subject => subject.id === activeId); if (index >= 0) setClassPage(Math.floor(index / classesPerPage) + 1); }, [activeId, visibleSubjects]);
   useEffect(() => { setRosterPage(1); }, [activeId, classStudentFilter]);
   useEffect(() => { setAssessmentCategoryOverrides({}); }, [activeId]);
