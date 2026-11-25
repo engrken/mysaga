@@ -37,16 +37,27 @@ test("Faculty ID accepts realistic school-issued IDs but rejects spaces and inva
   assert.equal(normalizeFacultyId("a".repeat(41)), null);
 });
 
-test("My Classes opens an active-period hover menu with individual class navigation", () => {
+test("Primary portal navigation replaces the sidebar and keeps My Classes as an active-period dropdown", () => {
   const portal = fs.readFileSync(path.join(__dirname, "../src/components/Portal.tsx"), "utf8");
   const styles = fs.readFileSync(path.join(__dirname, "../src/app/globals.css"), "utf8");
-  assert.ok(portal.includes("sidebar-nav-group sidebar-class-menu"));
+  assert.ok(portal.includes('<header className="portal-top-nav">'));
+  assert.ok(portal.includes('<nav className="portal-top-links" aria-label="Primary navigation">'));
+  assert.ok(portal.includes("portal-top-actions"));
+  assert.doesNotMatch(portal, /<aside className="sidebar"/);
+  assert.ok(portal.includes("portal-nav-class-menu"));
   assert.ok(portal.includes('aria-haspopup="true"'));
+  assert.ok(portal.includes("aria-expanded={classesMenuOpen}"));
   assert.ok(portal.includes("subjects.length ? subjects.map(subject => <button"));
-  assert.ok(portal.includes("onClick={() => openClass(subject.id)}"));
-  assert.doesNotMatch(portal, /import Link|<Link href=/);
-  assert.ok(styles.includes("sidebar-class-menu:hover .sidebar-class-list"));
-  assert.ok(styles.includes("sidebar-class-menu:focus-within .sidebar-class-list"));
+  assert.ok(portal.includes("onClick={() => { setClassesMenuOpen(false); openClass(subject.id); }}"));
+  assert.ok(portal.includes("Private by default"));
+  assert.ok(portal.includes("Grade Simulator"));
+  assert.ok(portal.includes("Help &amp; guides"));
+  assert.ok(styles.includes("portal-nav-class-menu:hover .portal-top-class-list"));
+  assert.ok(styles.includes("portal-nav-class-menu:focus-within .portal-top-class-list"));
+  assert.ok(styles.includes("portal-nav-class-menu.is-open .portal-top-class-list"));
+  assert.ok(styles.includes("@media(max-width:760px)"));
+  assert.ok(styles.includes(".portal-top-links{grid-column:1/-1"));
+  assert.ok(styles.includes(".portal-layout[data-bs-theme=\"dark\"] .portal-top-nav"));
 });
 
 test("Faculty ID migration protects existing records and unique school assignment", () => {
