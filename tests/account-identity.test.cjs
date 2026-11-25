@@ -37,11 +37,16 @@ test("Faculty ID accepts realistic school-issued IDs but rejects spaces and inva
   assert.equal(normalizeFacultyId("a".repeat(41)), null);
 });
 
-test("My Classes directly opens the active-period directory without a quick-access menu", () => {
+test("My Classes opens an active-period hover menu with individual class navigation", () => {
   const portal = fs.readFileSync(path.join(__dirname, "../src/components/Portal.tsx"), "utf8");
-  assert.match(portal, /<Link href=\{`\/\$\{encodeURIComponent\(user\.school\.slug\)\}\/classes`\} className=\{`side-link/);
-  assert.doesNotMatch(portal, /toggleClassNav|revealClassesOnHover|hideClassesOnMouseLeave|sidebar-class-list/);
-  assert.doesNotMatch(portal, /toggleClassNav|revealClassesOnHover|hideClassesOnMouseLeave|QUICK ACCESS|sidebar-class-list/);
+  const styles = fs.readFileSync(path.join(__dirname, "../src/app/globals.css"), "utf8");
+  assert.ok(portal.includes("sidebar-nav-group sidebar-class-menu"));
+  assert.ok(portal.includes('aria-haspopup="true"'));
+  assert.ok(portal.includes("subjects.length ? subjects.map(subject => <button"));
+  assert.ok(portal.includes("onClick={() => openClass(subject.id)}"));
+  assert.doesNotMatch(portal, /<Link href=.*\\/classes/);
+  assert.match(styles, /sidebar-class-menu:hover \\.sidebar-class-list/);
+  assert.match(styles, /sidebar-class-menu:focus-within \\.sidebar-class-list/);
 });
 
 test("Faculty ID migration protects existing records and unique school assignment", () => {
