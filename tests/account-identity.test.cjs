@@ -37,13 +37,10 @@ test("Faculty ID accepts realistic school-issued IDs but rejects spaces and inva
   assert.equal(normalizeFacultyId("a".repeat(41)), null);
 });
 
-test("My Classes menu no longer navigates to a class on toggle", () => {
+test("My Classes directly opens the active-period directory without a quick-access menu", () => {
   const portal = fs.readFileSync(path.join(__dirname, "../src/components/Portal.tsx"), "utf8");
-  const toggle = portal.match(/function toggleClassNav\(\) \{([\s\S]*?)\n  \}\n  function revealClassesOnHover/);
-  assert.ok(toggle, "My Classes must have a standalone expand/collapse handler");
-  assert.doesNotMatch(toggle[1], /navigatePage|openClass|router\.(push|replace)|setActiveId/);
-  assert.match(portal, /onMouseEnter=\{revealClassesOnHover\}/);
-  assert.match(portal, /onMouseLeave=\{hideClassesOnMouseLeave\}/);
+  assert.match(portal, /onClick=\{\(\) => navigatePage\("classes"\)\}/);
+  assert.doesNotMatch(portal, /toggleClassNav|revealClassesOnHover|hideClassesOnMouseLeave|QUICK ACCESS|sidebar-class-list/);
 });
 
 test("Faculty ID migration protects existing records and unique school assignment", () => {
