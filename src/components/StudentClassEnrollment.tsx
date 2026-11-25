@@ -74,3 +74,4 @@ export default function StudentClassEnrollment({ onJoined, academicYear, term }:
       </div>
     </div>
   </section>;
+}
