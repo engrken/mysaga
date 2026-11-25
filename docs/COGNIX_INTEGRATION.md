@@ -1,30 +1,41 @@
 # COGNIX integration status (SAGA)
 
-The initial SAGA-to-COGNIX teacher-summary experiment is **disabled** pending privacy review. There is currently no teacher-facing COGNIX feature in SAGA.
+SAGA integrates with COGNIX through server-side routes only. Browser code never receives a COGNIX service token.
 
-## Current behavior
+## Enabled capability: Academic resource drafting
 
-The existing server-side entry point, `POST /api/cognix/teacher-summary`, is retained temporarily for a safe, explicit response to any stale caller. It:
+Teachers can open **Academic Assistant** from the SAGA top navigation. It generates general lesson outlines, study guides, and practice questions from:
 
-- Requires SAGA's authenticated, non-demo teacher session.
-- Returns `403 capability_disabled`.
-- Does not query subjects, enrollments, assessments, or grade workflow records.
-- Does not make an outbound request to COGNIX.
-- Does not send any teacher or academic data outside SAGA.
+- A fixed resource type.
+- A fixed subject selection.
+- A fixed learning-level selection.
+- A short generic academic topic.
 
-## Why it is disabled
+It does not query SAGA academic records, classes, rosters, students, assessments, grades, or attendance. The request contains no teacher or student identifier. Only an authenticated, non-demo teacher can use the SAGA proxy endpoint, which also applies a 10-request-per-hour per-teacher limit.
 
-The original experiment sent teacher-scoped workload aggregates to an external model endpoint. Aggregate counts can still describe an identifiable teacher's activities and are not automatically anonymous. This use case has not been established as necessary and proportionate, and the current free model endpoint is not approved for confidential production information.
+### External model processing disclosure
 
-## Requirements before reconsidering
+The generic topic and selected settings are processed by the COGNIX Academic Agent using the AI Gateway virtual model `vmc/academic-assistant`. This model's configuration enforces the Gateway no-prompt-training provider filter. This does **not** guarantee zero data retention. The UI tells teachers not to enter personal, confidential, or record-level information.
 
-A future COGNIX integration must have:
+Generated materials are drafts and require teacher review for factual accuracy and curriculum fit. Do not treat the generated content as official school policy or an official curriculum determination.
 
-1. A specific, documented purpose that benefits from model processing.
-2. A necessity and proportionality assessment, including a local-processing alternative.
-3. An approved data contract that excludes unnecessary personal and academic information.
-4. Review of provider retention, training/improvement use, data processing terms, and deployment configuration.
-5. Appropriate notices, authorization, and approval from the responsible privacy/governance owners.
-6. Synthetic-data testing before production data is considered.
+## Disabled experiment: Teacher summary
 
-Until those requirements are satisfied, keep `COGNIX_API_URL` and `COGNIX_API_KEY` unconfigured in SAGA. Never expose a service credential to a browser.
+The previous `POST /api/cognix/teacher-summary` experiment remains disabled. It returns `403 capability_disabled` before querying subjects, enrollments, assessments, or grade workflows. It makes no outbound request to COGNIX.
+
+## Server environment
+
+The SAGA production server uses:
+
+- `COGNIX_API_URL`: `https://cognixph.vercel.app`.
+- `COGNIX_API_KEY`: the SAGA-to-COGNIX server credential matching the SAGA application key (or the SAGA-only legacy fallback) configured in COGNIX.
+
+Both values must stay server-side. Do not use a `NEXT_PUBLIC_` prefix or put either value in browser code.
+
+## Safety boundaries
+
+- SAGA remains authoritative for teacher authentication and school scope.
+- COGNIX receives generic topic input only; no SAGA data access or direct database connection exists.
+- Requests and responses are not persisted by the integration endpoints.
+- Logs contain only request IDs, task labels, duration, and token counts—not prompts or generated text.
+- No grade calculations, student evaluation, attendance decisions, academic record changes, or autonomous actions are enabled.
