@@ -47,9 +47,9 @@ test("global footer uses committed version and deployment build, including priva
 test("latest SAGA Portal update is visible in the global footer", () => {
   const releases = JSON.parse(read("src/data/releases.json"));
   const footer = read("src/components/SiteFooter.tsx");
-  assert.match(footer, /import releases from "@\\/data\\/releases\\.json"/);
-  assert.match(footer, /latestRelease\\?\\.changes\\?\\.\\[0\\]/);
-  assert.match(footer, /latestRelease\\?\\.version/);
+  assert.ok(footer.includes('import releases from "@/data/releases.json";'));
+  assert.ok(footer.includes("latestRelease?.changes?.[0]"));
+  assert.ok(footer.includes("latestRelease?.version"));
   assert.match(footer, /saga-site-footer-update/);
   assert.match(footer, /Latest update/);
   assert.equal(releases[0].version, JSON.parse(read("package.json")).version);
