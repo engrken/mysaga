@@ -64,11 +64,17 @@ test("Show all layout keeps a floating horizontal scrollbar synchronized with th
  assert.ok(portal.includes("ref={scorebookScrollRef}"));
  assert.ok(portal.includes("ref={scorebookFloatingScrollRef}"));
  assert.ok(portal.includes('scorebookFloatingScroll.visible && scorebookView === "all"'));
+ assert.ok(portal.includes('import { createPortal } from "react-dom"'));
+ assert.match(portal,/scorebookFloatingScroll\.visible && scorebookView === "all" && typeof document !== "undefined" && createPortal\(/);
+ assert.ok(portal.includes("document.body)"));
+ assert.ok(portal.includes("[scorebookFloatingScroll.visible, scorebookFloatingScroll.scrollWidth]"));
  assert.ok(portal.includes("floating.scrollLeft = event.currentTarget.scrollLeft"));
  assert.ok(portal.includes("sheet.scrollLeft = event.currentTarget.scrollLeft"));
  assert.ok(portal.includes("sheet.getBoundingClientRect()"));
  assert.ok(portal.includes("new ResizeObserver(updateFloatingScrollbar)"));
  assert.match(css,/\.score-sheet-floating-scroll\s*\{[^}]*position:\s*fixed/s);
  assert.match(css,/\.score-sheet-floating-scroll-track\s*\{/);
+ assert.match(css,/\.score-sheet-floating-scroll\[data-bs-theme="dark"\]/);
+ assert.doesNotMatch(css,/\.portal-layout\s+\.score-sheet-floating-scroll/);
  assert.match(css,/@media\s*\(max-width:\s*760px\),\s*print\s*\{[^}]*\.score-sheet-floating-scroll/s);
 });
