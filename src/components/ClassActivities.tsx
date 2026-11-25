@@ -427,7 +427,7 @@ export function StudentActivities({ readOnly, subjectId, academicYear, term }: {
   const canSubmit = active && active.status === "OPEN" && !deadlinePassed &&
     (active.practice || active.subject?.gradeStatus === "DRAFT");
 
-  return <section className="surface mb-3" aria-labelledby="student-activities-heading">
+  return <section className="surface mb-3 student-activities-panel" aria-labelledby="student-activities-heading">
     <div className="d-flex flex-wrap justify-content-between gap-2 align-items-center mb-2">
       <h2 id="student-activities-heading" className="mb-0">{subjectId ? "Class activities" : "Activities and submissions"}</h2>
     </div>
