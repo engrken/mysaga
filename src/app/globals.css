@@ -1810,3 +1810,110 @@ body[data-saga-theme="dark"]:has(.portal-layout[data-saga-role="student"]) .saga
 .iso-export-option-icon.pdf{background:#fff0ef;color:#b42318}
 .iso-export-option-icon.xlsx{background:#eaf6ee;color:#217447}
 @media(max-width:640px){.iso-export-menu{width:100%}.iso-export-menu>summary{width:100%;justify-content:center}.iso-export-options{left:0;right:auto;width:100%}}
+
+
+/* SAGA teacher overview — focused dashboard layout */
+.overview-hero{display:grid;gap:18px;margin:0 0 14px;padding:25px 28px 18px;border:1px solid #dce6f3;border-radius:18px;background:linear-gradient(125deg,#eef4ff 0%,#fff 62%,#f7faff 100%);box-shadow:0 8px 24px rgba(25,52,91,.055)}
+.overview-hero-main{display:flex;align-items:center;justify-content:space-between;gap:20px}
+.overview-hero-copy .eyebrow{color:#5274af;font-weight:800;letter-spacing:.1em}
+.overview-hero-copy h1{margin:5px 0 4px;color:#183354;font-size:1.8rem;font-weight:800;letter-spacing:-.045em}
+.overview-hero-copy p{margin:0;color:#718096;font-size:.82rem}
+.overview-create-button{flex:none;min-height:42px;padding:0 17px;border-radius:10px;font-size:.78rem;font-weight:750;box-shadow:0 5px 14px rgba(34,86,164,.16)}
+.overview-create-button span{margin-right:5px;font-size:1rem}
+.overview-period-bar{display:flex;align-items:center;justify-content:space-between;gap:20px;padding-top:15px;border-top:1px solid #e3eaf4}
+.overview-period-summary{display:grid;gap:3px;min-width:180px}
+.overview-period-summary>span{color:#718096;font-size:.58rem;font-weight:850;letter-spacing:.1em}
+.overview-period-summary strong{color:#263e5d;font-size:.86rem}
+.overview-period-summary strong i{color:#94a4b8;font-style:normal}
+.overview-period-summary small{color:#8a97a9;font-size:.64rem}
+.overview-period-controls{display:flex;flex-wrap:wrap;gap:9px}
+.overview-period-controls label{display:grid;gap:4px;min-width:120px;color:#64748b;font-size:.62rem;font-weight:750}
+.overview-period-controls select{min-height:34px;border-color:#dce5f1;border-radius:8px;background-color:#fff;color:#33465f;font-size:.72rem}
+.overview-quick-lookup{margin:0 0 19px;border:1px solid #e0e8f2;border-radius:13px;background:#fff;box-shadow:0 3px 12px rgba(25,52,91,.025)}
+.overview-quick-lookup>summary{display:flex;align-items:center;gap:12px;min-height:65px;padding:11px 17px;cursor:pointer;list-style:none}
+.overview-quick-lookup>summary::-webkit-details-marker{display:none}
+.overview-lookup-mark{display:grid;width:36px;height:36px;place-items:center;border-radius:10px;background:#eef4ff;color:#416bb4;font-size:1.45rem}
+.overview-lookup-copy{display:grid;gap:2px;min-width:0}
+.overview-lookup-copy strong{color:#243b5a;font-size:.78rem}
+.overview-lookup-copy small{color:#8390a3;font-size:.66rem}
+.overview-lookup-action{margin-left:auto;color:#426bad;font-size:.68rem;font-weight:750}
+.overview-quick-lookup[open]>summary{border-bottom:1px solid #edf1f6}
+.overview-quick-lookup .student-smart-search{margin:0;padding:17px;border:0;border-radius:0;box-shadow:none}
+.overview-quick-lookup .student-smart-search>.section-heading{margin-bottom:10px}
+.overview-quick-lookup .student-smart-search>.section-heading h2{font-size:.95rem}
+.overview-quick-lookup .student-smart-search>.section-heading p{max-width:720px;font-size:.68rem}
+.overview-report-heading{margin-bottom:15px;padding:16px 19px;border-radius:13px}
+.overview-report-heading h2{font-size:1.16rem}
+.overview-report-heading p{margin-bottom:0}
+.overview-date-controls{display:flex;flex-wrap:wrap;align-items:end;gap:9px}
+.overview-date-controls label{font-size:.62rem}
+.overview-date-controls input{min-height:34px;min-width:130px;border-color:#dce5f1;border-radius:8px;font-size:.7rem}
+.overview-date-controls .btn{min-height:34px;border-radius:8px;font-size:.68rem}
+.overview-stat-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:0 0 18px}
+.overview-stat-card{min-height:112px;padding:15px 16px 14px 18px;border-radius:13px!important}
+.overview-stat-card small{font-size:.57rem;letter-spacing:.075em}
+.overview-stat-card strong{font-size:1.72rem}
+.overview-stat-card span{font-size:.65rem;line-height:1.4}
+.overview-watchlist-heading{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:9px}
+.overview-watchlist-heading .eyebrow{color:#5274af}
+.overview-watchlist-heading h2{margin:3px 0 3px;color:#203451;font-size:1rem;font-weight:800}
+.overview-watchlist-heading p{margin:0;color:#7b8799;font-size:.68rem}
+.overview-watchlist-count{flex:none;padding:6px 10px;border:1px solid #f0d8d7;border-radius:20px;background:#fff8f7;color:#ad4542;font-size:.65rem;font-weight:800}
+.overview-attendance-risk{margin-bottom:22px;padding:17px 19px;border:1px solid #e4eaf2;border-radius:14px;box-shadow:0 5px 16px rgba(32,58,98,.035)}
+.overview-attendance-risk-list>li{grid-template-columns:minmax(120px,1fr) minmax(140px,1.3fr) minmax(130px,.8fr) auto;gap:14px;padding:12px 0;border-color:#edf1f5;font-size:.75rem}
+.overview-attendance-risk-student strong,.overview-attendance-risk-subject strong{display:block;color:#263e5d;font-size:.73rem}
+.overview-attendance-risk-student small,.overview-attendance-risk-subject small{margin-top:3px;font-size:.62rem}
+.overview-risk-rate>strong{display:block;color:#b34b48;font-size:.88rem;font-variant-numeric:tabular-nums}
+.overview-risk-rate>small{display:block;color:#8390a3;font-size:.6rem}
+.overview-risk-track{height:5px;margin:4px 0 5px;overflow:hidden;border-radius:10px;background:#f1e6e5}
+.overview-risk-track span{display:block;height:100%;border-radius:10px;background:linear-gradient(90deg,#e9a24c,#d85b56)}
+.overview-attendance-risk-list .btn{white-space:nowrap;border-radius:8px;font-size:.65rem}
+.overview-watchlist-empty{display:flex;align-items:center;gap:11px;padding:14px 2px;color:#21845d}
+.overview-watchlist-empty>span{display:grid;width:31px;height:31px;place-items:center;border-radius:50%;background:#eaf7f0;font-weight:900}
+.overview-watchlist-empty div{display:grid;gap:2px}
+.overview-watchlist-empty strong{font-size:.73rem}
+.overview-watchlist-empty small,.overview-watchlist-footnote{color:#8491a3;font-size:.63rem}
+.overview-watchlist-footnote{margin:8px 0 0}
+.overview-section-heading{margin:22px 0 12px}
+.overview-section-heading h2{font-size:1.02rem}
+.overview-chart-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.overview-chart-card{min-height:250px;padding:16px 17px}
+.overview-chart-card h3{font-size:.83rem}
+.overview-chart-card>p{font-size:.65rem}
+.overview-pie-wrap{height:165px}
+.overview-pie-chart{width:150px;height:150px;border-width:5px}
+.overview-chart-legend{font-size:.61rem}
+.overview-enrollment-list{display:grid;gap:13px;margin-top:18px}
+.overview-enrollment-item{display:grid;gap:6px}
+.overview-enrollment-item>div{display:flex;align-items:center;justify-content:space-between;gap:9px}
+.overview-enrollment-item strong{overflow:hidden;color:#344b68;font-size:.67rem;text-overflow:ellipsis;white-space:nowrap}
+.overview-enrollment-item small{flex:none;color:#7c899c;font-size:.62rem}
+.overview-enrollment-track{display:block;height:7px;overflow:hidden;border-radius:8px;background:#edf2f8}
+.overview-enrollment-track i{display:block;height:100%;border-radius:8px;background:linear-gradient(90deg,#5c87d6,#30a5bb)}
+.overview-upcoming-grid{gap:12px}
+.overview-upcoming-card{padding:16px 18px;border-radius:13px!important}
+.overview-upcoming-card h3{font-size:.83rem}
+.overview-upcoming-card>p{font-size:.65rem}
+.overview-upcoming-card li b{font-size:.68rem}
+.overview-upcoming-card li small,.overview-upcoming-card li time{font-size:.61rem}
+.overview-recent-wrap{margin-top:14px}
+.overview-recent-wrap>section{padding:16px 18px;border:1px solid #e4eaf2;border-radius:13px;box-shadow:0 5px 16px rgba(32,58,98,.035)}
+.overview-recent-wrap h2{margin:0 0 9px;color:#203451;font-size:.88rem;font-weight:800}
+.overview-recent-wrap .list-group-item{border-color:#edf1f5;font-size:.7rem}
+.portal-layout[data-bs-theme="dark"] .overview-hero{border-color:#34445c;background:linear-gradient(125deg,#1c2a40,#172235 68%,#1a2639);box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.portal-layout[data-bs-theme="dark"] .overview-hero-copy h1,.portal-layout[data-bs-theme="dark"] .overview-period-summary strong,.portal-layout[data-bs-theme="dark"] .overview-lookup-copy strong,.portal-layout[data-bs-theme="dark"] .overview-watchlist-heading h2,.portal-layout[data-bs-theme="dark"] .overview-attendance-risk-student strong,.portal-layout[data-bs-theme="dark"] .overview-attendance-risk-subject strong,.portal-layout[data-bs-theme="dark"] .overview-enrollment-item strong,.portal-layout[data-bs-theme="dark"] .overview-recent-wrap h2{color:#e4ebf6}
+.portal-layout[data-bs-theme="dark"] .overview-hero-copy p,.portal-layout[data-bs-theme="dark"] .overview-period-summary small,.portal-layout[data-bs-theme="dark"] .overview-period-summary>span,.portal-layout[data-bs-theme="dark"] .overview-period-controls label,.portal-layout[data-bs-theme="dark"] .overview-watchlist-heading p,.portal-layout[data-bs-theme="dark"] .overview-enrollment-item small{color:#a5b1c2}
+.portal-layout[data-bs-theme="dark"] .overview-period-bar{border-color:#34445c}
+.portal-layout[data-bs-theme="dark"] .overview-period-controls select,.portal-layout[data-bs-theme="dark"] .overview-date-controls input{border-color:#34445c;background:#111b2b;color:#e4ebf6}
+.portal-layout[data-bs-theme="dark"] .overview-quick-lookup,.portal-layout[data-bs-theme="dark"] .overview-quick-lookup .student-smart-search,.portal-layout[data-bs-theme="dark"] .overview-attendance-risk,.portal-layout[data-bs-theme="dark"] .overview-recent-wrap>section{border-color:#34445c;background:#172235}
+.portal-layout[data-bs-theme="dark"] .overview-quick-lookup>summary,.portal-layout[data-bs-theme="dark"] .overview-quick-lookup[open]>summary{border-color:#34445c}
+.portal-layout[data-bs-theme="dark"] .overview-lookup-mark{background:#263754;color:#a9c4ff}
+.portal-layout[data-bs-theme="dark"] .overview-lookup-copy small,.portal-layout[data-bs-theme="dark"] .overview-watchlist-empty small,.portal-layout[data-bs-theme="dark"] .overview-watchlist-footnote{color:#a5b1c2}
+.portal-layout[data-bs-theme="dark"] .overview-quick-lookup>summary .overview-lookup-copy strong,.portal-layout[data-bs-theme="dark"] .overview-risk-rate>strong{color:#e4ebf6}
+.portal-layout[data-bs-theme="dark"] .overview-watchlist-count{border-color:#563f45;background:#33252c;color:#ffb6af}
+.portal-layout[data-bs-theme="dark"] .overview-risk-track{background:#52363a}
+.portal-layout[data-bs-theme="dark"] .overview-enrollment-track{background:#2b3b52}
+.portal-layout[data-bs-theme="dark"] .overview-recent-wrap .list-group-item{border-color:#34445c}
+@media(max-width:1100px){.overview-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.overview-chart-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-enrollment-card{grid-column:1/-1}}
+@media(max-width:760px){.overview-hero{padding:18px 16px 15px}.overview-hero-main{align-items:flex-start;flex-direction:column;gap:13px}.overview-hero-copy h1{font-size:1.5rem}.overview-period-bar{align-items:stretch;flex-direction:column;gap:11px}.overview-period-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.overview-period-controls label{min-width:0}.overview-period-controls select{width:100%;font-size:.64rem}.overview-quick-lookup>summary{padding:10px 12px}.overview-lookup-copy small{max-width:205px}.overview-lookup-action{font-size:0}.overview-lookup-action span{font-size:.95rem}.overview-report-heading{align-items:flex-start;flex-direction:column;padding:15px}.overview-date-controls{width:100%;display:grid;grid-template-columns:1fr 1fr;padding:0;border:0}.overview-date-controls input{min-width:0;width:100%}.overview-date-controls .btn{grid-column:1/-1}.overview-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.overview-stat-card{min-height:96px;padding:12px 11px 12px 14px}.overview-stat-card strong{font-size:1.42rem}.overview-stat-card span{font-size:.6rem}.overview-watchlist-heading{align-items:flex-start}.overview-attendance-risk{padding:14px}.overview-attendance-risk-list>li{grid-template-columns:1fr 1fr;gap:9px}.overview-risk-rate{grid-column:1/-1}.overview-attendance-risk-list .btn{justify-self:start}.overview-chart-grid,.overview-upcoming-grid{grid-template-columns:1fr}.overview-enrollment-card{grid-column:auto}.overview-chart-card{min-height:220px}.overview-pie-wrap{height:145px}.overview-pie-chart{width:130px;height:130px}}
+@media(max-width:420px){.overview-period-controls{grid-template-columns:1fr 1fr}.overview-period-controls label:first-child{grid-column:1/-1}.overview-stat-grid{grid-template-columns:1fr 1fr}.overview-stat-card{min-height:88px}.overview-stat-card small{font-size:.52rem}.overview-lookup-copy small{max-width:170px}}
