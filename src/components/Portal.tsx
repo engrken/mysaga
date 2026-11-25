@@ -1223,6 +1223,9 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [scorebookPage, setScorebookPage] = useState(0);
   const [scorebookWidth, setScorebookWidth] = useState(1250);
   const scorebookRegionRef = useRef<HTMLElement>(null);
+  const scorebookScrollRef = useRef<HTMLDivElement>(null);
+  const scorebookFloatingScrollRef = useRef<HTMLDivElement>(null);
+  const [scorebookFloatingScroll, setScorebookFloatingScroll] = useState({ visible: false, left: 0, width: 0, scrollWidth: 0 });
   useEffect(() => {
     if (classSection !== "record") return;
     const region = scorebookRegionRef.current;
@@ -2390,6 +2393,58 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     scorebookColumnWidths.total + scorebookColumnWidths.final + scorebookColumnWidths.remark +
     scorebookDisplayColumns.reduce((total, column) =>
       total + (column.kind === "assessment" ? scorebookColumnWidths.assessment : scorebookColumnWidths.equivalent), 0);
+  useEffect(() => {
+    const sheet = scorebookScrollRef.current;
+    const region = scorebookRegionRef.current;
+    if (classSection !== "record" || scorebookView !== "all" || !sheet || !region) {
+      setScorebookFloatingScroll(current => current.visible ? { ...current, visible: false } : current);
+      return;
+    }
+
+    const updateFloatingScrollbar = () => {
+      const bounds = sheet.getBoundingClientRect();
+      const hasHorizontalOverflow = sheet.clientWidth > 0 && sheet.scrollWidth > sheet.clientWidth + 2;
+      const intersectsViewport = bounds.bottom > 56 && bounds.top < window.innerHeight - 56;
+      const visible = hasHorizontalOverflow && intersectsViewport;
+      const next = {
+        visible,
+        left: Math.round(bounds.left),
+        width: Math.round(bounds.width),
+        scrollWidth: Math.max(sheet.clientWidth, sheet.scrollWidth)
+      };
+
+      setScorebookFloatingScroll(current =>
+        current.visible === next.visible &&
+        current.left === next.left &&
+        current.width === next.width &&
+        current.scrollWidth === next.scrollWidth
+          ? current
+          : next
+      );
+
+      const floating = scorebookFloatingScrollRef.current;
+      if (visible && floating && Math.abs(floating.scrollLeft - sheet.scrollLeft) > 1) {
+        floating.scrollLeft = sheet.scrollLeft;
+      }
+    };
+
+    updateFloatingScrollbar();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateFloatingScrollbar) : null;
+    observer?.observe(region);
+    observer?.observe(sheet);
+    const table = sheet.querySelector("table");
+    if (table) observer?.observe(table);
+
+    window.addEventListener("scroll", updateFloatingScrollbar, { passive: true });
+    window.addEventListener("resize", updateFloatingScrollbar);
+    document.addEventListener("scroll", updateFloatingScrollbar, true);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("scroll", updateFloatingScrollbar);
+      window.removeEventListener("resize", updateFloatingScrollbar);
+      document.removeEventListener("scroll", updateFloatingScrollbar, true);
+    };
+  }, [classSection, scorebookView, activeId, detail?.id, scorebookTableMinWidth, filteredEnrollments.length]);
   const scorebookHeaderRows = useMemo(() => {
     if (!detail || !scorebookVisibleAssessments.length) return { rows: [] as Array<Array<{ category: Category; colSpan: number; rowSpan: number }>>, rowSpan: 1 };
     const itemCounts = new Map<string, number>();
@@ -2728,7 +2783,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
               </div>
             </div>}
             {scorebookAssessments.length === 0 && <div className="inline-empty">The full class roster is shown below. Add assessment items to enable score entry.</div>}
-            {filteredEnrollments.length > 0 && <div className={`score-sheet-wrap ${scorebookView === "all" ? "score-sheet-wrap-full" : "score-sheet-wrap-auto"}`}><table className="score-sheet" style={{minWidth: scorebookView === "all" ? `${scorebookTableMinWidth}px` : undefined}}><colgroup>
+            {filteredEnrollments.length > 0 && <div id="score-sheet-scroll-viewport" ref={scorebookScrollRef} aria-label="Full class record workbook" onScroll={event => { const floating = scorebookFloatingScrollRef.current; if (floating && Math.abs(floating.scrollLeft - event.currentTarget.scrollLeft) > 1) floating.scrollLeft = event.currentTarget.scrollLeft; }} className={`score-sheet-wrap ${scorebookView === "all" ? "score-sheet-wrap-full" : "score-sheet-wrap-auto"}`}><table className="score-sheet" style={{minWidth: scorebookView === "all" ? `${scorebookTableMinWidth}px` : undefined}}><colgroup>
   <col style={{width: `${scorebookColumnWidths.student}px`}} />
   <col style={{width: `${scorebookColumnWidths.attendance}px`}} />
   {scorebookDisplayColumns.map((column,i) => <col
@@ -2759,6 +2814,16 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
               const attendance = attendanceStatsByEnrollment.get(enrollment.id)!;
               const courseWeights = recordContributionsByEnrollment.get(enrollment.id)!;
               return <Fragment key={enrollment.id}><tr><td className="score-sheet-student"><div><b>{index+1}. {enrollment.studentName}</b></div></td><td className="score-sheet-attendance-summary" title={`Present ${attendance.present} · Absent ${attendance.absent} · Excused ${attendance.excused}`}>{attendance.percent===null?"—":`${attendance.percent.toFixed(2)}%`}</td>{scorebookDisplayColumns.map(column=>{if(column.kind !== "assessment"){ const contribution=courseWeights.get(column.category.id);return <td className="score-sheet-category-equivalent" key={`${column.category.id}-equivalent`} title={hasSpecialRemark || contribution?.earnedWithinRoot == null ? "No weighted equivalent available" : `${contribution.percent?.toFixed(2)}% raw equivalent × ${contribution.withinRootWeight.toFixed(2)}% within ${rootCategory(column.category, detail.categories).name} = ${contribution.earnedWithinRoot.toFixed(2)}%`}>{hasSpecialRemark || contribution?.earnedWithinRoot == null ? "—" : `${contribution.earnedWithinRoot.toFixed(2)}%`}</td>; } const item=column.item; const score=scoresByEnrollment.get(enrollment.id)?.get(item.id);return <td className="score-sheet-score" key={item.id}><div className="score-sheet-entry"><input key={`${item.id}-${enrollment.id}-${score?.points??""}`} className="score-sheet-input" aria-label={`${enrollment.studentName} — ${item.title} score`} type="number" min="0" max={item.maxScore} step="0.01" defaultValue={score?.points??""} disabled={detail.gradeStatus==="VERIFIED"} onBlur={event=>{if(String(score?.points??"")!==event.target.value)saveScore(enrollment.id,item.id,event.target.value,score?.remark??null)}}/><select className="score-sheet-status" aria-label={`${enrollment.studentName} — ${item.title} status`} title={`${enrollment.studentName}: ${item.title} status`} value={score?.remark??""} onChange={event=>saveScore(enrollment.id,item.id,score?.points==null?"":String(score.points),event.target.value||null)} disabled={busy||detail.gradeStatus==="VERIFIED"}><option value="">—</option><option value="EXCUSED">EX</option><option value="ABSENT">AB</option><option value="DID_NOT_SUBMIT">DNS</option></select></div></td>})}<td className="score-sheet-total">{enrollment.finalPercent===null?"—":`${enrollment.finalPercent.toFixed(2)}%`}</td><td className="score-sheet-total">{hasSpecialRemark?enrollment.remarks:enrollment.finalGradeOverride||band?.finalGrade||"—"}</td><td className="score-sheet-remark"><select className="score-sheet-remark-select" aria-label={`${enrollment.studentName} class remark`} title="Automatically follows the final-grade scale unless a special remark is selected" value={hasSpecialRemark?enrollment.remarks||"": "__AUTO__"} onChange={event=>saveRemark(enrollment.id,event.target.value==="__AUTO__"?"":event.target.value)} disabled={busy||detail.gradeStatus==="VERIFIED"}><option value="__AUTO__">{band?.remarks||"Not yet graded"}</option><option value="INC">INC</option><option value="NP">NP</option><option value="DROPPED">DROPPED</option></select></td></tr>{showWeightBreakdown && <tr className="score-sheet-breakdown-row"><td colSpan={scorebookDisplayColumns.length+5}><GradeContributionPanel categories={detail.categories} assessments={detail.assessments} scores={enrollment.scores} remark={enrollment.remarks} /></td></tr>}</Fragment>})}</tbody></table></div>}
+            {scorebookFloatingScroll.visible && scorebookView === "all" && <div
+              ref={scorebookFloatingScrollRef}
+              className="score-sheet-floating-scroll"
+              style={{ left: `${scorebookFloatingScroll.left}px`, width: `${scorebookFloatingScroll.width}px` }}
+              role="region"
+              aria-label="Floating horizontal scrollbar for the full workbook"
+              aria-controls="score-sheet-scroll-viewport"
+              tabIndex={0}
+              onScroll={event => { const sheet = scorebookScrollRef.current; if (sheet && Math.abs(sheet.scrollLeft - event.currentTarget.scrollLeft) > 1) sheet.scrollLeft = event.currentTarget.scrollLeft; }}
+            ><div className="score-sheet-floating-scroll-track" aria-hidden="true" style={{ width: `${scorebookFloatingScroll.scrollWidth}px` }}/></div>}
             {detail.enrollments.length > 0 && <div className="mobile-scorebook">{filteredEnrollments.map((enrollment,index)=>{const band=detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>enrollment.finalPercent!==null&&enrollment.finalPercent>=item.minPercent);const special=["INC","NP","DROPPED"].includes(enrollment.remarks||"");const attendance=attendanceStatsByEnrollment.get(enrollment.id)!;return <article className="mobile-score-student" key={enrollment.id}><header><div><b>{index+1}. {enrollment.studentName}</b></div><strong>{enrollment.finalPercent===null?"—":`${enrollment.finalPercent.toFixed(2)}%`}</strong></header><div className="mobile-score-summary"><span>Attendance <b>{attendance.percent===null?"—":`${attendance.percent.toFixed(1)}%`}</b></span><span>Final grade <b>{special?enrollment.remarks:enrollment.finalGradeOverride||band?.finalGrade||"—"}</b></span></div>{showWeightBreakdown && <GradeContributionPanel categories={detail.categories} assessments={detail.assessments} scores={enrollment.scores} remark={enrollment.remarks} />}{scorebookGroups.map(group=><section className="mobile-score-category" key={group.parent.id}><h4>{group.parent.name}</h4>{group.subcategories.map(category=><div className="mobile-score-subcategory" key={category.id}><b>{category.id===group.parent.id?"":categoryPath(category,detail.categories).split(" / ").slice(1).join(" / ")}</b>{group.items.filter(item=>item.categoryId===category.id).map(item=>{const score=scoresByEnrollment.get(enrollment.id)?.get(item.id);return <div className="mobile-score-assessment" key={item.id}><div><b>{item.title}</b><small>Maximum score: {item.maxScore}</small></div><div className="mobile-score-fields"><label>Score<input className="form-control form-control-sm" aria-label={`${enrollment.studentName} — ${item.title} score`} type="number" min="0" max={item.maxScore} step="0.01" defaultValue={score?.points??""} disabled={detail.gradeStatus==="VERIFIED"} onBlur={event=>{if(String(score?.points??"")!==event.target.value)saveScore(enrollment.id,item.id,event.target.value,score?.remark??null)}}/></label><label>Status<select className="form-select form-select-sm" aria-label={`${enrollment.studentName} — ${item.title} status`} value={score?.remark??""} onChange={event=>saveScore(enrollment.id,item.id,score?.points==null?"":String(score.points),event.target.value||null)} disabled={busy||detail.gradeStatus==="VERIFIED"}><option value="">—</option><option value="EXCUSED">Excused</option><option value="ABSENT">Absent</option><option value="DID_NOT_SUBMIT">Did not submit</option></select></label></div></div>})}</div>)}</section>)}<label className="mobile-score-remark">Class remark<select className="form-select form-select-sm" aria-label={`${enrollment.studentName} class remark`} value={special?enrollment.remarks||"":"__AUTO__"} onChange={event=>saveRemark(enrollment.id,event.target.value==="__AUTO__"?"":event.target.value)} disabled={busy||detail.gradeStatus==="VERIFIED"}><option value="__AUTO__">{band?.remarks||"Not yet graded"}</option><option value="INC">INC</option><option value="NP">NP</option><option value="DROPPED">DROPPED</option></select></label></article>})}</div>}
             {detail.enrollments.length === 0 ? <div className="inline-empty">No students are enrolled in this class. Add students from the Class roster tab.</div> : filteredEnrollments.length === 0 ? <div className="inline-empty">No students match this name or ID filter.</div> : null}
             <div className="scorebook-legend"><span><b>Excused</b> removes an item from its category denominator.</span><span><b>Absent / Did not submit</b> records zero raw points (the configured transmutation base still applies to academic assessments).</span><span><b>Blank</b> is pending, not zero. Equivalent columns show weighted percentages within the parent Lecture/Laboratory component; the final grade also applies its course weight.</span><span>Attendance sessions are recorded in the Attendance tab, not as assessment scores.</span></div>
