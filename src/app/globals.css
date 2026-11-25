@@ -2025,3 +2025,32 @@ body[data-saga-theme="dark"]:has(.portal-layout[data-saga-role="student"]) .saga
 @media(max-width:1100px){.student-overview-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.student-enrollment-layout{grid-template-columns:1fr}.student-enrolled-classes-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.student-overview-hero .overview-hero-main{gap:12px}.student-overview-hero .overview-create-button{min-height:38px;padding:0 12px;font-size:.68rem}.student-overview-stats{gap:9px;margin-bottom:16px}.student-overview-stats .overview-stat-card{min-height:93px;padding:12px}.student-overview-stats .overview-stat-card strong{font-size:1.42rem}.student-progress-heading{align-items:flex-start;flex-direction:column;gap:3px}.student-attendance-watch{padding:14px}.student-attendance-watch-heading{align-items:flex-start}.student-attendance-watch-item{align-items:flex-start;flex-direction:column;gap:6px}.student-attendance-watch-status{justify-items:start;text-align:left}.student-activities-panel,.student-enrollment-panel{padding:14px}.student-enrollment-layout{gap:14px}.student-enrolled-classes-list{grid-template-columns:1fr}.student-enrollment-form-row{align-items:stretch;flex-direction:column}.student-enrollment-form-row .btn{width:100%}.class-directory-filters{grid-template-columns:1fr;gap:9px}.class-directory-filter-foot{justify-content:space-between}}
 @media(max-width:420px){.student-overview-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.student-attendance-watch-count{font-size:.55rem}.student-grade-section-heading{align-items:flex-start;flex-direction:column}.student-grade-header-actions{width:100%;justify-content:space-between}}
+
+
+/* My Classes is a hover/focus menu for classes in the selected academic period. */
+.sidebar-class-menu{position:relative;width:100%;min-width:0}
+.sidebar-class-menu .sidebar-classes-toggle{width:100%;cursor:default}
+.sidebar-class-menu .sidebar-nav-caret{margin-left:auto;color:#8c98aa;font-size:1.05rem;line-height:1;transition:transform .16s ease}
+.sidebar-class-menu .sidebar-class-list{display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;z-index:45;max-height:min(56vh,440px)!important;overflow-x:hidden!important;overflow-y:auto!important;margin:0;padding:7px;border:1px solid #e1e7f0;border-radius:10px;background:#fff;box-shadow:0 14px 34px rgba(18,35,62,.18)}
+.sidebar-class-menu:hover .sidebar-class-list,.sidebar-class-menu:focus-within .sidebar-class-list{display:grid}
+.sidebar-class-menu:hover .sidebar-nav-caret,.sidebar-class-menu:focus-within .sidebar-nav-caret{transform:rotate(180deg)}
+.sidebar-class-period{display:grid;gap:4px;padding:8px 9px 10px;margin-bottom:4px;border-bottom:1px solid #e9edf3}
+.sidebar-class-period span{font-size:.53rem;font-weight:850;letter-spacing:.11em;color:#8995a7}
+.sidebar-class-period strong{font-size:.64rem;font-weight:750;color:#445875;line-height:1.3}
+.sidebar-class-menu .sidebar-class-link{border:0;margin:0}
+.sidebar-class-menu .sidebar-class-link-copy b{font-size:.68rem}
+.sidebar-class-menu .sidebar-class-link-copy small{font-size:.6rem}
+.sidebar-class-menu .sidebar-class-link em{max-width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sidebar-class-menu .sidebar-class-link:focus-visible,.sidebar-class-menu .sidebar-classes-toggle:focus-visible{outline:2px solid #5b84e6;outline-offset:2px}
+.sidebar-class-menu .sidebar-class-empty{padding:12px 9px}
+.sidebar-collapsed .sidebar-class-menu .sidebar-class-list{top:0;left:calc(100% + 8px);right:auto;width:276px}
+.portal-layout[data-bs-theme="dark"] .sidebar-class-menu .sidebar-class-list{border-color:#34445d;background:#172235;box-shadow:0 14px 34px rgba(0,0,0,.36)}
+.portal-layout[data-bs-theme="dark"] .sidebar-class-period{border-color:#34445d}
+.portal-layout[data-bs-theme="dark"] .sidebar-class-period span{color:#a5b1c2}
+.portal-layout[data-bs-theme="dark"] .sidebar-class-period strong{color:#d2e5ff}
+.portal-layout[data-bs-theme="dark"] .sidebar-class-menu .sidebar-class-link:hover,.portal-layout[data-bs-theme="dark"] .sidebar-class-menu .sidebar-class-link.selected{background:#263b58;color:#d2e5ff}
+@media(max-width:760px){
+  .sidebar-class-menu{position:relative;width:100%}
+  .sidebar-class-menu .sidebar-class-list{top:calc(100% + 4px);left:0;right:auto;width:100%;max-height:min(58vh,440px)!important}
+  .sidebar-collapsed .sidebar-class-menu .sidebar-class-list{top:calc(100% + 4px);left:0;width:min(92vw,360px)}
+}
