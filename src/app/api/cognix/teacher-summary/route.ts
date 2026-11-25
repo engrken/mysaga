@@ -90,9 +90,10 @@ export async function POST() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        apiVersion: "1",
         app: "saga",
-        task: "Provide a concise teacher-facing overview using only these aggregate counts. Explain that enrollment records may include the same learner in multiple subjects. Do not infer individual student performance, invent causes, or recommend changing grades.",
-        context: summary,
+        task: "teacher-summary",
+        input: summary,
         requestId: `saga-${randomUUID()}`,
       }),
       cache: "no-store",
