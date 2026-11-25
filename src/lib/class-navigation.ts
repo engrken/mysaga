@@ -58,7 +58,7 @@ export function classWorkspaceHref(
   return `${path}${query ? `?${query}` : ""}`;
 }
 
-/** Keep the active class if still visible; otherwise automatically open the first matching class. */
+/** Preserve an explicit directory state; otherwise keep the active class or select the first visible match. */
 export function resolveClassSelection(
   classes: ClassListItem[],
   selectedId: string,
@@ -69,6 +69,7 @@ export function resolveClassSelection(
     (year === "All School Years" || item.academicYear === year) &&
     (term === "All Terms" || item.term === term)
   );
+  if (!selectedId) return "";
   return filtered.some(item => item.id === selectedId) ? selectedId : filtered[0]?.id ?? "";
 }
 

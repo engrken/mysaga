@@ -34,11 +34,11 @@ test("attendance shortcuts persist the requested section after page remount", ()
   assert.equal(url, "/fcu/classes/ece-6?section=attendance&attendanceToday=1");
   assert.equal(parseClassWorkspaceQuery(Object.fromEntries(new URL(url, "https://example.test").searchParams)).attendanceToday, true);
 });
-test("direct /classes loads the first available class, preserving a valid selection", () => {
-  assert.equal(resolveClassSelection(subjects, "", "All School Years", "All Terms"), "class-a");
+test("the class directory stays unselected until a teacher opens a class", () => {
+  assert.equal(resolveClassSelection(subjects, "", "All School Years", "All Terms"), "");
   assert.equal(resolveClassSelection(subjects, "class-b", "All School Years", "All Terms"), "class-b");
   assert.equal(resolveClassSelection(subjects, "class-b", "2026-2027", "1st Semester"), "class-a");
-  assert.equal(resolveClassSelection([], "", "All School Years", "All Terms"), "");
+  assert.equal(resolveClassSelection([], "class-b", "All School Years", "All Terms"), "");
 });
 test("legacy bookmarked class IDs survive the redirect while data is loading", () => {
   assert.equal(classWorkspaceHref("fcu", "class-a"), "/fcu/classes?class=class-a");
