@@ -3,6 +3,12 @@
 import { useState, type FormEvent } from "react";
 
 type ResourceType = "lesson-outline" | "study-guide" | "practice-questions";
+type SubjectContext = {
+  code: string;
+  title: string;
+  courseYear: string | null;
+  term: string;
+};
 type ResourceResponse = {
   answer?: string;
   warnings?: string[];
@@ -16,9 +22,14 @@ const resourceLabels: Record<ResourceType, string> = {
   "practice-questions": "Practice questions",
 };
 
-export default function AcademicAssistant() {
+export default function AcademicAssistant({
+  subjectId,
+  subjectContext,
+}: {
+  subjectId: string;
+  subjectContext: SubjectContext;
+}) {
   const [resourceType, setResourceType] = useState<ResourceType>("lesson-outline");
-  const [subject, setSubject] = useState("");
   const [level, setLevel] = useState("");
   const [topic, setTopic] = useState("");
   const [answer, setAnswer] = useState("");
@@ -42,7 +53,10 @@ export default function AcademicAssistant() {
         credentials: "same-origin",
         cache: "no-store",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resourceType, subject, level, topic }),
+        // Only send the selected Subject ID. The server re-checks ownership
+        // and reads its instructional metadata; browser-supplied class text
+        // is never trusted or forwarded.
+        body: JSON.stringify({ subjectId, resourceType, level, topic }),
       });
       const payload = await response.json().catch(() => null) as ResourceResponse | null;
       if (!response.ok || !payload?.answer) {
@@ -52,7 +66,7 @@ export default function AcademicAssistant() {
       setAnswer(payload.answer);
       setWarnings(Array.isArray(payload.warnings) ? payload.warnings : []);
     } catch {
-      setError("COGNIX could not be reached. Your SAGA records were not accessed or changed.");
+      setError("COGNIX could not be reached. Your SAGA academic records were not accessed or changed.");
     } finally {
       setLoading(false);
     }
@@ -81,6 +95,14 @@ export default function AcademicAssistant() {
 
   return (
     <section style={{ border: "1px solid #d7e0eb", borderRadius: 16, background: "#fff", boxShadow: "0 12px 30px rgba(20,45,74,.07)", padding: "clamp(18px, 3vw, 28px)" }}>
+      <div style={{ padding: 16, borderRadius: 10, background: "#f1f6fc", border: "1px solid #d8e5f3", marginBottom: 18 }}>
+        <p style={{ margin: 0, color: "#52708f", fontSize: 11, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase" }}>Current class subject · Read only</p>
+        <h2 style={{ margin: "6px 0 4px", color: "#173454", fontSize: 19 }}>{subjectContext.title}</h2>
+        <p style={{ margin: 0, color: "#526d88", fontSize: 13, lineHeight: 1.6 }}>
+          {subjectContext.code} · {subjectContext.courseYear || "Course/year not set"} · {subjectContext.term}
+        </p>
+      </div>
+
       <form onSubmit={generate}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 16 }}>
           <label style={{ display: "grid", gap: 7, color: "#314b67", fontSize: 13, fontWeight: 700 }}>
@@ -89,20 +111,6 @@ export default function AcademicAssistant() {
               <option value="lesson-outline">Lesson outline</option>
               <option value="study-guide">Study guide</option>
               <option value="practice-questions">Practice questions</option>
-            </select>
-          </label>
-          <label style={{ display: "grid", gap: 7, color: "#314b67", fontSize: 13, fontWeight: 700 }}>
-            Subject
-            <select style={fieldStyle} value={subject} onChange={event => setSubject(event.target.value)} required>
-              <option value="">Select subject</option>
-              <option>Mathematics</option>
-              <option>Science</option>
-              <option>English</option>
-              <option>Filipino</option>
-              <option>Araling Panlipunan</option>
-              <option>Computer Studies</option>
-              <option>Technology and Livelihood Education</option>
-              <option>General</option>
             </select>
           </label>
           <label style={{ display: "grid", gap: 7, color: "#314b67", fontSize: 13, fontWeight: 700 }}>
@@ -119,26 +127,29 @@ export default function AcademicAssistant() {
         </div>
 
         <label style={{ display: "grid", gap: 7, marginTop: 18, color: "#314b67", fontSize: 13, fontWeight: 700 }}>
-          Generic academic topic
+          Topic or learning competency
           <textarea
             style={{ ...fieldStyle, minHeight: 104, resize: "vertical" }}
             value={topic}
             onChange={event => setTopic(event.target.value)}
             minLength={3}
             maxLength={120}
-            placeholder="Example: Photosynthesis and the role of sunlight"
+            placeholder="Example: Linear equations in one variable"
             required
           />
-          <span style={{ color: "#74869b", fontSize: 11, fontWeight: 400 }}>{topic.length}/120 characters · Topic only; do not include student or teacher details.</span>
+          <span style={{ color: "#74869b", fontSize: 11, fontWeight: 400 }}>{topic.length}/120 characters · Use a general topic or competency only; never include learner or teacher details.</span>
         </label>
 
         <div role="note" style={{ marginTop: 18, padding: 15, borderRadius: 10, background: "#fff7e7", border: "1px solid #f1d8a7", color: "#79551a", fontSize: 12, lineHeight: 1.65 }}>
-          <strong>Privacy notice:</strong> Only the selected resource settings and generic topic are sent to an external model provider through COGNIX. SAGA does not send class lists or academic records. AI Gateway filters out providers that train on prompts, but this does <strong>not</strong> guarantee zero data retention. Never enter names, student IDs/LRNs, grades, scores, attendance, contact details, personal circumstances, or confidential school material.
+          <strong>Privacy notice:</strong> Only this class's subject title and code, course/year label, term, selected learning level, resource type, and generic topic are sent through COGNIX to an external model provider. SAGA does not send class lists, enrollments, assessment items, grades, scores, attendance, or student records. AI Gateway filters out providers that train on prompts, but this does <strong>not</strong> guarantee zero data retention. Never enter names, student IDs/LRNs, grades, scores, attendance, contact details, personal circumstances, or confidential school material.
         </div>
+        <p style={{ margin: "10px 0 0", color: "#74869b", fontSize: 11, lineHeight: 1.6 }}>
+          SAGA does not currently supply official curriculum guides or learning-competency documents to COGNIX. The topic or competency is teacher-provided; generated materials are not certified curriculum-aligned.
+        </p>
 
         {error ? <p role="alert" style={{ margin: "16px 0 0", color: "#b42318", fontSize: 13 }}>{error}</p> : null}
 
-        <button type="submit" disabled={loading || topic.trim().length < 3 || !subject || !level} style={{ marginTop: 18, minHeight: 46, padding: "0 20px", border: 0, borderRadius: 9, background: loading ? "#7891ad" : "#225f9e", color: "#fff", fontWeight: 800, cursor: loading ? "wait" : "pointer" }}>
+        <button type="submit" disabled={loading || topic.trim().length < 3 || !level} style={{ marginTop: 18, minHeight: 46, padding: "0 20px", border: 0, borderRadius: 9, background: loading ? "#7891ad" : "#225f9e", color: "#fff", fontWeight: 800, cursor: loading ? "wait" : "pointer" }}>
           {loading ? "Generating draft…" : `Generate ${resourceLabels[resourceType].toLowerCase()}`}
         </button>
       </form>

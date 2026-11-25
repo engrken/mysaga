@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { checkAuthThrottle } from "@/lib/rate-limit";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,17 +14,8 @@ const headers = {
 };
 
 const schema = z.object({
+  subjectId: z.string().trim().min(1).max(160),
   resourceType: z.enum(["lesson-outline", "study-guide", "practice-questions"]),
-  subject: z.enum([
-    "Mathematics",
-    "Science",
-    "English",
-    "Filipino",
-    "Araling Panlipunan",
-    "Computer Studies",
-    "Technology and Livelihood Education",
-    "General",
-  ]),
   level: z.enum([
     "Elementary",
     "Junior High School",
@@ -63,8 +55,9 @@ function cognixEndpoint() {
 }
 
 /**
- * This route forwards only generic resource settings and a short topic.
- * It does not query SAGA subjects, students, assessments, grades, or attendance.
+ * This route reads exactly one teacher-owned Subject row and selects only
+ * instructional metadata. It never loads enrollments, assessments, scores,
+ * grades, activities, or attendance relations.
  */
 export async function POST(request: Request) {
   const teacher = await requireRole("TEACHER");
@@ -117,7 +110,7 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "invalid_input", message: "Choose a supported resource type, subject, level, and a generic topic." },
+      { error: "invalid_input", message: "Choose a resource type, learning level, topic, and a class you teach." },
       { status: 400, headers },
     );
   }
@@ -125,6 +118,36 @@ export async function POST(request: Request) {
   if (containsPersonalOrRecordData(parsed.data.topic)) {
     return NextResponse.json(
       { error: "personal_data_not_allowed", message: "Use a generic academic topic only. Do not enter personal details, identifiers, grades, scores, attendance, or records." },
+      { status: 400, headers },
+    );
+  }
+
+  // Tenant and ownership checks are part of the query. Select scalar
+  // instructional fields only; never include student or academic relations.
+  const subject = await prisma.subject.findFirst({
+    where: {
+      id: parsed.data.subjectId,
+      teacherId: teacher.id,
+      schoolId: teacher.schoolId,
+    },
+    select: {
+      code: true,
+      title: true,
+      courseYear: true,
+      term: true,
+    },
+  });
+  if (!subject) {
+    return NextResponse.json(
+      { error: "class_not_found", message: "That class subject is unavailable or is not assigned to your teacher account." },
+      { status: 404, headers },
+    );
+  }
+
+  const classContextText = [subject.code, subject.title, subject.courseYear ?? "", subject.term].join(" ");
+  if (containsPersonalOrRecordData(classContextText)) {
+    return NextResponse.json(
+      { error: "invalid_class_context", message: "The selected subject details contain information that cannot be sent to the Academic Assistant. Ask your school administrator to review the class subject settings." },
       { status: 400, headers },
     );
   }
@@ -150,7 +173,17 @@ export async function POST(request: Request) {
         app: "saga",
         task: "learning-resource",
         requestId,
-        input: parsed.data,
+        input: {
+          resourceType: parsed.data.resourceType,
+          subject: subject.title,
+          level: parsed.data.level,
+          topic: parsed.data.topic,
+          classContext: {
+            subjectCode: subject.code,
+            courseYear: subject.courseYear ?? "",
+            term: subject.term,
+          },
+        },
       }),
       cache: "no-store",
       signal: AbortSignal.timeout(25_000),
