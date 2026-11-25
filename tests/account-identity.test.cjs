@@ -44,9 +44,9 @@ test("My Classes opens an active-period hover menu with individual class navigat
   assert.ok(portal.includes('aria-haspopup="true"'));
   assert.ok(portal.includes("subjects.length ? subjects.map(subject => <button"));
   assert.ok(portal.includes("onClick={() => openClass(subject.id)}"));
-  assert.doesNotMatch(portal, /<Link href=.*\\/classes/);
-  assert.match(styles, /sidebar-class-menu:hover \\.sidebar-class-list/);
-  assert.match(styles, /sidebar-class-menu:focus-within \\.sidebar-class-list/);
+  assert.doesNotMatch(portal, /import Link|<Link href=/);
+  assert.ok(styles.includes("sidebar-class-menu:hover .sidebar-class-list"));
+  assert.ok(styles.includes("sidebar-class-menu:focus-within .sidebar-class-list"));
 });
 
 test("Faculty ID migration protects existing records and unique school assignment", () => {
