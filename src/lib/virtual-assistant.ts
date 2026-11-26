@@ -70,8 +70,8 @@ function asksHowTo(message: string) {
 
 function asksForIndividualRecord(message: string) {
   const text = message.toLocaleLowerCase();
-  const mentionsPerson = /\b(student|learner|pupil|student name|student id|student number|lrn)\b/.test(text);
-  const asksDetail = /\b(name|id|lrn|grade|grades|score|scores|attendance|remark|remarks|record|records|result|results|mark|marks|submission|submissions)\b/.test(text);
+  const mentionsPerson = /\b(students?|learners?|pupils?|student names?|student ids?|student numbers?|lrn)\b/.test(text);
+  const asksDetail = /\b(names?|ids?|lrns?|grades?|scores?|attendance|remarks?|records?|results?|marks?|submissions?)\b/.test(text);
   const asksToRetrieve = /\b(show|list|find|look up|who|which|what is|what are|tell me|give me|display|identify|view|check)\b/.test(text);
   const namedRecord = /\b(?:grades?|scores?|attendance|remarks?|records?|marks?)\s+(?:of|for)\s+[a-z][a-z'-]{1,40}/i.test(message)
     || /\b[a-z][a-z'-]*(?:\s+[a-z][a-z'-]*)?'s\s+(?:grades?|scores?|attendance|remarks?|records?|marks?)\b/i.test(message)
@@ -100,7 +100,7 @@ export function classifyAssistantMessage(message: string): AssistantIntent {
   }
 
   if (/\b(due|upcoming|deadline|next seven days|next 7 days|this week)\b/.test(lower)
-    && /\b(assessment|quiz|exam|item)\b/.test(lower)) {
+    && /\b(assessments?|quizzes?|exams?|items?)\b/.test(lower)) {
     return { kind: "workspace", intent: "upcoming-assessments" };
   }
 
