@@ -2,25 +2,25 @@
 
 import { useState, type FormEvent } from "react";
 
-type ResourceType = "lesson-outline" | "study-guide" | "practice-questions";
 type SubjectContext = {
   code: string;
   title: string;
+  classId: string | null;
   courseYear: string | null;
+  academicYear: string;
   term: string;
 };
-type ResourceResponse = {
-  answer?: string;
-  warnings?: string[];
-  message?: string;
-  error?: string;
-};
+type AssistantMessage = { id: number; role: "assistant" | "user"; content: string };
+type AssistantResponse = { answer?: string; message?: string; error?: string };
 
-const resourceLabels: Record<ResourceType, string> = {
-  "lesson-outline": "Lesson outline",
-  "study-guide": "Study guide",
-  "practice-questions": "Practice questions",
-};
+const suggestions = [
+  "Give me an overview of this class.",
+  "How many students are enrolled?",
+  "What assessments are due this week?",
+  "What is the current grade-sheet status?",
+  "How do I record scores?",
+  "How do I submit final grades?",
+];
 
 export default function AcademicAssistant({
   subjectId,
@@ -29,145 +29,133 @@ export default function AcademicAssistant({
   subjectId: string;
   subjectContext: SubjectContext;
 }) {
-  const [resourceType, setResourceType] = useState<ResourceType>("lesson-outline");
-  const [level, setLevel] = useState("");
-  const [topic, setTopic] = useState("");
-  const [answer, setAnswer] = useState("");
-  const [warnings, setWarnings] = useState<string[]>([]);
+  const [messages, setMessages] = useState<AssistantMessage[]>([{
+    id: 1,
+    role: "assistant",
+    content: `Hello! I’m your SAGA Virtual Assistant. I can explain how to use SAGA and answer supported questions about this class workspace: ${subjectContext.code} · ${subjectContext.title}. What would you like to know?`,
+  }]);
+  const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [copyStatus, setCopyStatus] = useState("");
+  const [nextId, setNextId] = useState(2);
 
-  async function generate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (loading) return;
-    setLoading(true);
+  async function sendMessage(value: string) {
+    const message = value.trim();
+    if (!message || loading || message.length > 800) return;
+
+    setDraft("");
     setError("");
-    setAnswer("");
-    setWarnings([]);
-    setCopyStatus("");
+    setMessages(current => [...current, { id: nextId, role: "user", content: message }]);
+    setNextId(value => value + 1);
+    setLoading(true);
 
     try {
-      const response = await fetch("/api/cognix/academic-assistant", {
+      const response = await fetch(`/api/teacher/subjects/${encodeURIComponent(subjectId)}/assistant`, {
         method: "POST",
         credentials: "same-origin",
         cache: "no-store",
         headers: { "Content-Type": "application/json" },
-        // Only send the selected Subject ID. The server re-checks ownership
-        // and reads its instructional metadata; browser-supplied class text
-        // is never trusted or forwarded.
-        body: JSON.stringify({ subjectId, resourceType, level, topic }),
+        body: JSON.stringify({ message }),
       });
-      const payload = await response.json().catch(() => null) as ResourceResponse | null;
+      const payload = await response.json().catch(() => null) as AssistantResponse | null;
       if (!response.ok || !payload?.answer) {
-        setError(payload?.message || "The Academic Assistant could not complete this request.");
+        setError(payload?.message || "The assistant could not complete this request.");
         return;
       }
-      setAnswer(payload.answer);
-      setWarnings(Array.isArray(payload.warnings) ? payload.warnings : []);
+      setMessages(current => [...current, { id: nextId + 1, role: "assistant", content: payload.answer || "" }]);
+      setNextId(value => value + 1);
     } catch {
-      setError("COGNIX could not be reached. Your SAGA academic records were not accessed or changed.");
+      setError("SAGA could not process the message. Your class records were not changed.");
     } finally {
       setLoading(false);
     }
   }
 
-  async function copyAnswer() {
-    if (!answer) return;
-    try {
-      await navigator.clipboard.writeText(answer);
-      setCopyStatus("Draft copied.");
-    } catch {
-      setCopyStatus("Copy was not available. Select the draft text and copy it manually.");
-    }
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void sendMessage(draft);
   }
 
-  const fieldStyle = {
-    width: "100%",
-    minHeight: 44,
-    border: "1px solid #cbd5e1",
-    borderRadius: 9,
-    background: "#fff",
-    color: "#172b45",
-    padding: "10px 12px",
-    font: "inherit",
-  } as const;
-
   return (
-    <section style={{ border: "1px solid #d7e0eb", borderRadius: 16, background: "#fff", boxShadow: "0 12px 30px rgba(20,45,74,.07)", padding: "clamp(18px, 3vw, 28px)" }}>
-      <div style={{ padding: 16, borderRadius: 10, background: "#f1f6fc", border: "1px solid #d8e5f3", marginBottom: 18 }}>
-        <p style={{ margin: 0, color: "#52708f", fontSize: 11, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase" }}>Current class subject · Read only</p>
-        <h2 style={{ margin: "6px 0 4px", color: "#173454", fontSize: 19 }}>{subjectContext.title}</h2>
-        <p style={{ margin: 0, color: "#526d88", fontSize: 13, lineHeight: 1.6 }}>
-          {subjectContext.code} · {subjectContext.courseYear || "Course/year not set"} · {subjectContext.term}
+    <section className="surface" style={{ borderRadius: 16, padding: "clamp(16px, 3vw, 26px)", boxShadow: "0 12px 30px rgba(20,45,74,.06)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div>
+          <span className="eyebrow">SAGA · WORKSPACE COPILOT</span>
+          <h2 style={{ margin: "6px 0", color: "var(--bs-emphasis-color, #173454)", fontSize: 22 }}>SAGA Virtual Assistant</h2>
+          <p className="muted" style={{ margin: 0, lineHeight: 1.6 }}>Ask about using SAGA or get a read-only overview of this class.</p>
+        </div>
+        <span style={{ borderRadius: 999, background: "#edf5fd", color: "#285a86", padding: "7px 11px", fontSize: 12, fontWeight: 800 }}>Current workspace only</span>
+      </div>
+
+      <div style={{ marginTop: 18, padding: 15, border: "1px solid #d8e5f3", borderRadius: 12, background: "#f4f8fc" }}>
+        <div style={{ color: "#54718e", fontSize: 11, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase" }}>Active class · Read only</div>
+        <h3 style={{ margin: "6px 0 3px", color: "#173454", fontSize: 18 }}>{subjectContext.code} · {subjectContext.title}</h3>
+        <p style={{ margin: 0, color: "#5b7188", fontSize: 12, lineHeight: 1.6 }}>
+          {subjectContext.classId ? `Class ID ${subjectContext.classId} · ` : ""}
+          {subjectContext.courseYear || "Course/year not set"} · {subjectContext.term} · {subjectContext.academicYear}
         </p>
       </div>
 
-      <form onSubmit={generate}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 16 }}>
-          <label style={{ display: "grid", gap: 7, color: "#314b67", fontSize: 13, fontWeight: 700 }}>
-            Resource type
-            <select style={fieldStyle} value={resourceType} onChange={event => setResourceType(event.target.value as ResourceType)}>
-              <option value="lesson-outline">Lesson outline</option>
-              <option value="study-guide">Study guide</option>
-              <option value="practice-questions">Practice questions</option>
-            </select>
-          </label>
-          <label style={{ display: "grid", gap: 7, color: "#314b67", fontSize: 13, fontWeight: 700 }}>
-            Learning level
-            <select style={fieldStyle} value={level} onChange={event => setLevel(event.target.value)} required>
-              <option value="">Select level</option>
-              <option>Elementary</option>
-              <option>Junior High School</option>
-              <option>Senior High School</option>
-              <option>Higher Education</option>
-              <option>Adult Learning</option>
-            </select>
-          </label>
-        </div>
+      <div aria-live="polite" aria-label="Assistant conversation" style={{ display: "grid", gap: 12, marginTop: 20, maxHeight: 520, overflowY: "auto", padding: 2 }}>
+        {messages.map(message => (
+          <article key={message.id} style={{
+            maxWidth: "min(100%, 780px)",
+            justifySelf: message.role === "user" ? "end" : "start",
+            border: message.role === "user" ? "1px solid #c5d9ee" : "1px solid #e0e7ef",
+            borderRadius: 13,
+            padding: "12px 15px",
+            background: message.role === "user" ? "#edf5fd" : "#fff",
+            color: "#243b53",
+            lineHeight: 1.7,
+            whiteSpace: "pre-wrap",
+            overflowWrap: "anywhere",
+            fontSize: 14,
+          }}>
+            <div style={{ marginBottom: 5, color: "#698099", fontSize: 10, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase" }}>
+              {message.role === "user" ? "You" : "SAGA Virtual Assistant"}
+            </div>
+            {message.content}
+          </article>
+        ))}
+        {loading && <p role="status" style={{ margin: 0, color: "#627a94", fontSize: 13 }}>Checking this workspace and preparing a response…</p>}
+      </div>
 
-        <label style={{ display: "grid", gap: 7, marginTop: 18, color: "#314b67", fontSize: 13, fontWeight: 700 }}>
-          Topic or learning competency
+      {messages.length === 1 && (
+        <div style={{ marginTop: 18 }}>
+          <p style={{ margin: "0 0 9px", color: "#526b85", fontSize: 12, fontWeight: 800 }}>TRY ASKING</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {suggestions.map(suggestion => (
+              <button key={suggestion} type="button" className="btn btn-sm btn-outline-primary" disabled={loading} onClick={() => void sendMessage(suggestion)}>
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <form onSubmit={submit} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 9, alignItems: "end", marginTop: 18 }}>
+        <label style={{ display: "grid", gap: 6, color: "#38536e", fontSize: 12, fontWeight: 700 }}>
+          Your question
           <textarea
-            style={{ ...fieldStyle, minHeight: 104, resize: "vertical" }}
-            value={topic}
-            onChange={event => setTopic(event.target.value)}
-            minLength={3}
-            maxLength={120}
-            placeholder="Example: Linear equations in one variable"
-            required
+            value={draft}
+            onChange={event => setDraft(event.target.value)}
+            maxLength={800}
+            rows={2}
+            placeholder="Ask about this class or how to use a SAGA feature…"
+            disabled={loading}
+            style={{ width: "100%", minHeight: 54, resize: "vertical", border: "1px solid #cbd5e1", borderRadius: 9, padding: "10px 12px", font: "inherit", fontWeight: 400, color: "#172b45" }}
           />
-          <span style={{ color: "#74869b", fontSize: 11, fontWeight: 400 }}>{topic.length}/120 characters · Use a general topic or competency only; never include learner or teacher details.</span>
+          <span style={{ color: "#7a8da2", fontSize: 10, fontWeight: 400 }}>{draft.length}/800 characters</span>
         </label>
-
-        <div role="note" style={{ marginTop: 18, padding: 15, borderRadius: 10, background: "#fff7e7", border: "1px solid #f1d8a7", color: "#79551a", fontSize: 12, lineHeight: 1.65 }}>
-          <strong>Privacy notice:</strong> Only this class's subject title and code, course/year label, term, selected learning level, resource type, and generic topic are sent through COGNIX to an external model provider. SAGA does not send class lists, enrollments, assessment items, grades, scores, attendance, or student records. AI Gateway filters out providers that train on prompts, but this does <strong>not</strong> guarantee zero data retention. Never enter names, student IDs/LRNs, grades, scores, attendance, contact details, personal circumstances, or confidential school material.
-        </div>
-        <p style={{ margin: "10px 0 0", color: "#74869b", fontSize: 11, lineHeight: 1.6 }}>
-          SAGA does not currently supply official curriculum guides or learning-competency documents to COGNIX. The topic or competency is teacher-provided; generated materials are not certified curriculum-aligned.
-        </p>
-
-        {error ? <p role="alert" style={{ margin: "16px 0 0", color: "#b42318", fontSize: 13 }}>{error}</p> : null}
-
-        <button type="submit" disabled={loading || topic.trim().length < 3 || !level} style={{ marginTop: 18, minHeight: 46, padding: "0 20px", border: 0, borderRadius: 9, background: loading ? "#7891ad" : "#225f9e", color: "#fff", fontWeight: 800, cursor: loading ? "wait" : "pointer" }}>
-          {loading ? "Generating draft…" : `Generate ${resourceLabels[resourceType].toLowerCase()}`}
+        <button type="submit" className="btn btn-primary" disabled={loading || draft.trim().length < 2 || draft.length > 800} style={{ minHeight: 46, paddingInline: 18 }}>
+          {loading ? "Sending…" : "Send"}
         </button>
       </form>
+      {error && <p role="alert" style={{ margin: "10px 0 0", color: "#b42318", fontSize: 13 }}>{error}</p>}
 
-      {answer ? (
-        <section style={{ marginTop: 24, borderTop: "1px solid #e1e8f0", paddingTop: 22 }} aria-labelledby="academic-draft-title">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <div>
-              <p style={{ margin: 0, color: "#52708f", fontSize: 11, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase" }}>COGNIX generated draft</p>
-              <h2 id="academic-draft-title" style={{ margin: "5px 0 0", color: "#173454", fontSize: 21 }}>{resourceLabels[resourceType]}</h2>
-            </div>
-            <button type="button" onClick={copyAnswer} style={{ border: "1px solid #9fb2c8", borderRadius: 8, padding: "9px 14px", background: "#f7faff", color: "#244768", fontWeight: 700 }}>Copy draft</button>
-          </div>
-          <p role="status" aria-live="polite" style={{ margin: "8px 0", color: "#52708f", fontSize: 12 }}>{copyStatus}</p>
-          <pre style={{ margin: "12px 0 0", padding: 18, borderRadius: 10, background: "#f5f8fc", color: "#253b55", whiteSpace: "pre-wrap", overflowWrap: "anywhere", font: "inherit", fontSize: 14, lineHeight: 1.75 }}>{answer}</pre>
-          {warnings.length ? <ul style={{ margin: "14px 0 0", paddingLeft: 20, color: "#667d97", fontSize: 12, lineHeight: 1.6 }}>{warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul> : null}
-        </section>
-      ) : null}
+      <aside role="note" style={{ marginTop: 18, padding: 14, border: "1px solid #d6e6d9", borderRadius: 10, background: "#f3f9f4", color: "#385b43", fontSize: 11, lineHeight: 1.7 }}>
+        <strong>Privacy and permissions:</strong> SAGA verifies your teacher and school access for this class on every message. Workspace answers are produced inside SAGA from class metadata and aggregate counts; individual student records and marks are not loaded into chat. For general SAGA help, COGNIX receives only a fixed help-topic code—not your typed question, class details, or academic records. This assistant is read-only and does not save changes. Conversation text stays in this page session and is not saved by the assistant.
+      </aside>
     </section>
   );
 }

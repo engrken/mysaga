@@ -1,31 +1,33 @@
-# COGNIX integration status (SAGA)
+# SAGA Virtual Assistant and COGNIX integration
 
 SAGA integrates with COGNIX through server-side routes only. Browser code never receives a COGNIX service token.
 
-## Enabled capability: Class-contextual academic resource drafting
+## SAGA Virtual Assistant
 
-Teachers open **Academic Assistant** from the SAGA top navigation. When launched from a class workspace, the active subject is preselected. Otherwise, the teacher chooses from a list of subjects owned by their authenticated teacher account in the current school.
+The former lesson-outline, study-guide, and practice-question generator has been retired. Teachers launch **Virtual Assistant** from the currently open class workspace. The assistant page does not display a list of other classes or provide a class switcher. To ask about another class, the teacher returns to **My classes** and opens that workspace first.
 
-For each generation request, SAGA authenticates an active, non-demo teacher and performs one ownership-scoped lookup of the selected `Subject` row. It selects only these scalar instructional fields:
+The assistant is a conversational, read-only copilot for two purposes:
 
-- Subject title.
-- Subject/course code.
-- Course/year label.
-- Term.
+1. Explain how to use SAGA features such as class roster, grading setup, assessment items, score entry, attendance, activities, final-grade submission, grade visibility, profile/security, and class chats.
+2. Answer supported factual questions about the currently open class workspace, such as class overview, enrollment count, assessment item count and due dates, grade-sheet workflow state, attendance-session count, activity metadata, and student grade visibility.
 
-The teacher also selects a learning level and resource type and supplies a short generic topic or learning competency. SAGA does not load or query enrollments, student names or identifiers, rosters, assessments, activities, scores, grades, grade-change history, or attendance for this feature. The internal subject ID is used only by SAGA to verify ownership and is not sent to COGNIX.
+## SAGA-local academic data boundary
 
-The Academic Assistant is launched from the current class workspace when a class is active. From the global assistant link, a teacher selects one of their own class subjects before generating a draft. School ID and teacher ID are not sent to COGNIX either. The request endpoint applies a 10-request-per-hour per-teacher limit.
+For every message, SAGA authenticates an active, non-demo teacher and queries exactly one `Subject` with all of these predicates: the route's class subject ID, the authenticated `teacherId`, and the authenticated `schoolId`.
 
-## External model processing disclosure
+The adapter answers supported workspace questions inside SAGA. It can read the selected class's non-personal subject metadata, class-level relation counts, assessment titles and due dates, grade workflow status, attendance-session count, and activity titles/types/status/due dates. It does not load individual student names or IDs, student-level grades, scores, grade-change history, attendance marks, rosters, or activity submissions into the assistant conversation. It cannot change academic records or execute actions.
 
-The selected subject metadata, learning level, resource type, and generic topic are sent through COGNIX to the AI Gateway virtual model `vmc/academic-assistant`. This model's configuration enforces the Gateway no-prompt-training provider filter. This does **not** guarantee zero data retention. The interface discloses these fields and prohibits personal, confidential, or record-level information.
+Questions requesting individual student details or marks are not answered in chat; the teacher is directed to the appropriate private SAGA workspace screen. Unsupported questions fail closed to a safe clarification. Requests are throttled to 20 messages per teacher per hour. Conversation text remains in the browser page state and is not saved as assistant history.
 
-SAGA does not currently provide official curriculum guides or learning-competency documents to COGNIX. A teacher may enter a competency or topic as generic text, but the model must not claim official DepEd, CHED, or institutional curriculum alignment unless verified standards are supplied in a future approved integration. Generated materials are drafts and require teacher review for factual accuracy, age-appropriateness, and classroom suitability.
+## Fixed-topic COGNIX system guidance
 
-## Disabled experiment: Teacher summary
+COGNIX is used only for generic SAGA product instructions. The SAGA adapter classifies the teacher's question locally into one allowlisted help-topic code, then sends only that fixed code to COGNIX using task `system-help`.
 
-The previous `POST /api/cognix/teacher-summary` experiment remains disabled. It returns `403 capability_disabled` before querying subjects, enrollments, assessments, or grade workflows. It makes no outbound request to COGNIX.
+The COGNIX request contains only one enum value such as `score-entry` or `attendance`. It does **not** include the teacher's typed message, teacher or student identifiers, subject ID, class metadata, roster, assessment contents, grades, scores, attendance marks, or any other academic record. COGNIX cannot query the SAGA database.
+
+The COGNIX virtual model is `vmc/saga-system-help`, targeting `openai/gpt-4.1-mini`, with AI Gateway provider filtering that excludes providers marked as training on prompts. This does **not** guarantee zero data retention. If COGNIX is unavailable, SAGA falls back to its built-in help instructions.
+
+The COGNIX capability `learning-resource` is disabled. The old SAGA route `POST /api/cognix/academic-assistant` is retired and returns `410 feature_retired`. The separate COGNIX `teacher-summary` capability remains disabled; the SAGA compatibility endpoint remains disabled and does not query academic records or make an outbound request.
 
 ## Server environment
 
@@ -38,8 +40,9 @@ Both values must stay server-side. Do not use a `NEXT_PUBLIC_` prefix or put eit
 
 ## Safety boundaries
 
-- SAGA remains authoritative for teacher authentication and school scope.
-- COGNIX receives only the selected subject's instructional metadata and generic resource request; it has no direct SAGA database connection.
-- Requests and responses are not persisted by the integration endpoints.
-- Logs contain only request IDs, task labels, duration, and token counts—not prompts or generated text.
-- No grade calculations, student evaluation, attendance decisions, academic record changes, or autonomous actions are enabled.
+- SAGA remains authoritative for teacher authentication, class ownership, school scope, and all academic data.
+- Workspace facts are queried and answered locally by SAGA; no academic records are sent to a model.
+- COGNIX receives a fixed help-topic code only, never teacher free text or academic data.
+- The assistant is read-only. It performs no grade calculations, student evaluation, attendance decisions, data mutation, or autonomous actions.
+- Neither endpoint persists the conversation or logs message contents or generated text.
+- AI-generated system guidance is instructional only; teachers remain responsible for using SAGA's authoritative on-screen workflow and validation messages.
