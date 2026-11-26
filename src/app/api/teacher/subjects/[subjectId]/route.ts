@@ -73,7 +73,7 @@ const remarkSchema = z.object({ enrollmentId: z.string(), remark: z.enum(["INC",
 const gradeChangeSchema = z.object({ gradeChange: z.object({ enrollmentId: z.string(), finalGrade: z.string().trim().min(1).max(12), remarks: z.string().trim().max(40), reason: z.string().trim().min(10).max(500) }) });
 const copyGradingSchema = z.object({ copyGradingFromSubjectId: z.string() });
 const bandsSchema = z.object({ gradeBands: z.array(z.object({ id: z.string().optional(), minPercent: z.number().min(0).max(100), finalGrade: z.string().trim().min(1).max(12), remarks: z.string().trim().min(1).max(40) })).min(2).max(30) });
-const subjectDetailsSchema = z.object({ updateSubject: z.object({ classId: z.string().trim().min(1).max(40), code: z.string().trim().min(1).max(30), title: z.string().trim().min(2).max(160), term: z.string().trim().min(1).max(40), academicYear: z.string().trim().min(4).max(20), schedule: z.string().trim().max(4000).nullable(), courseYear: z.string().trim().max(80).nullable(), courseProgram: z.string().trim().max(120).nullable().optional(), yearLevel: z.string().trim().max(40).nullable().optional(), section: z.string().trim().max(40).nullable().optional() }) });
+const subjectDetailsSchema = z.object({ updateSubject: z.object({ classId: z.string().trim().max(40).nullable().transform(value => value || null), code: z.string().trim().min(1).max(30), title: z.string().trim().min(2).max(160), term: z.string().trim().min(1).max(40), academicYear: z.string().trim().min(4).max(20), schedule: z.string().trim().max(4000).nullable(), courseYear: z.string().trim().max(80).nullable(), courseProgram: z.string().trim().max(120).nullable().optional(), yearLevel: z.string().trim().max(40).nullable().optional(), section: z.string().trim().max(40).nullable().optional() }) });
 export async function PATCH(request: Request, context: Context) {
   const teacher = await requireRole("TEACHER"); if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { subjectId } = await context.params;
@@ -90,7 +90,7 @@ export async function PATCH(request: Request, context: Context) {
     if (!parsed.success) return NextResponse.json({ error: "Check the Class ID and class details." }, { status: 400 });
     const details = parsed.data.updateSubject;
     if (details.term === "Trimester") details.term = "3rd Semester";
-    if (await prisma.subject.findFirst({
+    if (details.classId && await prisma.subject.findFirst({
       where: { schoolId: teacher.schoolId, id: { not: subjectId }, classId: { equals: details.classId, mode: "insensitive" } },
       select: { id: true }
     })) return NextResponse.json({ error: "That Class ID is already used in this school." }, { status: 409 });

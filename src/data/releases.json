@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.14.0-beta.2",
+    "date": "2026-11-26",
+    "kind": "improvement",
+    "changes": [
+      "Made Class ID optional when creating or editing a class; duplicate checks still apply when an ID is entered."
+    ]
+  },{
     "version": "0.14.0-beta.1",
     "date": "2026-11-26",
     "kind": "feature",
