@@ -30,7 +30,7 @@
     "test:demo": "node --test tests/demo-experience.test.cjs tests/authentic-demo-authorization.test.cjs",
     "test:department-logo": "node --test tests/department-logo-media.test.cjs",
     "test:virtual-assistant": "node --test tests/virtual-assistant.test.cjs",
-    "test:cognix-errors": "node --test tests/cognix-error-reporter.test.mjs"
+    "test:cognix-errors": "node --experimental-strip-types --test tests/cognix-error-reporter.test.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
