@@ -1345,6 +1345,11 @@
 .account-menu-identity b{font-size:.86rem;overflow-wrap:anywhere}
 .account-menu-identity small{font-size:.71rem;color:var(--bs-secondary-color,#708198);overflow-wrap:anywhere}
 .account-menu-identity>span{font-size:.65rem;color:var(--bs-primary,#285cc0);font-weight:750}
+.account-menu-privacy{display:flex;align-items:center;gap:9px;margin:8px 4px 4px;padding:10px 11px;border:1px solid #e6eee9;border-radius:10px;background:#f7faf8;color:#328354}
+.account-menu-privacy>span:first-child{display:grid;place-items:center;flex:none;width:22px;height:22px;border-radius:50%;background:#e6f4eb;font-size:.75rem;font-weight:900}
+.account-menu-privacy b,.account-menu-privacy small{display:block}
+.account-menu-privacy b{font-size:.68rem}
+.account-menu-privacy small{margin-top:3px;color:#84958b;font-size:.61rem}
 .account-menu-actions{display:grid;gap:1px;padding:7px 0}
 .account-menu-item{display:flex;align-items:center;gap:10px;width:100%;border:0;border-radius:9px;padding:10px 11px;background:transparent;color:inherit;text-align:left;cursor:pointer;font-size:.77rem;font-weight:750}
 .account-menu-item>span:last-child{display:grid;gap:3px;min-width:0}
@@ -2079,9 +2084,9 @@ body[data-saga-theme="dark"]:has(.portal-layout[data-saga-role="student"]) .saga
 .portal-nav-class-menu .sidebar-class-link:hover,.portal-nav-class-menu .sidebar-class-link.selected{background:#f1f5fc;color:#2458d3}
 .portal-nav-class-menu .sidebar-class-link-copy b{font-size:.7rem}
 .portal-nav-class-menu .sidebar-class-link-copy small{font-size:.62rem}
-.portal-top-links{flex-wrap:wrap}
-.portal-top-account{flex:0 0 100%;margin-top:3px;padding-left:8px}
-.portal-top-account .account-menu-panel{left:0;right:auto}
+.portal-top-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex:none;margin-left:auto}
+.portal-layout[data-bs-theme="dark"] .account-menu-privacy{border-color:#304b45;background:#172e2b;color:#79d4a2}
+.portal-layout[data-bs-theme="dark"] .account-menu-privacy small{color:#a0b8ad}
 .portal-layout[data-bs-theme="dark"] .portal-top-nav{border-color:#304057;background:rgba(17,29,47,.96);box-shadow:0 4px 18px rgba(0,0,0,.2)}
 .portal-layout[data-bs-theme="dark"] .portal-top-brand,.portal-layout[data-bs-theme="dark"] .portal-top-brand>span strong{color:#e4ebf6}
 .portal-layout[data-bs-theme="dark"] .portal-top-brand>span small{color:#69c7d5}
@@ -2106,7 +2111,8 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
   .portal-top-brand .sidebar-app-mark{width:34px;height:34px}
   .portal-top-brand>span strong{font-size:.8rem}
   .portal-top-brand>span small{font-size:.48rem}
-  .portal-top-links{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px;padding-top:7px;border-top:1px solid var(--line)}
+  .portal-top-actions{grid-column:2;grid-row:1;align-self:center}
+  .portal-top-links{grid-column:1/-1;grid-row:2;display:flex;flex-wrap:wrap;gap:4px;padding-top:7px;border-top:1px solid var(--line)}
   .portal-top-link{min-height:36px;padding:7px 9px;border-radius:8px;font-size:.68rem;gap:6px}
   .portal-top-link>span:first-child{font-size:.88rem}
   .portal-nav-class-menu{position:relative}

@@ -98,6 +98,7 @@ export default function AccountMenu({
     </button>
     {open && <div id={menuId} className="account-menu-panel" aria-label="My account settings">
       <div className="account-menu-identity"><b>{fullName}</b><small>{email}</small><span>{role} account</span></div>
+      <div className="account-menu-privacy" role="note"><span aria-hidden="true">✓</span><span><b>Private by default</b><small>Academic records are protected</small></span></div>
       <div className="account-menu-actions">
         <button type="button" className="account-menu-item" onClick={() => select(onEditProfile)}>
           <span className="account-menu-item-icon" aria-hidden="true">◉</span><span><b>Edit profile</b><small>Name, photo, email &amp; password</small></span>
