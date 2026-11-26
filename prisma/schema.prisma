@@ -109,6 +109,7 @@ model User {
   defaultGradeSheetComponents String?
   courseProgram           String?
   yearLevel               String?
+  section                 String?
   privacyNoticeAcceptedAt DateTime?
   termsAcceptedAt         DateTime?
   termsOfServiceVersion   String?
@@ -191,6 +192,7 @@ model StudentDirectory {
   email         String
   courseProgram String
   yearLevel     String
+  section       String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   school        School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
@@ -210,6 +212,9 @@ model Subject {
   academicYear String
   schedule     String?
   courseYear   String?
+  courseProgram String?
+  yearLevel    String?
+  section      String?
   gradeSheetComponents String?
   isPublished  Boolean         @default(false)
   gradeStatus  GradeStatus     @default(DRAFT)
