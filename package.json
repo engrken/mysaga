@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate deploy; fi && prisma generate && npm run test:department-logo && npm run test:grades && npm run test:classes && npm run test:simulation && npm run test:scorebook-layout && npm run test:tenant && npm run test:teacher-signup && npm run test:identity && npm run test:invites && npm run test:release && npm run test:theme && npm run test:demo && npm run test:virtual-assistant && next build",
+    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate deploy; fi && prisma generate && npm run test:department-logo && npm run test:grades && npm run test:classes && npm run test:simulation && npm run test:scorebook-layout && npm run test:tenant && npm run test:teacher-signup && npm run test:identity && npm run test:invites && npm run test:release && npm run test:theme && npm run test:demo && npm run test:virtual-assistant && npm run test:cognix-errors && next build",
     "test:grades": "node --test tests/grades.test.cjs tests/assessment-setup.test.cjs",
     "test:classes": "node --test tests/class-navigation.test.cjs tests/class-chat-period.test.mjs",
     "postinstall": "prisma generate",
@@ -29,7 +29,8 @@
     "test:theme": "node --test tests/theme-palette.test.cjs",
     "test:demo": "node --test tests/demo-experience.test.cjs tests/authentic-demo-authorization.test.cjs",
     "test:department-logo": "node --test tests/department-logo-media.test.cjs",
-    "test:virtual-assistant": "node --test tests/virtual-assistant.test.cjs"
+    "test:virtual-assistant": "node --test tests/virtual-assistant.test.cjs",
+    "test:cognix-errors": "node --experimental-strip-types --test tests/cognix-error-reporter.test.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
