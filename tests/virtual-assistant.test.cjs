@@ -44,6 +44,18 @@ test("system-use questions map to fixed help topics", () => {
   assert.deepEqual(classifyAssistantMessage("How do I record scores?"), {
     kind: "system-help", topic: "score-entry",
   });
+  assert.deepEqual(classifyAssistantMessage("Can you record a score from my Excel sheet?"), {
+    kind: "system-help", topic: "score-entry",
+  });
+  assert.deepEqual(classifyAssistantMessage("How do I import scores from an Excel spreadsheet?"), {
+    kind: "system-help", topic: "score-entry",
+  });
+  assert.deepEqual(classifyAssistantMessage("How to setup grade?"), {
+    kind: "system-help", topic: "grading-setup",
+  });
+  assert.deepEqual(classifyAssistantMessage("How do I set up my grades?"), {
+    kind: "system-help", topic: "grading-setup",
+  });
   assert.deepEqual(classifyAssistantMessage("Where do I add students to the roster?"), {
     kind: "system-help", topic: "class-roster",
   });
