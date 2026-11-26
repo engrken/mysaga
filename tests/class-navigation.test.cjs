@@ -62,3 +62,24 @@ test("student grades use the Overview academic period without separate year and 
   assert.ok(portal.includes("view=summary&academicYear=${encodeURIComponent(academicYear)}&term=${encodeURIComponent(activeTerm)}"));
   assert.doesNotMatch(portal, /studentYearFilter|studentTermFilter/);
 });
+
+
+test("class directory has dedicated responsive and dark-mode presentation styles", () => {
+  const styles = fs.readFileSync(path.join(__dirname, "../src/app/globals.css"), "utf8");
+  for (const selector of [
+    ".class-directory-hero{",
+    ".class-directory-stats{",
+    ".class-directory-stat{",
+    ".class-directory-grid{",
+    ".class-directory-card{",
+    ".class-directory-card:focus-visible{",
+    ".class-directory-pagination{",
+    '.portal-layout[data-bs-theme="dark"] .class-directory-card,'
+  ]) {
+    assert.ok(styles.includes(selector), "Missing class directory style: " + selector);
+  }
+  assert.ok(styles.includes("@media(max-width:760px){"));
+  assert.ok(styles.includes(".class-directory-grid{grid-template-columns:1fr;"));
+  assert.ok(styles.includes("@media(max-width:1100px){"));
+  assert.ok(styles.includes(".class-directory-stats{grid-template-columns:repeat(2,minmax(0,1fr))}"));
+});
