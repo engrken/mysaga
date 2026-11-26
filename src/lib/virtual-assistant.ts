@@ -60,7 +60,7 @@ function classifyHelpTopic(message: string): SagaHelpTopic | null {
     || /\b(?:excel|spreadsheet|csv|workbook|file|template)\b.{0,48}\b(?:scores?|marks?|points?)\b/.test(text)
     || /\b(scorebook|score entry|bulk scores?)\b/.test(text)) return "score-entry";
   if (/\b(grading setup|grade setup|setup grades?|set[- ]?up grades?|grading path|grading configuration|grading scheme|grade scale|category weights?|weight allocation|lecture and laboratory)\b/.test(text)
-    || /\b(?:setup|set[- ]?up|configure|configuration)\s+(?:the\s+)?(?:class\s+)?(?:grade|grading|gradebook)\b/.test(text)
+    || /\b(?:setup|set[- ]?up|configure|configuration)\s+(?:(?:the|my|our|class)\s+)*(?:grades?|grading|gradebook)(?:\s+categories?)?\b/.test(text)
     || /\b(?:grade|grading)\s+(?:setup|set[- ]?up|configuration|scheme|structure|path)\b/.test(text)) return "grading-setup";
   if (/\b(assessment|quiz|exam|due date|maximum points?)\b/.test(text)) return "assessments";
   if (/\b(roster|enrollment|enrolment|add students?|import students?|student number)\b/.test(text)) return "class-roster";
