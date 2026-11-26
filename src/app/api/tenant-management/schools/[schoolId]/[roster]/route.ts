@@ -24,7 +24,10 @@ const pageSize = 25;
 const listSchema = z.object({
   page: z.coerce.number().int().min(1).max(10000).default(1),
   query: z.string().trim().max(100).default(""),
-  status: z.enum(["ALL", "VERIFIED", "UNVERIFIED", "NO_ACCOUNT", "CLASS_ONLY"]).default("ALL")
+  status: z.enum(["ALL", "VERIFIED", "UNVERIFIED", "NO_ACCOUNT", "CLASS_ONLY"]).default("ALL"),
+  program: z.string().trim().max(120).default(""),
+  yearLevel: z.string().trim().max(40).default(""),
+  section: z.string().trim().max(40).default("")
 });
 
 export async function GET(request: Request, { params }: Context) {
@@ -34,7 +37,7 @@ export async function GET(request: Request, { params }: Context) {
   const search = new URL(request.url).searchParams;
   const parsed = listSchema.safeParse(Object.fromEntries(search));
   if (!parsed.success) return NextResponse.json({ error: "Check your roster filters." }, { status: 400 });
-  const { page, query, status } = parsed.data;
+  const { page, query, status, program, yearLevel, section } = parsed.data;
   if (!(await prisma.school.findUnique({ where: { id: schoolId }, select: { id: true } }))) {
     return NextResponse.json({ error: "School workspace not found." }, { status: 404 });
   }
@@ -71,6 +74,20 @@ export async function GET(request: Request, { params }: Context) {
     return NextResponse.json({ teachers, hasMore: accounts.length > pageSize }, { headers: { "Cache-Control": "no-store" } });
   }
 
+  const filterOptionsRows = await prisma.$queryRaw<{ programs: string[]; yearLevels: string[]; sections: string[] }[]>`
+    WITH cohort_values AS (
+      SELECT "courseProgram", "yearLevel", COALESCE("section", 'A') AS "section"
+      FROM "User" WHERE "schoolId" = ${schoolId} AND "role" = 'STUDENT'
+      UNION ALL
+      SELECT "courseProgram", "yearLevel", COALESCE("section", 'A') AS "section"
+      FROM "StudentDirectory" WHERE "schoolId" = ${schoolId}
+    )
+    SELECT
+      ARRAY(SELECT DISTINCT "courseProgram" FROM cohort_values WHERE NULLIF(btrim("courseProgram"), '') IS NOT NULL ORDER BY "courseProgram") AS programs,
+      ARRAY(SELECT DISTINCT "yearLevel" FROM cohort_values WHERE NULLIF(btrim("yearLevel"), '') IS NOT NULL ORDER BY "yearLevel") AS "yearLevels",
+      ARRAY(SELECT DISTINCT "section" FROM cohort_values WHERE NULLIF(btrim("section"), '') IS NOT NULL ORDER BY "section") AS sections
+  `;
+  const filterOptions = filterOptionsRows[0] ?? { programs: [], yearLevels: [], sections: [] };
   const rows = await prisma.$queryRaw<RosterEntry[]>`
     WITH accounts AS (
       SELECT "id", "studentNumber", "fullName", "email", "courseProgram", "yearLevel", "section", "emailVerifiedAt", "updatedAt"
@@ -103,10 +120,13 @@ export async function GET(request: Request, { params }: Context) {
     WHERE (${status} = 'ALL' OR "status" = ${status})
       AND (${query} = '' OR strpos(lower("fullName"), lower(${query})) > 0
         OR strpos(lower("studentNumber"), lower(${query})) > 0)
+      AND (${program} = '' OR "courseProgram" = ${program})
+      AND (${yearLevel} = '' OR "yearLevel" = ${yearLevel})
+      AND (${section} = '' OR COALESCE("section", 'A') = ${section})
     ORDER BY lower("fullName"), "key"
     LIMIT ${pageSize + 1} OFFSET ${(page - 1) * pageSize}
   `;
-  return NextResponse.json({ students: rows.slice(0, pageSize), hasMore: rows.length > pageSize }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ students: rows.slice(0, pageSize), hasMore: rows.length > pageSize, filterOptions }, { headers: { "Cache-Control": "no-store" } });
 }
 
 const changeDetails = z.object({
