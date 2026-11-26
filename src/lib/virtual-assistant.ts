@@ -35,7 +35,7 @@ const STATIC_HELP: Record<SagaHelpTopic, string> = {
   "class-roster": "Inside the current class workspace, open Class roster. Use Add students to paste or import the class roster; the roster template shows the expected columns. SAGA matches an existing student portal account using the student number. Review the rows before saving.",
   "grading-setup": "Open Grading setup in the current class workspace. Choose a single Lecture/Laboratory structure or a combined Lecture and Laboratory structure, then configure the category weights. Confirm that each parent allocation totals 100% before saving the grading path. Set the class grade-equivalent scale separately.",
   assessments: "Open Assessment items in the current class workspace. Add an assessment, choose its grading category, enter the maximum points, and optionally set a due date and item weight. Save the assessment setup when finished.",
-  "score-entry": "Open Record scores in the current class workspace. Choose the assessment columns and enter points for the appropriate enrolled students. Blank cells remain unchanged; use the available remark controls for excused, absent, or did-not-submit cases. Use the score template when importing a CSV and review validation before saving.",
+  "score-entry": "Open Record scores in the current class workspace. Choose Import scores, download the SAGA CSV template, fill in the assessment columns, then select the completed CSV file. Review the student-row preview and validation messages, then choose Validate and save. The importer accepts CSV files, not .xlsx workbooks; export your Excel data as CSV and align it with the SAGA template first. Blank cells remain unchanged, and attendance is imported separately. The Virtual Assistant cannot upload files or change score records.",
   attendance: "Open Attendance in the current class workspace to review attendance sessions. Use Attendance day to add a session, select its date and delivery type, and then record the attendance marks. SAGA treats attendance as Present, Absent, or Excused rather than ordinary points.",
   "class-activities": "Open Activities in the current class workspace to create or manage class activities and learning tasks. Review the activity status and due date before opening it to students. Student submissions and grading remain within the class workspace.",
   "final-grades": "Open Final grades & submit in the current class workspace. Review the grade sheet and its validation messages before submitting. A submitted sheet follows the school's verification workflow; a verified sheet is final. Follow the on-screen instructions if a correction or recall is required.",
@@ -55,8 +55,13 @@ function classifyHelpTopic(message: string): SagaHelpTopic | null {
   if (/\b(submit|submission|verify|verification|registrar|final grades?|grade sheet|gradesheet)\b/.test(text)) return "final-grades";
   if (/\b(attendance|present|absent|excused)\b/.test(text)) return "attendance";
   if (/\b(activities|activity|assignment|learning task|student submission)\b/.test(text)) return "class-activities";
-  if (/\b(record scores?|enter scores?|scorebook|score entry|import scores?|bulk scores?)\b/.test(text)) return "score-entry";
-  if (/\b(grading setup|grading path|category weights?|grade scale|weight allocation|lecture and laboratory)\b/.test(text)) return "grading-setup";
+  if (/\b(?:record|enter|import|upload|add|save)\b.{0,48}\b(?:scores?|marks?|points?)\b/.test(text)
+    || /\b(?:scores?|marks?|points?)\b.{0,48}\b(?:excel|spreadsheet|csv|workbook|file|template)\b/.test(text)
+    || /\b(?:excel|spreadsheet|csv|workbook|file|template)\b.{0,48}\b(?:scores?|marks?|points?)\b/.test(text)
+    || /\b(scorebook|score entry|bulk scores?)\b/.test(text)) return "score-entry";
+  if (/\b(grading setup|grade setup|setup grades?|set[- ]?up grades?|grading path|grading configuration|grading scheme|grade scale|category weights?|weight allocation|lecture and laboratory)\b/.test(text)
+    || /\b(?:setup|set[- ]?up|configure|configuration)\s+(?:the\s+)?(?:class\s+)?(?:grade|grading|gradebook)\b/.test(text)
+    || /\b(?:grade|grading)\s+(?:setup|set[- ]?up|configuration|scheme|structure|path)\b/.test(text)) return "grading-setup";
   if (/\b(assessment|quiz|exam|due date|maximum points?)\b/.test(text)) return "assessments";
   if (/\b(roster|enrollment|enrolment|add students?|import students?|student number)\b/.test(text)) return "class-roster";
   if (/\b(my classes|switch class|open class|class workspace|class navigation|change class|subject workspace)\b/.test(text)) return "class-navigation";
@@ -130,7 +135,8 @@ export function classifyAssistantMessage(message: string): AssistantIntent {
     return { kind: "workspace", intent: "class-overview" };
   }
 
-  if (helpTopic && /\b(help|guide|explain|confused|how|where|steps)\b/.test(lower)) {
+  const asksForFeatureAction = /\b(?:can|could|would)\s+you\b|\bcan\s+i\b|\bplease\b|\b(?:want|need|trying)\s+to\b/.test(lower);
+  if (helpTopic && (/\b(help|guide|explain|confused|how|where|steps)\b/.test(lower) || asksForFeatureAction)) {
     return { kind: "system-help", topic: helpTopic };
   }
 
