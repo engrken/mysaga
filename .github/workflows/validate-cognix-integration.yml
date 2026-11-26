@@ -14,17 +14,19 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       VERCEL_ENV: ci
+      DIRECT_URL: postgresql://placeholder:placeholder@127.0.0.1:5432/placeholder?sslmode=disable
+      DATABASE_URL: postgresql://placeholder:placeholder@127.0.0.1:5432/placeholder?sslmode=disable
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-      - name: Install dependencies
+          node-version: 24
+      - name: Install dependencies and generate Prisma client
         run: npm install --no-package-lock --no-audit --no-fund
       - name: Full SAGA test suite and production build
         run: npm run build
