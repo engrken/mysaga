@@ -78,6 +78,8 @@ test("class directory has dedicated responsive and dark-mode presentation styles
   ]) {
     assert.ok(styles.includes(selector), "Missing class directory style: " + selector);
   }
-  assert.match(styles, /@media\\(max-width:760px\\)[\\s\\S]*?\\.class-directory-grid\\{grid-template-columns:1fr\\}/);
-  assert.match(styles, /@media\\(max-width:1100px\\)[\\s\\S]*?\\.class-directory-stats\\{grid-template-columns:repeat\\(2,minmax\\(0,1fr\\)\\)\\}/);
+  assert.ok(styles.includes("@media(max-width:760px){"));
+  assert.ok(styles.includes(".class-directory-grid{grid-template-columns:1fr}"));
+  assert.ok(styles.includes("@media(max-width:1100px){"));
+  assert.ok(styles.includes(".class-directory-stats{grid-template-columns:repeat(2,minmax(0,1fr))}"));
 });
