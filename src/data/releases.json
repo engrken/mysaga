@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.14.0-beta.1",
+    "date": "2026-11-26",
+    "kind": "feature",
+    "changes": [
+      "Added structured Course/Program, Year Level, and Section fields to class creation and class editing, with editable suggestions and support for custom entries.",
+      "Extended student directory and student account records with an optional Section field; administrators can edit section alongside program and year level, with Section A used as the default for new class-only records.",
+      "Preserved existing student enrollments and grade records while introducing structured class cohort metadata."
+    ]
+  },
+  {
     "version": "0.13.0-beta.1",
     "date": "2026-11-25",
     "kind": "feature",
