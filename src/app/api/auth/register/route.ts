@@ -182,7 +182,7 @@ export async function POST(request: Request) {
         if (!school) throw new Error("SCHOOL_NOT_READY");
       }
       if (!school) throw new Error("SCHOOL_NOT_READY");
-      const created = await tx.user.create({ data: { schoolId: school.id, fullName: studentProfile?.fullName ?? fullName!, email: normalizedEmail, emailVerifiedAt: new Date(), passwordHash, role, isSchoolAdmin: invitation?.role === "SCHOOL_ADMIN", studentNumber: role === "STUDENT" ? studentProfile?.studentNumber : null, facultyId: role === "TEACHER" ? normalizedFacultyId : null, courseProgram: studentProfile?.courseProgram ?? null, yearLevel: studentProfile?.yearLevel ?? null, privacyNoticeAcceptedAt: new Date(), termsAcceptedAt: new Date(), termsOfServiceVersion: termsVersion }, select: { id: true, role: true, schoolId: true } });
+      const created = await tx.user.create({ data: { schoolId: school.id, fullName: studentProfile?.fullName ?? fullName!, email: normalizedEmail, emailVerifiedAt: new Date(), passwordHash, role, isSchoolAdmin: invitation?.role === "SCHOOL_ADMIN", studentNumber: role === "STUDENT" ? studentProfile?.studentNumber : null, facultyId: role === "TEACHER" ? normalizedFacultyId : null, courseProgram: studentProfile?.courseProgram ?? null, yearLevel: studentProfile?.yearLevel ?? null, section: studentProfile?.section ?? "A", privacyNoticeAcceptedAt: new Date(), termsAcceptedAt: new Date(), termsOfServiceVersion: termsVersion }, select: { id: true, role: true, schoolId: true } });
       if (studentProfile) await tx.enrollment.updateMany({ where: { studentNumber: studentProfile.studentNumber, studentUserId: null, subject: { schoolId: school.id } }, data: { studentUserId: created.id } });
       return created;
     });
