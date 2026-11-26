@@ -74,7 +74,7 @@ test("class directory has dedicated responsive and dark-mode presentation styles
     ".class-directory-card{",
     ".class-directory-card:focus-visible{",
     ".class-directory-pagination{",
-    '.portal-layout[data-bs-theme="dark"] .class-directory-card{'
+    '.portal-layout[data-bs-theme="dark"] .class-directory-card,'
   ]) {
     assert.ok(styles.includes(selector), "Missing class directory style: " + selector);
   }
