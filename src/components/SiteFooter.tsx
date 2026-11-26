@@ -1,12 +1,9 @@
 import Link from "next/link";
 import packageJson from "../../package.json";
-import releases from "@/data/releases.json";
 
 /** Globally consistent footer; version is a committed release and build is the exact deployment. */
 export default function SiteFooter() {
   const version = packageJson.version;
-  const latestRelease = releases[0];
-  const latestChange = latestRelease?.changes?.[0] ?? "See the release history for the latest changes.";
   const build = (process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || "")
     .trim().slice(0, 7);
 
@@ -18,11 +15,6 @@ export default function SiteFooter() {
         <Link href="/updates" title={build ? `Release notes · Deployment ${build}` : "Release notes"}>
           v{version}{build && <span className="saga-site-footer-build"> · build {build}</span>}
         </Link>
-      </p>
-      <p className="saga-site-footer-meta saga-site-footer-update" aria-label="Latest SAGA Portal update">
-        <span><strong>Latest update · v{latestRelease?.version ?? version}</strong></span>
-        <span>{latestChange}</span>
-        <Link href="/updates">Release notes</Link>
       </p>
       <p className="saga-site-footer-meta">
         <span>All rights reserved</span>
