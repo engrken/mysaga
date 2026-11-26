@@ -211,7 +211,7 @@ export async function PATCH(request: Request, { params }: Context) {
       }
       const emailChanged = account.email !== email;
       const verificationChanged = (account.emailVerifiedAt !== null) !== input.verified;
-      if (!emailChanged && !verificationChanged && !(role === "STUDENT" && input.fullName)) return { changed: false };
+      if (!emailChanged && !verificationChanged && !(role === "STUDENT" && (input.fullName || input.courseProgram || input.yearLevel || input.section))) return { changed: false };
       if (emailChanged && await tx.user.findFirst({
         where: { schoolId, id: { not: account.id }, email: { equals: email, mode: "insensitive" } },
         select: { id: true }
@@ -220,7 +220,7 @@ export async function PATCH(request: Request, { params }: Context) {
       const now = new Date();
       const updated = await tx.user.updateMany({
         where: { id: account.id, schoolId, role, updatedAt: new Date(input.updatedAt) },
-        data: { email, emailVerifiedAt: input.verified ? now : null, emailIdentityChangedAt: now, ...(role === "STUDENT" && input.fullName ? { fullName: input.fullName, courseProgram: input.courseProgram, yearLevel: input.yearLevel, section: input.section ?? "A" } : {}) }
+        data: { email, emailVerifiedAt: input.verified ? now : null, emailIdentityChangedAt: now, ...(role === "STUDENT" ? { ...(input.fullName ? { fullName: input.fullName } : {}), ...(input.courseProgram ? { courseProgram: input.courseProgram } : {}), ...(input.yearLevel ? { yearLevel: input.yearLevel } : {}), ...(input.section ? { section: input.section } : {}) } : {}) }
       });
       if (updated.count !== 1) return null;
       await tx.passwordResetToken.deleteMany({ where: { userId: account.id } });
