@@ -56,7 +56,7 @@ test("Primary portal navigation replaces the sidebar and keeps My Classes as an 
   assert.ok(account.includes("Academic records are protected"));
   assert.ok(styles.includes(".portal-top-actions{display:flex;align-items:center;justify-content:flex-end"));
   assert.ok(styles.includes(".account-menu-privacy{display:flex;align-items:center"));
-  assert.ok(styles.includes(".portal-top-actions{grid-column:2;grid-row:1}"));
+  assert.ok(styles.includes(".portal-top-actions{grid-column:2;grid-row:1;align-self:center}"));
   assert.ok(portal.includes("Grade Simulator"));
   assert.ok(portal.includes("Help &amp; guides"));
   assert.ok(styles.includes("portal-nav-class-menu:hover .portal-top-class-list"));
