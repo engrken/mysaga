@@ -36,7 +36,8 @@ export default function TenantRoster({ school, schools, roster, managerName, man
   const isStudentRoster = roster === "students";
   const heading = isStudentRoster ? "Student roster" : "Teacher roster";
   const endpoint = `/api/tenant-management/schools/${encodeURIComponent(school.id)}/${roster}`;
-  const [filters, setFilters] = useState({ query: "", status: "ALL", page: 1 });
+  const [filters, setFilters] = useState({ query: "", status: "ALL", program: "", yearLevel: "", section: "", page: 1 });
+  const [filterOptions, setFilterOptions] = useState<{ programs: string[]; yearLevels: string[]; sections: string[] }>({ programs: [], yearLevels: [], sections: [] });
   const [entries, setEntries] = useState<RosterEntry[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -70,7 +71,7 @@ export default function TenantRoster({ school, schools, roster, managerName, man
 
   useEffect(() => {
     const controller = new AbortController();
-    const search = new URLSearchParams({ query: filters.query, status: filters.status, page: String(filters.page) });
+    const search = new URLSearchParams({ query: filters.query, status: filters.status, program: filters.program, yearLevel: filters.yearLevel, section: filters.section, page: String(filters.page) });
     setLoading(true);
     setListError("");
     async function load() {
@@ -80,6 +81,7 @@ export default function TenantRoster({ school, schools, roster, managerName, man
         if (!response.ok) throw new Error(data.error || "Could not load the roster.");
         setEntries(data[roster]);
         setHasMore(data.hasMore);
+        if (isStudentRoster && data.filterOptions) setFilterOptions(data.filterOptions);
       } catch (error) {
         if (!controller.signal.aborted) setListError(error instanceof Error ? error.message : "Could not load the roster.");
       } finally {
@@ -88,14 +90,14 @@ export default function TenantRoster({ school, schools, roster, managerName, man
     }
     void load();
     return () => controller.abort();
-  }, [endpoint, filters, revision, roster]);
+  }, [endpoint, filters, revision, roster, isStudentRoster]);
 
   function filter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     setEditing(null);
     setNotice("");
-    setFilters({ query: String(data.get("query") ?? "").trim(), status: String(data.get("status") ?? "ALL"), page: 1 });
+    setFilters({ query: String(data.get("query") ?? "").trim(), status: String(data.get("status") ?? "ALL"), program: String(data.get("program") ?? ""), yearLevel: String(data.get("yearLevel") ?? ""), section: String(data.get("section") ?? ""), page: 1 });
   }
 
   function beginEdit(entry: RosterEntry) {
@@ -163,14 +165,37 @@ export default function TenantRoster({ school, schools, roster, managerName, man
             {schools.map(entry => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
           </select>
         </div>
-        <form onSubmit={filter} className="row g-2 align-items-end mb-3">
+        <form key={JSON.stringify(filters)} onSubmit={filter} className="row g-2 align-items-end mb-3">
           <div className="col-12 col-md">
             <label className="form-label" htmlFor="roster-query">{isStudentRoster ? "Name or student ID" : "Name or email"}</label>
-            <input id="roster-query" name="query" type="search" className="form-control" maxLength={100} />
+            <input id="roster-query" name="query" type="search" className="form-control" maxLength={100} defaultValue={filters.query} />
           </div>
-          <div className="col-8 col-md-3">
+          {isStudentRoster && <>
+            <div className="col-12 col-sm-6 col-lg-2">
+              <label className="form-label" htmlFor="roster-program">Program</label>
+              <select id="roster-program" name="program" className="form-select" defaultValue={filters.program}>
+                <option value="">All programs</option>
+                {filterOptions.programs.map(value => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </div>
+            <div className="col-6 col-lg-2">
+              <label className="form-label" htmlFor="roster-year">Year level</label>
+              <select id="roster-year" name="yearLevel" className="form-select" defaultValue={filters.yearLevel}>
+                <option value="">All year levels</option>
+                {filterOptions.yearLevels.map(value => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </div>
+            <div className="col-6 col-lg-2">
+              <label className="form-label" htmlFor="roster-section">Section</label>
+              <select id="roster-section" name="section" className="form-select" defaultValue={filters.section}>
+                <option value="">All sections</option>
+                {filterOptions.sections.map(value => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </div>
+          </>}
+          <div className="col-8 col-md-3 col-lg-2">
             <label className="form-label" htmlFor="roster-status">Verification status</label>
-            <select id="roster-status" name="status" className="form-select">
+            <select id="roster-status" name="status" className="form-select" defaultValue={filters.status}>
               <option value="ALL">All statuses</option>
               {Object.entries(statusLabels).filter(([value]) => isStudentRoster || value === "VERIFIED" || value === "UNVERIFIED").map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
