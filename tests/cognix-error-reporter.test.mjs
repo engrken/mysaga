@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildCognixErrorEvent } from "../src/lib/cognix-error-reporter.ts";
+import { buildCognixErrorEvent } from "../src/lib/cognix-error-event.ts";
 
 test("builds a fixed technical event without application or user data", () => {
   const event = buildCognixErrorEvent("saga", "2026-11-26T12:00:00.000Z", "6ba7b810-9dad-11d1-80b4-00c04fd430c8");
