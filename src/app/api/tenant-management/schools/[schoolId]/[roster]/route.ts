@@ -201,7 +201,7 @@ export async function PATCH(request: Request, { params }: Context) {
 
       const account = await tx.user.findUnique({
         where: { id: input.accountId, schoolId, role, updatedAt: new Date(input.updatedAt) },
-        select: { id: true, email: true, emailVerifiedAt: true, tenantManagerEmail: true, isSchoolAdmin: true }
+        select: { id: true, studentNumber: true, email: true, emailVerifiedAt: true, tenantManagerEmail: true, isSchoolAdmin: true }
       });
       if (!account) return null;
         if (account.isSchoolAdmin && !manager.isTenantManager) throw new Error("SCHOOL_ADMIN_PROTECTED");
@@ -223,6 +223,9 @@ export async function PATCH(request: Request, { params }: Context) {
         data: { email, emailVerifiedAt: input.verified ? now : null, emailIdentityChangedAt: now, ...(role === "STUDENT" ? { ...(input.fullName ? { fullName: input.fullName } : {}), ...(input.courseProgram ? { courseProgram: input.courseProgram } : {}), ...(input.yearLevel ? { yearLevel: input.yearLevel } : {}), ...(input.section ? { section: input.section } : {}) } : {}) }
       });
       if (updated.count !== 1) return null;
+      if (role === "STUDENT" && account.studentNumber) {
+        await tx.studentDirectory.updateMany({ where: { schoolId, studentNumber: account.studentNumber }, data: { ...(input.fullName ? { fullName: input.fullName, ...studentNameParts(input.fullName) } : {}), ...(input.courseProgram ? { courseProgram: input.courseProgram } : {}), ...(input.yearLevel ? { yearLevel: input.yearLevel } : {}), ...(input.section ? { section: input.section } : {}) } });
+      }
       await tx.passwordResetToken.deleteMany({ where: { userId: account.id } });
       await tx.emailChangeToken.deleteMany({ where: { userId: account.id } });
       const action = emailChanged
