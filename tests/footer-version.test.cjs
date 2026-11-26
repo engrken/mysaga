@@ -48,7 +48,7 @@ test("global footer omits the latest-release teaser for all future releases", ()
   const footer = read("src/components/SiteFooter.tsx");
   assert.doesNotMatch(footer, /import releases from/);
   assert.doesNotMatch(footer, /latestRelease|latestChange|Latest update|saga-site-footer-update/);
-  assert.match(footer, /href="\\/updates"/);
+  assert.ok(footer.includes('href="/updates"'), "The compact version link still opens release history.");
 });
 
 test("public release history follows the shared version manifest", () => {
