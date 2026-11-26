@@ -22,6 +22,7 @@ type RosterEntry = {
   email: string | null;
   courseProgram?: string | null;
   yearLevel?: string | null;
+  section?: string | null;
   status: RosterStatus;
   updatedAt: string | null;
   protected?: boolean;
@@ -45,6 +46,7 @@ export default function TenantRoster({ school, schools, roster, managerName, man
   const [editName, setEditName] = useState("");
   const [editProgram, setEditProgram] = useState("");
   const [editYear, setEditYear] = useState("");
+  const [editSection, setEditSection] = useState("A");
   const [verified, setVerified] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -102,6 +104,7 @@ export default function TenantRoster({ school, schools, roster, managerName, man
     setEditName(entry.fullName);
     setEditProgram(entry.courseProgram ?? "");
     setEditYear(entry.yearLevel ?? "");
+    setEditSection(entry.section || "A");
     setVerified(entry.status === "VERIFIED");
     setSaveError("");
     setNotice("");
@@ -112,7 +115,7 @@ export default function TenantRoster({ school, schools, roster, managerName, man
     if (!editing || saving) return;
     const fields = new FormData(event.currentTarget);
     const common = { email: editEmail, updatedAt: editing.updatedAt, currentPassword: fields.get("currentPassword") };
-    const details = { fullName: editName.trim(), courseProgram: editProgram.trim(), yearLevel: editYear.trim() };
+    const details = { fullName: editName.trim(), courseProgram: editProgram.trim(), yearLevel: editYear.trim(), section: editSection.trim() || "A" };
     const payload = editing.accountId
       ? { ...common, ...(isStudentRoster ? details : {}), kind: "ACCOUNT", accountId: editing.accountId, verified }
       : { ...common, ...details, kind: editing.status === "CLASS_ONLY" ? "CLASS_ONLY" : "DIRECTORY", studentNumber: editing.studentNumber };
@@ -181,27 +184,27 @@ export default function TenantRoster({ school, schools, roster, managerName, man
           : entries.length === 0 ? <p className="mb-0 py-3 text-secondary">No {roster} match these filters.</p>
           : <div className="table-responsive">
             <table className="table align-middle mb-0">
-              <thead><tr><th scope="col">Name</th>{isStudentRoster && <th scope="col">Student ID</th>}<th scope="col">Email</th><th scope="col">Verification</th><th scope="col"><span className="visually-hidden">Actions</span></th></tr></thead>
+              <thead><tr><th scope="col">Name</th>{isStudentRoster && <th scope="col">Student ID</th>}<th scope="col">Program / Year / Section</th><th scope="col">Email</th><th scope="col">Verification</th><th scope="col"><span className="visually-hidden">Actions</span></th></tr></thead>
               <tbody>{entries.map(entry => (
                 <Fragment key={entry.key}>
                   <tr>
                     <th scope="row">{entry.fullName}</th>
                     {isStudentRoster && <td className="text-nowrap">{entry.studentNumber || "—"}</td>}
-                    <td className="text-break">{entry.email || "—"}</td>
+                    <td>{isStudentRoster ? [entry.courseProgram, entry.yearLevel, entry.section || "A"].filter(Boolean).join(" · ") : "—"}</td><td className="text-break">{entry.email || "—"}</td>
                     <td><span className={`badge ${entry.status === "VERIFIED" ? "text-bg-success" : entry.status === "UNVERIFIED" ? "text-bg-warning" : "text-bg-secondary"}`}>{statusLabels[entry.status]}</span></td>
                     <td>{entry.protected ? <span className="small text-secondary text-nowrap">Tenant manager</span> : (entry.updatedAt || entry.status === "CLASS_ONLY") && <button type="button" className="btn btn-sm btn-outline-primary"
                       aria-label={`Edit ${entry.fullName}`} aria-expanded={editing?.key === entry.key}
                       disabled={saving} onClick={() => beginEdit(entry)}>Edit</button>}</td>
                   </tr>
-                  {editing?.key === entry.key && <tr><td colSpan={isStudentRoster ? 5 : 4}>
+                  {editing?.key === entry.key && <tr><td colSpan={isStudentRoster ? 6 : 4}>
                     <form onSubmit={save} className="p-2 p-md-3">
                       <fieldset disabled={saving}>
                         <legend className="h6 fw-bold mb-3">Edit {entry.fullName}</legend>
                         <div className="row g-3">
                           {isStudentRoster && <>
                             <div className="col-12"><label className="form-label" htmlFor="roster-edit-name">Student name</label><input id="roster-edit-name" className="form-control" value={editName} maxLength={200} required onChange={event => setEditName(event.target.value)} /></div>
-                            <div className="col-12 col-md"><label className="form-label" htmlFor="roster-edit-program">Course / program</label><input id="roster-edit-program" className="form-control" value={editProgram} maxLength={120} required placeholder="e.g. BS Information Technology" onChange={event => setEditProgram(event.target.value)} /></div>
-                            <div className="col-12 col-md-3"><label className="form-label" htmlFor="roster-edit-year">Year level</label><input id="roster-edit-year" className="form-control" value={editYear} maxLength={40} required placeholder="e.g. 1st Year" onChange={event => setEditYear(event.target.value)} /></div>
+                            <div className="col-12 col-md"><label className="form-label" htmlFor="roster-edit-program">Course / program</label><input id="roster-edit-program" className="form-control" list="saga-program-options" value={editProgram} maxLength={120} required placeholder="e.g. BS Information Technology" onChange={event => setEditProgram(event.target.value)} /><datalist id="saga-program-options">{[...new Set(entries.map(item => item.courseProgram).filter(Boolean))].map(value => <option key={value} value={value!} />)}</datalist></div>
+                            <div className="col-12 col-md-3"><label className="form-label" htmlFor="roster-edit-year">Year level</label><input id="roster-edit-year" className="form-control" list="saga-year-options" value={editYear} maxLength={40} required placeholder="e.g. 1st Year" onChange={event => setEditYear(event.target.value)} /><datalist id="saga-year-options">{[...new Set(entries.map(item => item.yearLevel).filter(Boolean))].map(value => <option key={value} value={value!} />)}</datalist></div><div className="col-12 col-md-3"><label className="form-label" htmlFor="roster-edit-section">Section</label><input id="roster-edit-section" className="form-control" list="saga-section-options" value={editSection} maxLength={40} placeholder="A" onChange={event => setEditSection(event.target.value)} /><datalist id="saga-section-options">{[...new Set(entries.map(item => item.section || "A"))].map(value => <option key={value} value={value} />)}</datalist></div>
                           </>}
                           <div className="col-12 col-md">
                             <label className="form-label" htmlFor="roster-edit-email">Email address</label>
