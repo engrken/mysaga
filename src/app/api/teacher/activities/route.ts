@@ -98,7 +98,7 @@ export async function GET(request: Request) {
       select: { id: true, text: true, driveUrl: true, files: true, storageProvider: true, fileUrl: true,
         fileName: true, fileSize: true, mimeType: true, points: true, feedback: true,
         submittedAt: true, gradedAt: true,
-        attachments: { select: { id: true, storageProvider: true, fileKey: true, fileUrl: true,
+        attachments: { select: { id: true, storageProvider: true, fileUrl: true,
           fileName: true, fileSize: true, mimeType: true, createdAt: true } },
         enrollment: { select: { id: true, studentName: true, studentNumber: true } } }
     });
@@ -111,7 +111,12 @@ export async function GET(request: Request) {
     ]);
     return reply({ submissions: rows.slice(0, 30).map(row => ({
       ...row,
-      attachments: row.attachments.map(file => ({ ...file, fileSize: Number(file.fileSize) }))
+      fileUrl: row.storageProvider === "CLOUDFLARE_R2" ? null : row.fileUrl,
+      attachments: row.attachments.map(file => ({
+        ...file,
+        fileUrl: file.storageProvider === "CLOUDFLARE_R2" ? null : file.fileUrl,
+        fileSize: Number(file.fileSize)
+      }))
     })), nextCursor: rows.length > 30 ? rows[29].id : null, roster, quizAttempts });
   }
   const topic = searchParams.get("topic");
