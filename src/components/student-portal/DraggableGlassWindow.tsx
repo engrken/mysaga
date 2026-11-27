@@ -11,6 +11,7 @@ export default function DraggableGlassWindow({
   onExpand,
   position,
   onPositionChange,
+  onActivate,
   children
 }: {
   title: string;
@@ -19,6 +20,7 @@ export default function DraggableGlassWindow({
   onExpand: () => void;
   position: Position;
   onPositionChange: (position: Position) => void;
+  onActivate: () => void;
   children: ReactNode;
 }) {
   const [dragging, setDragging] = useState(false);
@@ -65,6 +67,7 @@ export default function DraggableGlassWindow({
     className={`student-floating-window${dragging ? " is-dragging" : ""}`}
     style={{ left: position.x > 0 ? position.x : "auto", right: position.x > 0 ? "auto" : 18, top: position.y || 116 }}
     aria-label={title}
+    onPointerDownCapture={onActivate}
   >
     <header className="student-floating-window-head">
       <button
