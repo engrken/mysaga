@@ -69,12 +69,13 @@ export async function verifyGoogleOAuthState(state: string) {
 
 export async function createGoogleOAuthUrl(
   user: { id: string; schoolId: string },
-  options: { expectedGoogleSubject?: string; loginHint?: string; returnTo?: string } = {}
+  options: { expectedGoogleSubject?: string; loginHint?: string; returnTo?: string; redirectUri?: string } = {}
 ) {
   const clientId = requiredEnv("GOOGLE_CLIENT_ID");
-  const redirectUri = requiredEnv("GOOGLE_REDIRECT_URI");
+  const redirectUri = options.redirectUri || requiredEnv("GOOGLE_REDIRECT_URI");
   const state = await signGoogleOAuthState({
     uid: user.id,
+    redirectUri,
     sid: user.schoolId,
     purpose: "google-chat-oauth",
     ...(options.expectedGoogleSubject ? { expectedGoogleSubject: options.expectedGoogleSubject } : {}),
@@ -114,7 +115,7 @@ export async function completeGoogleOAuth(code: string, state: string) {
       code,
       client_id: requiredEnv("GOOGLE_CLIENT_ID"),
       client_secret: requiredEnv("GOOGLE_CLIENT_SECRET"),
-      redirect_uri: requiredEnv("GOOGLE_REDIRECT_URI"),
+      redirect_uri: typeof payload.redirectUri === "string" ? payload.redirectUri : requiredEnv("GOOGLE_REDIRECT_URI"),
       grant_type: "authorization_code"
     }),
     cache: "no-store"
