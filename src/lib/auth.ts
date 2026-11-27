@@ -54,7 +54,15 @@ export async function getSession() {
     if (user.passwordChangedAt && (!payload.iat || user.passwordChangedAt.getTime() >= payload.iat * 1000)) return null;
     if (!user?.emailVerifiedAt || !user.school.isActive || user.school.subscriptionStatus !== "ACTIVE" || (user.school.subscriptionExpiresAt && user.school.subscriptionExpiresAt <= new Date())) return null;
     if ((payload.emailIdentityChangedAt ?? null) !== (user.emailIdentityChangedAt?.getTime() ?? null)) return null;
-    const { passwordChangedAt: _passwordChangedAt, emailIdentityChangedAt: _emailIdentityChangedAt, tenantManagerEmail: _tenantManagerEmail, ...sessionUser } = user;
+    const {
+      passwordChangedAt: passwordChangedAtForValidation,
+      emailIdentityChangedAt: emailIdentityChangedAtForValidation,
+      tenantManagerEmail: tenantManagerEmailForValidation,
+      ...sessionUser
+    } = user;
+    void passwordChangedAtForValidation;
+    void emailIdentityChangedAtForValidation;
+    void tenantManagerEmailForValidation;
     const isTenantManager = !isDemo && payload.managerVerified === true && (await tenantManagerIdentity(user)) !== null;
     return {
       ...sessionUser,
