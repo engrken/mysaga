@@ -2877,7 +2877,6 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         <StudentSpatialExperience
           fullName={user.fullName}
           grades={grades}
-          verifiedCount={studentGradeStats.verified}
           pendingAssessments={studentGradeStats.pendingAssessments}
           attendanceAlerts={studentAttendanceWarnings.length}
           isDemo={user.isDemo}
