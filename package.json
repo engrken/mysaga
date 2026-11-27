@@ -32,7 +32,7 @@
     "test:virtual-assistant": "node --test tests/virtual-assistant.test.cjs",
     "test:activities": "node --experimental-strip-types --test tests/class-activities-engine.test.mjs",
     "test:announcements": "node --test tests/announcements.test.cjs",
-    "lint": "eslint --max-warnings=0 src/app/api/activities/files/route.ts src/app/api/student/activities src/app/api/teacher/activities src/components/ClassActivities.tsx src/components/ActivityRichEditor.tsx src/lib/class-activities.ts src/lib/activity-feature-flags.ts src/lib/activity-feature-flags.client.ts src/lib/activity-statistics.ts tests/class-activities-engine.test.mjs tests/announcements.test.cjs "src/app/api/teacher/subjects/[subjectId]/announcements/route.ts" "src/app/api/teacher/announcements/[announcementId]/route.ts" src/app/api/student/announcements src/components/SagaAnnouncements.tsx"
+    "lint": "eslint --max-warnings=0 src/app/api/activities/files/route.ts src/app/api/student/activities src/app/api/teacher/activities src/components/ClassActivities.tsx src/components/ActivityRichEditor.tsx src/lib/class-activities.ts src/lib/activity-feature-flags.ts src/lib/activity-feature-flags.client.ts src/lib/activity-statistics.ts tests/class-activities-engine.test.mjs tests/announcements.test.cjs src/app/api/teacher/subjects/\\[subjectId\\]/announcements/route.ts src/app/api/teacher/announcements/\\[announcementId\\]/route.ts src/app/api/student/announcements src/components/SagaAnnouncements.tsx"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
