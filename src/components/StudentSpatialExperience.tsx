@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import styles from "./StudentSpatialExperience.module.css";
 
 type StudentSchedule = { id: string; code: string; title: string; term: string; academicYear: string; schedule: string | null };
@@ -27,6 +27,7 @@ const DEFAULTS: Settings = {
   layout: "snapped", minimized: false, offset: { x: 0, y: 0 }
 };
 const STORAGE_KEY = "saga-student-spatial-v1";
+const getEmptySnapshot = () => null;
 const ACCENTS = {
   ocean: { label: "Ocean Blue", value: "#4f8df7" },
   emerald: { label: "Emerald", value: "#25b887" },
@@ -69,8 +70,6 @@ export default function StudentSpatialExperience({
   userId: string; fullName: string; grades: StudentGrade[]; academicYear: string; term: string;
   pendingAssessments: number; attendanceAlerts: number; isDemo?: boolean;
 }) {
-  const [settings, setSettings] = useState<Settings>(DEFAULTS);
-  const [ready, setReady] = useState(false);
   const [panelView, setPanelView] = useState<"checklist" | "customize">("checklist");
   const [toast, setToast] = useState("");
   const [schedule, setSchedule] = useState<StudentSchedule[]>([]);
@@ -88,15 +87,21 @@ export default function StudentSpatialExperience({
   }, [grades]);
   const storage = useCallback(() => isDemo ? window.sessionStorage : window.localStorage, [isDemo]);
   const storageKey = `${STORAGE_KEY}:${userId}`;
-
-  useEffect(() => {
-    setSettings(safeSettings(storage().getItem(storageKey)));
-    setReady(true);
-  }, [storage, storageKey]);
-  useEffect(() => {
-    if (!ready) return;
-    storage().setItem(storageKey, JSON.stringify(settings));
-  }, [ready, settings, storage, storageKey]);
+  const subscribe = useCallback((listener: () => void) => {
+    window.addEventListener("storage", listener);
+    window.addEventListener("saga-spatial-storage", listener);
+    return () => {
+      window.removeEventListener("storage", listener);
+      window.removeEventListener("saga-spatial-storage", listener);
+    };
+  }, []);
+  const getSnapshot = useCallback(() => storage().getItem(storageKey), [storage, storageKey]);
+  const storedSettings = useSyncExternalStore(subscribe, getSnapshot, getEmptySnapshot);
+  const settings = useMemo(() => safeSettings(storedSettings), [storedSettings]);
+  const commitSettings = (next: Settings) => {
+    storage().setItem(storageKey, JSON.stringify(next));
+    window.dispatchEvent(new Event("saga-spatial-storage"));
+  };
   useEffect(() => {
     let active = true;
     const params = new URLSearchParams({ academicYear, term });
@@ -107,11 +112,11 @@ export default function StudentSpatialExperience({
     return () => { active = false; };
   }, [academicYear, term]);
 
-  const update = <K extends keyof Settings>(key: K, value: Settings[K]) => setSettings(current => ({ ...current, [key]: value }));
+  const update = <K extends keyof Settings>(key: K, value: Settings[K]) => commitSettings({ ...settings, [key]: value });
   const reset = () => {
     if (!window.confirm("Reset your Student Portal appearance and panel positions to the original defaults?")) return;
     storage().removeItem(storageKey);
-    setSettings(DEFAULTS);
+    window.dispatchEvent(new Event("saga-spatial-storage"));
     setToast("Original layout restored");
     window.setTimeout(() => setToast(""), 2600);
   };
@@ -130,7 +135,7 @@ export default function StudentSpatialExperience({
     const height = panel?.getBoundingClientRect().height ?? 480;
     const nextX = clamp(active.originX + event.clientX - active.startX, -window.innerWidth + width + 36, 12);
     const nextY = clamp(active.originY + event.clientY - active.startY, -128, window.innerHeight - height - 152);
-    setSettings(current => ({ ...current, offset: { x: nextX, y: nextY } }));
+    commitSettings({ ...settings, offset: { x: nextX, y: nextY } });
   };
   const onDragEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (drag.current?.pointerId === event.pointerId) drag.current = null;
@@ -207,7 +212,7 @@ export default function StudentSpatialExperience({
         <div className={styles.customGroup}><label>Ambient wallpaper</label><select value={settings.wallpaper} onChange={event => update("wallpaper", event.target.value as Settings["wallpaper"])}>{WALLPAPERS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}<option value="custom">Custom image URL</option></select>
           {settings.wallpaper === "custom" && <input type="url" placeholder="https://example.com/wallpaper.jpg" value={settings.customWallpaper} onChange={event => update("customWallpaper", event.target.value.trim())} />}</div>
         <div className={styles.customGroup}><label>Accent palette</label><div className={styles.swatches}>{Object.entries(ACCENTS).map(([key, item]) => <button key={key} type="button" aria-label={item.label} title={item.label} aria-pressed={settings.accent === key} style={{ background: item.value }} onClick={() => update("accent", key as Settings["accent"])}/>)}</div></div>
-        <div className={styles.customGroup}><label>Visible modules</label><label className={styles.check}><input type="checkbox" checked={settings.modules.insights} onChange={event => setSettings(current => ({ ...current, modules: { ...current.modules, insights: event.target.checked } }))}/> Class insights</label><label className={styles.check}><input type="checkbox" checked={settings.modules.courses} onChange={event => setSettings(current => ({ ...current, modules: { ...current.modules, courses: event.target.checked } }))}/> Active courses</label></div>
+        <div className={styles.customGroup}><label>Visible modules</label><label className={styles.check}><input type="checkbox" checked={settings.modules.insights} onChange={event => commitSettings({ ...settings, modules: { ...settings.modules, insights: event.target.checked } })}/> Class insights</label><label className={styles.check}><input type="checkbox" checked={settings.modules.courses} onChange={event => commitSettings({ ...settings, modules: { ...settings.modules, courses: event.target.checked } })}/> Active courses</label></div>
         <div className={styles.customGroup}><label>Window layout</label><div className={styles.choiceRow}><button type="button" aria-pressed={settings.layout === "snapped"} onClick={() => update("layout", "snapped")}>Snapped grid</button><button type="button" aria-pressed={settings.layout === "freeform"} onClick={() => update("layout", "freeform")}>Freeform drag</button></div></div>
         <button type="button" className={styles.reset} onClick={reset}>↺ Reset to Original</button>
       </div>}
