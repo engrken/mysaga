@@ -750,7 +750,7 @@ export function StudentActivities({ readOnly, subjectId, academicYear, term }: {
         {active.submission.points !== null ? <p>Score · <strong>{active.submission.points} / {active.maxScore}</strong></p> : <p>{active.submission.graded ? "Your grade has not been released." : "Waiting for grading."}</p>}
         {active.submission.feedback && <div className="border-start border-3 ps-3"><strong>Teacher feedback</strong><p className="mb-0" style={{ whiteSpace: "pre-wrap" }}>{active.submission.feedback}</p></div>}
       </section> : canSubmit ? <StudentR2Uploader assignmentId={active.id} disabled={busy || featureReadOnly}
-          onSubmitted={() => setRevision(current => current + 1)}/> : <p className="mb-0">Submissions are closed.</p>)}
+          onSubmitted={() => { setActive(null); setRevision(current => current + 1); }}/> : <p className="mb-0">Submissions are closed.</p>)}
     </article>}
 
   </section>;

@@ -71,6 +71,11 @@ export async function POST(request: Request) {
     select: { id: true }
   });
   if (!enrollment) return error("Class enrollment not found.", 404);
+  const existingSubmission = await prisma.activitySubmission.findUnique({
+    where: { activityId_enrollmentId: { activityId: activity.id, enrollmentId: enrollment.id } },
+    select: { offline: true }
+  });
+  if (existingSubmission?.offline) return error("This assignment is recorded as offline work by the teacher.", 409);
 
   try {
     const fileKey = "assignments/" + activity.id + "/" + student.id + "-" +
