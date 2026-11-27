@@ -4,6 +4,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import type { StudentGradeSummary, StudentPortalPreferences } from "./types";
 import { STUDENT_PORTAL_ACCENTS } from "./types";
 import DraggableGlassWindow from "./DraggableGlassWindow";
+import DraggableGlassModule from "./DraggableGlassModule";
 import PortalCustomizer from "./PortalCustomizer";
 import ClassInsightsPanel, { scheduleLabel } from "./ClassInsightsPanel";
 
@@ -65,6 +66,8 @@ export default function OverviewDashboard({
 
   const updatePosition = (panelPosition: { x: number; y: number }) =>
     onPreferencesChange({ ...preferences, panelPosition });
+  const updateModulePosition = (module: "metrics" | "insights" | "courses", position: { x: number; y: number }) =>
+    onPreferencesChange({ ...preferences, modulePositions: { ...preferences.modulePositions, [module]: position } });
 
   const accentColor = STUDENT_PORTAL_ACCENTS[preferences.accent].color;
   const averageValue = metrics.average === null ? "—" : `${metrics.average.toFixed(1)}%`;
@@ -76,20 +79,44 @@ export default function OverviewDashboard({
       <span className="student-spatial-period">{grades[0]?.term || "Current term"} · {grades[0]?.academicYear || "Academic records"}</span>
     </div>
 
-    {preferences.modules.metrics && <section className="student-glass-kpi-row" aria-label="Academic key indicators">
+    {preferences.modules.metrics && <DraggableGlassModule
+      key={`metrics-${preferences.modulePositions.metrics.x}-${preferences.modulePositions.metrics.y}`}
+      title="Academic indicators"
+      enabled={preferences.layout === "freeform"}
+      position={preferences.modulePositions.metrics}
+      onPositionChange={position => updateModulePosition("metrics", position)}
+    >
+        <section className="student-glass-kpi-row" aria-label="Academic key indicators">
       <article className="student-glass-kpi-card"><span className="student-kpi-pill">ACADEMIC AVERAGE</span><strong>{averageValue}</strong><small>Simple mean of visible course percentages</small></article>
       <article className="student-glass-kpi-card"><span className="student-kpi-pill">ATTENDANCE RATE</span><strong>{attendanceValue}</strong><small>{metrics.attendanceRate === null ? "No recorded roll calls for this period" : "Based on recorded attendance marks"}</small></article>
       <article className="student-glass-kpi-card"><span className="student-kpi-pill">PENDING ITEMS</span><strong>{metrics.pending}</strong><small>Unrecorded assessment items across {metrics.visible} visible class(es)</small></article>
-    </section>}
+        </section>
+    </DraggableGlassModule>}
 
-    {preferences.modules.insights && <ClassInsightsPanel grades={grades} attendanceRate={metrics.attendanceRate} average={metrics.average}/>}
+    {preferences.modules.insights && <DraggableGlassModule
+      key={`insights-${preferences.modulePositions.insights.x}-${preferences.modulePositions.insights.y}`}
+      title="Class insights"
+      enabled={preferences.layout === "freeform"}
+      position={preferences.modulePositions.insights}
+      onPositionChange={position => updateModulePosition("insights", position)}
+    >
+        <ClassInsightsPanel grades={grades} attendanceRate={metrics.attendanceRate} average={metrics.average}/>
+    </DraggableGlassModule>}}
 
-    {preferences.modules.courses && <section className="student-glass-active-courses" aria-label="Active courses and weekly schedules">
+    {preferences.modules.courses && <DraggableGlassModule
+      key={`courses-${preferences.modulePositions.courses.x}-${preferences.modulePositions.courses.y}`}
+      title="Active courses"
+      enabled={preferences.layout === "freeform"}
+      position={preferences.modulePositions.courses}
+      onPositionChange={position => updateModulePosition("courses", position)}
+    >
+        <section className="student-glass-active-courses" aria-label="Active courses and weekly schedules">
       <div className="student-glass-module-heading"><div><span>THIS ACADEMIC PERIOD</span><h2>Active courses &amp; weekly schedule</h2></div><span className="student-glass-count">{grades.length} course(s)</span></div>
       {grades.length ? <div className="student-glass-schedule-grid">{grades.map(grade => <a className="student-glass-schedule-card" key={grade.id} href={`#student-grade-${encodeURIComponent(grade.id)}`}>
         <span className="student-glass-course-mark">{grade.code.slice(0, 2)}</span><span><b>{grade.code} — {grade.title}</b><small>{grade.teacher}</small><small>{scheduleLabel(grade.schedule)}</small></span><strong>{grade.percent === null ? "—" : `${grade.percent.toFixed(1)}%`}</strong>
       </a>)}</div> : <div className="student-glass-empty">No course records are visible yet. Your teachers&apos; shared classes will appear here.</div>}
-    </section>}
+        </section>
+    </DraggableGlassModule>}
 
     <DraggableGlassWindow
       key={`${preferences.panelPosition.x}:${preferences.panelPosition.y}`}
