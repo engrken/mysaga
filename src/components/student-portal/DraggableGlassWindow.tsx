@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 
 type Position = { x: number; y: number };
 
@@ -24,18 +24,27 @@ export default function DraggableGlassWindow({
   children: ReactNode;
 }) {
   const [dragging, setDragging] = useState(false);
+  const [currentPosition, setCurrentPosition] = useState(position);
+  const currentPositionRef = useRef(position);
   const dragOffset = useRef({ x: 0, y: 0 });
   const dragPointer = useRef<number | null>(null);
+
+  useEffect(() => {
+    currentPositionRef.current = position;
+    setCurrentPosition(position);
+  }, [position.x, position.y]);
 
   const startDrag = (event: PointerEvent<HTMLButtonElement>) => {
     if (minimized || window.matchMedia("(max-width: 767px)").matches) return;
     if ((event.target as HTMLElement).closest("button[data-window-action]")) return;
-    const currentX = position.x || Math.max(12, window.innerWidth - 356);
-    const currentY = position.y || 116;
+    const currentX = currentPositionRef.current.x || Math.max(12, window.innerWidth - 356);
+    const currentY = currentPositionRef.current.y || 116;
     dragOffset.current = { x: event.clientX - currentX, y: event.clientY - currentY };
     dragPointer.current = event.pointerId;
     event.currentTarget.setPointerCapture(event.pointerId);
-    if (!position.x) onPositionChange({ x: currentX, y: currentY });
+    const startPosition = { x: currentX, y: currentY };
+    currentPositionRef.current = startPosition;
+    setCurrentPosition(startPosition);
     setDragging(true);
   };
 
@@ -45,13 +54,16 @@ export default function DraggableGlassWindow({
     const estimatedHeight = Math.min(window.innerHeight - 24, 620);
     const x = Math.max(12, Math.min(window.innerWidth - width - 12, event.clientX - dragOffset.current.x));
     const y = Math.max(82, Math.min(window.innerHeight - estimatedHeight, event.clientY - dragOffset.current.y));
-    onPositionChange({ x, y });
+    const nextPosition = { x, y };
+    currentPositionRef.current = nextPosition;
+    setCurrentPosition(nextPosition);
   };
 
   const endDrag = (event: PointerEvent<HTMLButtonElement>) => {
     if (dragPointer.current !== event.pointerId) return;
     dragPointer.current = null;
     setDragging(false);
+    onPositionChange(currentPositionRef.current);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
@@ -65,7 +77,7 @@ export default function DraggableGlassWindow({
 
   return <section
     className={`student-floating-window${dragging ? " is-dragging" : ""}`}
-    style={{ left: position.x > 0 ? position.x : "auto", right: position.x > 0 ? "auto" : 18, top: position.y || 116 }}
+    style={{ left: currentPosition.x > 0 ? currentPosition.x : "auto", right: currentPosition.x > 0 ? "auto" : 18, top: currentPosition.y || 116 }}
     aria-label={title}
     onPointerDownCapture={onActivate}
   >
