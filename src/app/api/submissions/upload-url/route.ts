@@ -76,7 +76,7 @@ export async function POST(request: Request) {
       Date.now() + "-" + randomUUID() + "-" + safeName;
     const uploadHeaders = {
       "Content-Type": mimeType,
-      "Content-Disposition": "attachment; filename=\\\""+safeName+"\\\""
+      "Content-Disposition": 'attachment; filename="' + safeName + '"'
     };
     const command = new PutObjectCommand({
       Bucket: getR2BucketName(),
