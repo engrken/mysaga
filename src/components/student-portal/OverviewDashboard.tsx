@@ -106,6 +106,7 @@ export default function OverviewDashboard({
       onExpand={() => { setPanelMinimized(false); setPanelFront(true); }}
       position={preferences.panelPosition}
       onPositionChange={updatePosition}
+      onActivate={() => setPanelFront(true)}
     >
       <div className="student-floating-tabs" role="tablist" aria-label="Quick panel views">
         <button type="button" role="tab" aria-selected={panelTab === "checklist"} className={panelTab === "checklist" ? "active" : ""} onClick={() => setPanelTab("checklist")}>Live class &amp; tasks</button>
