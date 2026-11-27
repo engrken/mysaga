@@ -42,7 +42,8 @@ export async function createGoogleSignInOAuthUrl(schoolId: string) {
   const signedState = await signGoogleOAuthState({
     purpose: "google-login",
     schoolId,
-    nonce
+    nonce,
+    redirectUri
   });
 
   const secure = process.env.NODE_ENV === "production";
@@ -88,6 +89,7 @@ export async function completeGoogleSignInOAuth(code: string, state: string) {
   const statePayload = await verifyGoogleOAuthState(state).catch(() => null);
   if (!statePayload || statePayload.purpose !== "google-login" ||
       typeof statePayload.schoolId !== "string" || typeof statePayload.nonce !== "string" ||
+      statePayload.redirectUri !== requiredGoogleEnv("GOOGLE_SSO_REDIRECT_URI") ||
       !nonceCookie || nonceCookie !== statePayload.nonce || !verifierCookie) {
     throw new GoogleSignInError("INVALID_GOOGLE_STATE", "This Google sign-in request expired. Please try again.");
   }
