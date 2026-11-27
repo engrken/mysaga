@@ -137,7 +137,7 @@ export default function StudentSpatialExperience({
   };
   const themeStyle = {
     "--spatial-accent": ACCENTS[settings.accent].value,
-    "--spatial-wallpaper": settings.wallpaper === "custom" && settings.customWallpaper
+    "--spatial-wallpaper": settings.wallpaper === "custom" && /^https:\/\//i.test(settings.customWallpaper)
       ? `url("${settings.customWallpaper.replaceAll('"', "%22")}")`
       : "none"
   } as CSSProperties;
@@ -205,7 +205,7 @@ export default function StudentSpatialExperience({
       </div> : <div className={styles.panelBody}>
         <div className={styles.customGroup}><label>Glass appearance</label><div className={styles.choiceRow}><button type="button" aria-pressed={settings.theme === "light"} onClick={() => update("theme", "light")}>Light glass</button><button type="button" aria-pressed={settings.theme === "dark"} onClick={() => update("theme", "dark")}>Smoked dark</button><button type="button" aria-pressed={settings.theme === "classic"} onClick={() => update("theme", "classic")}>Classic</button></div></div>
         <div className={styles.customGroup}><label>Ambient wallpaper</label><select value={settings.wallpaper} onChange={event => update("wallpaper", event.target.value as Settings["wallpaper"])}>{WALLPAPERS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}<option value="custom">Custom image URL</option></select>
-          {settings.wallpaper === "custom" && <input type="url" placeholder="https://example.com/wallpaper.jpg" value={settings.customWallpaper} onChange={event => { const value = event.target.value.trim(); update("customWallpaper", !value || /^https:\/\//i.test(value) ? value : ""); }} />}</div>
+          {settings.wallpaper === "custom" && <input type="url" placeholder="https://example.com/wallpaper.jpg" value={settings.customWallpaper} onChange={event => update("customWallpaper", event.target.value.trim())} />}</div>
         <div className={styles.customGroup}><label>Accent palette</label><div className={styles.swatches}>{Object.entries(ACCENTS).map(([key, item]) => <button key={key} type="button" aria-label={item.label} title={item.label} aria-pressed={settings.accent === key} style={{ background: item.value }} onClick={() => update("accent", key as Settings["accent"])}/>)}</div></div>
         <div className={styles.customGroup}><label>Visible modules</label><label className={styles.check}><input type="checkbox" checked={settings.modules.insights} onChange={event => setSettings(current => ({ ...current, modules: { ...current.modules, insights: event.target.checked } }))}/> Class insights</label><label className={styles.check}><input type="checkbox" checked={settings.modules.courses} onChange={event => setSettings(current => ({ ...current, modules: { ...current.modules, courses: event.target.checked } }))}/> Active courses</label></div>
         <div className={styles.customGroup}><label>Window layout</label><div className={styles.choiceRow}><button type="button" aria-pressed={settings.layout === "snapped"} onClick={() => update("layout", "snapped")}>Snapped grid</button><button type="button" aria-pressed={settings.layout === "freeform"} onClick={() => update("layout", "freeform")}>Freeform drag</button></div></div>
