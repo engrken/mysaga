@@ -1,5 +1,7 @@
 "use client";
 
+import type { CSSProperties } from "react";
+
 import type { StudentGradeSummary } from "./types";
 
 function statusLabel(status: StudentGradeSummary["status"]) {
@@ -52,7 +54,7 @@ export default function ClassInsightsPanel({
     <div className="student-glass-analytics">
       <div className="student-glass-module-heading"><div><span>ACADEMIC SIGNALS</span><h2>Performance snapshot</h2></div><span className="student-glass-live-dot">Live data</span></div>
       <div className="student-glass-radials">
-        <div className="student-glass-radial" style={{ "--progress": `${Math.max(0, Math.min(100, attendanceRate ?? 0)) * 3.6}deg` } as React.CSSProperties} aria-label={attendanceRate === null ? "Attendance data unavailable" : `Attendance rate ${attendanceRate.toFixed(1)} percent`}>
+        <div className="student-glass-radial" style={{ "--progress": `${Math.max(0, Math.min(100, attendanceRate ?? 0)) * 3.6}deg` } as CSSProperties} aria-label={attendanceRate === null ? "Attendance data unavailable" : `Attendance rate ${attendanceRate.toFixed(1)} percent`}>
           <div><strong>{attendanceRate === null ? "—" : `${Math.round(attendanceRate)}%`}</strong><small>Attendance</small></div>
         </div>
         <div className="student-glass-radial accent" style={{ "--progress": `${Math.max(0, Math.min(100, average ?? 0)) * 3.6}deg` } as React.CSSProperties} aria-label={average === null ? "Course average unavailable" : `Course average ${average.toFixed(1)} percent`}>
