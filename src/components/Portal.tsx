@@ -2875,6 +2875,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           </div>
         </section>
         <StudentSpatialExperience
+          userId={user.id}
           fullName={user.fullName}
           grades={grades}
           academicYear={academicYear}
