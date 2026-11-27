@@ -1,5 +1,7 @@
 "use client";
 
+import type { CSSProperties } from "react";
+
 import {
   STUDENT_PORTAL_ACCENTS,
   type StudentPortalPreferences,
@@ -61,7 +63,7 @@ export default function PortalCustomizer({
       <div className="student-customizer-label">Accent color</div>
       <div className="student-accent-swatches" role="group" aria-label="Accent color palette">
         {(Object.entries(STUDENT_PORTAL_ACCENTS) as Array<[StudentAccent, { label: string; color: string }]>).map(([id, item]) =>
-          <button key={id} type="button" className={preferences.accent === id ? "is-selected" : ""} style={{ "--swatch": item.color } as React.CSSProperties} onClick={() => update({ accent: id })} aria-pressed={preferences.accent === id} aria-label={item.label} title={item.label}><span/></button>
+          <button key={id} type="button" className={preferences.accent === id ? "is-selected" : ""} style={{ "--swatch": item.color } as CSSProperties} onClick={() => update({ accent: id })} aria-pressed={preferences.accent === id} aria-label={item.label} title={item.label}><span/></button>
         )}
       </div>
       <div className="student-customizer-help">{STUDENT_PORTAL_ACCENTS[preferences.accent].label}</div>
