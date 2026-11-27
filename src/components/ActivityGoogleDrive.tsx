@@ -176,7 +176,7 @@ export function ActivityGoogleDrive({ subjectId, mode, fileUrl, onPicked }: Prop
     setNotice("Connecting to Google Drive…");
     const tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: config.clientId,
-      scope: "https://www.googleapis.com/auth/drive.file",
+      scope: "openid email https://www.googleapis.com/auth/drive.file",
       callback: async token => {
         if (!token.access_token) {
           setBusy(false);
@@ -240,8 +240,9 @@ export function ActivityGoogleDrive({ subjectId, mode, fileUrl, onPicked }: Prop
       setError("This Google Drive link is invalid. Ask your subject teacher to check the activity material.");
       return;
     }
-    const opened = window.open(fileUrl, "_blank", "noopener,noreferrer");
-    if (!opened) setError("Your browser blocked the new tab. Allow pop-ups for SAGA Portal, then try again.");
+    const opened = window.open(fileUrl, "_blank");
+    if (opened) opened.opener = null;
+    else setError("Your browser blocked the new tab. Allow pop-ups for SAGA Portal, then try again.");
   }
 
   return <div className="d-grid gap-2">
