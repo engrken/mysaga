@@ -15,9 +15,9 @@ type InlineQuestion = { type: QuestionType; prompt: string; choices: string; ans
 type Question = { id: string; type: QuestionType; prompt: string; options: string[]; answer?: number; answerText?: string; points: number };
 type BankQuestionItem = Pick<Question, "id" | "prompt" | "type" | "points"> & { topic: string | null };
 type StorageProvider = "GOOGLE_DRIVE" | "CLOUDFLARE_R2";
-type SubmissionAttachment = { id: string; storageProvider: StorageProvider; fileKey: string | null;
-  fileUrl: string; fileName: string; fileSize: number; mimeType: string; createdAt: string };
-type Submission = { text: string | null; driveUrl: string | null; files?: Attachment[];
+type SubmissionAttachment = { id: string; storageProvider: StorageProvider;
+  fileUrl: string | null; fileName: string; fileSize: number; mimeType: string; createdAt: string };
+type Submission = { id: string; text: string | null; driveUrl: string | null; files?: Attachment[];
   attachments?: SubmissionAttachment[];
   storageProvider?: StorageProvider | null; fileKey?: string | null; fileUrl?: string | null;
   fileName?: string | null; fileSize?: number | null; mimeType?: string | null; offline?: boolean;
@@ -748,11 +748,18 @@ export function StudentActivities({ readOnly, subjectId, academicYear, term }: {
         <p><b>My submission</b> · {formatDate(active.submission.submittedAt)} Manila time {active.submission.offline ? "· Recorded as offline work" : ""}</p>
         {active.submission.text && <p style={{ whiteSpace: "pre-wrap" }}>{active.submission.text}</p>}
         {active.submission.attachments?.map(file => <p key={file.id} className="text-break">
-          <a href={file.fileUrl} target="_blank" rel="noreferrer">
-            {file.storageProvider === "GOOGLE_DRIVE" ? "Open Google Drive" : "Download"} · {file.fileName}
+          <a href={file.storageProvider === "CLOUDFLARE_R2"
+            ? "/api/submissions/download?attachmentId=" + encodeURIComponent(file.id)
+            : file.fileUrl || "#"} target="_blank" rel="noreferrer">
+            {file.storageProvider === "GOOGLE_DRIVE" ? "Open Google Drive" : "Download securely"} · {file.fileName}
           </a> <small className="text-secondary">({(file.fileSize / (1024 * 1024)).toFixed(2)} MB)</small>
         </p>)}
-        {active.submission.fileUrl && <p><a href={active.submission.fileUrl} target="_blank" rel="noreferrer">View / download {active.submission.fileName || "submitted file"}</a>{active.submission.fileSize ? <small className="text-secondary"> · {Math.ceil(active.submission.fileSize / 1024)} KB</small> : null}</p>}
+        {active.submission.fileName && (active.submission.fileUrl || active.submission.storageProvider === "CLOUDFLARE_R2") &&
+          <p><a href={active.submission.storageProvider === "CLOUDFLARE_R2"
+            ? "/api/submissions/download?submissionId=" + encodeURIComponent(active.submission.id)
+            : active.submission.fileUrl!} target="_blank" rel="noreferrer">
+            Download securely {active.submission.fileName || "submitted file"}
+          </a>{active.submission.fileSize ? <small className="text-secondary"> · {Math.ceil(active.submission.fileSize / 1024)} KB</small> : null}</p>}
         {active.submission.driveUrl && <p><a href={active.submission.driveUrl} target="_blank" rel="noreferrer">Open legacy Google Drive submission</a></p>}
         {active.submission.files?.map(file => <p key={file.pathname}><a href={"/api/activities/files?activityId=" + encodeURIComponent(active.id) + "&pathname=" + encodeURIComponent(file.pathname)}>{file.filename}</a> <small className="text-secondary">({Math.ceil(file.size / 1024)} KB)</small></p>)}
         {active.submission.points !== null ? <p>Score · <strong>{active.submission.points} / {active.maxScore}</strong></p> : <p>{active.submission.graded ? "Your grade has not been released." : "Waiting for grading."}</p>}
