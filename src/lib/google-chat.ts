@@ -127,7 +127,10 @@ export async function completeGoogleOAuth(code: string, state: string) {
     throw new Error("Google authorization did not return the required offline access. Reconnect and approve the requested access.");
   }
 
-  const grantedScopes = new Set((tokens.scope || GOOGLE_SCOPES.join(" ")).split(/\s+/));
+  if (typeof tokens.scope !== "string" || !tokens.scope.trim()) {
+    throw new Error("Google did not confirm the permissions granted to SAGA. Reconnect and approve the requested access.");
+  }
+  const grantedScopes = new Set(tokens.scope.split(/\s+/));
   if (GOOGLE_SCOPES.some(scope => !grantedScopes.has(scope))) {
     throw new Error("Google authorization did not include every required Chat permission. Reconnect and approve all requested permissions.");
   }
@@ -174,14 +177,14 @@ export async function completeGoogleOAuth(code: string, state: string) {
         ? encryptGoogleToken(tokens.refresh_token)
         : sameExistingGoogleAccount ? existingConnection!.encryptedRefreshToken : "",
       accessTokenExpiresAt: new Date(Date.now() + Math.max(60, tokens.expires_in ?? 3600) * 1000),
-      scopes: tokens.scope ?? GOOGLE_SCOPES.join(" ")
+      scopes: tokens.scope
     },
     update: {
       googleSubject: identity.sub, googleEmail: identity.email.toLowerCase(),
       encryptedAccessToken: encryptGoogleToken(tokens.access_token),
       encryptedRefreshToken: tokens.refresh_token ? encryptGoogleToken(tokens.refresh_token) : existingConnection!.encryptedRefreshToken,
       accessTokenExpiresAt: new Date(Date.now() + Math.max(60, tokens.expires_in ?? 3600) * 1000),
-      scopes: tokens.scope ?? GOOGLE_SCOPES.join(" ")
+      scopes: tokens.scope
     }
   });
   return {
