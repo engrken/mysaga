@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { upload as uploadPrivateBlob } from "@vercel/blob/client";
 import { ActivityRichEditor } from "@/components/ActivityRichEditor";
-import { activitiesReadOnly } from "@/lib/activity-feature-flags.client";
+import { activitiesExplorationOnly, activitiesPublishEnabled, activitiesReadOnly, activitiesStudentReadOnly } from "@/lib/activity-feature-flags.client";
 
 type ClassInfo = { id: string; code: string; title: string; term: string; academicYear: string; gradeStatus: string; teacher: { fullName: string } };
 type CategoryOption = { id: string; label: string };
@@ -99,7 +99,9 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
   const bankQuery = bankTopic === "all" ? query : `${query}&topic=${encodeURIComponent(bankTopic === "untagged" ? "" : bankTopic.slice(6))}`;
   const selected = activities.find(activity => activity.id === active);
   const featureReadOnly = !!readOnly || activitiesReadOnly;
+  const explorationOnly = activitiesExplorationOnly;
   const disabled = busy || locked || featureReadOnly;
+  const actionDisabled = disabled || explorationOnly;
 
   useEffect(() => {
     const firstTick = setTimeout(() => setClockNow(Date.now()), 0);
@@ -252,6 +254,7 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
       <button className="btn btn-primary btn-sm" disabled={disabled} type="button" onClick={() => { setFormOpen(false); setChoosing(current => !current); }}>Add activity</button>
     </div>
     {featureReadOnly && <p className="alert alert-info" role="status">Beta preview · read-only in production. Teachers can review published activities and student submissions; changes are disabled until the feature is enabled.</p>}
+    {explorationOnly && !featureReadOnly && <p className="alert alert-info" role="status">Exploration mode · you can create, edit, and preview drafts and manage the question bank. Publishing, submissions, grading, and changes to opened activities are disabled.</p>}
     {failure && <p className="alert alert-danger" role="alert">{failure}</p>}
     {message && <p className="alert alert-success" role="status">{message}</p>}
     {locked && <p className="small text-secondary">Recall the class record to draft before opening activities or recording grades.</p>}
@@ -412,11 +415,12 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
         <div className="d-flex flex-wrap gap-2">
           {activity.status === "DRAFT" ? <>
             <button className="btn btn-sm btn-outline-secondary" type="button" disabled={disabled} onClick={() => edit(activity)}>Edit draft</button>
-            <button className="btn btn-sm btn-primary" type="button" disabled={disabled} onClick={() =>
-              void save({ action: "open", subjectId, activityId: activity.id }, "Activity published.", true)}>Publish activity</button>
+            {activity.kind === "LESSON" && <button className="btn btn-sm btn-outline-primary" type="button" disabled={busy} onClick={() => selectSubmissionActivity(activity.id)}>Preview lesson</button>}
+            <button className="btn btn-sm btn-primary" type="button" disabled={disabled || explorationOnly || !activitiesPublishEnabled} title={explorationOnly ? "Publishing is disabled in exploration mode." : undefined} onClick={() =>
+              void save({ action: "open", subjectId, activityId: activity.id }, "Activity published.", true)}>{explorationOnly || !activitiesPublishEnabled ? "Publishing disabled" : "Publish activity"}</button>
           </> : <>
             {activity.kind !== "RESOURCE" && <button className="btn btn-sm btn-outline-primary" type="button" disabled={busy} onClick={() => selectSubmissionActivity(activity.id)}>{activity.kind === "LESSON" ? "Preview lesson" : activity.kind === "QUIZ" ? "Results & attempts" : "Submissions (" + (activity._count?.submissions ?? 0) + ")"}</button>}
-            {activity.status === "OPEN" && <button type="button" className="btn btn-sm btn-outline-secondary" disabled={disabled} onClick={() =>
+            {activity.status === "OPEN" && <button type="button" className="btn btn-sm btn-outline-secondary" disabled={actionDisabled} onClick={() =>
               void save({ action: "close", subjectId, activityId: activity.id }, activity.kind === "RESOURCE" ? "Resource unpublished." : "Submissions closed.")}>{activity.kind === "RESOURCE" ? "Unpublish" : "Close submissions"}</button>}
           </>}
         </div>
@@ -448,10 +452,10 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
         }}>
           <label>Score out of {selected.maxScore}<input name="points" className="form-control" type="number" step="0.01" min="0" max={selected.maxScore} required defaultValue={row.points ?? ""}/></label>
           <label>Feedback<textarea name="feedback" className="form-control" maxLength={4000} defaultValue={row.feedback ?? ""}/></label>
-          <button className="btn btn-outline-primary btn-sm" disabled={disabled}>Save grade</button>
+          <button className="btn btn-outline-primary btn-sm" disabled={actionDisabled}>Save grade</button>
         </form> : row.points !== null && <span>{row.points} / {selected?.maxScore ?? "—"}</span>}
       </article>)}
-      {selected?.kind === "ASSIGNMENT" && !featureReadOnly && roster.some(student => !rows.some(row => row.enrollment.id === student.id)) && <details className="border rounded p-3 mt-3">
+      {selected?.kind === "ASSIGNMENT" && !featureReadOnly && !explorationOnly && roster.some(student => !rows.some(row => row.enrollment.id === student.id)) && <details className="border rounded p-3 mt-3">
         <summary>Record offline work for students without submissions</summary>
         <div className="d-grid gap-2 mt-3">{roster.filter(student => !rows.some(row => row.enrollment.id === student.id)).map(student => <form key={student.id} className="border-top pt-2 d-grid gap-2" onSubmit={event => {
           event.preventDefault(); const fields = new FormData(event.currentTarget);
@@ -461,7 +465,7 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
           <strong>{student.studentName}{student.studentNumber ? " · " + student.studentNumber : ""}</strong>
           <label>Score out of {selected.maxScore}<input name="points" className="form-control" type="number" step=".01" min="0" max={selected.maxScore} required/></label>
           <label>Feedback<textarea name="feedback" className="form-control" maxLength={4000}/></label>
-          <button className="btn btn-sm btn-outline-primary" disabled={disabled}>Record offline grade</button>
+          <button className="btn btn-sm btn-outline-primary" disabled={actionDisabled}>Record offline grade</button>
         </form>)}</div>
       </details>}
       {selected?.kind === "QUIZ" && <>
@@ -499,7 +503,7 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
             const answer = attempt.answers?.[question.id];
             return <div className="small mb-2" key={question.id}><b>{question.prompt}</b><div>{typeof answer === "number" ? question.options[answer] ?? "No answer" : answer || "No answer"}</div></div>;
           })}
-          {essays.length > 0 && !featureReadOnly && <form className="d-grid gap-2" onSubmit={event => {
+          {essays.length > 0 && !featureReadOnly && !explorationOnly && <form className="d-grid gap-2" onSubmit={event => {
             event.preventDefault(); const fields = new FormData(event.currentTarget);
             const questionPoints = Object.fromEntries(essays.map(question => [question.id, Number(fields.get(question.id))]));
             void save({ action: "grade-quiz", subjectId, activityId: active, attemptId: attempt.id,
@@ -507,7 +511,7 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
           }}>
             {essays.map(question => <label key={question.id}>Score for: {question.prompt} (max {question.points})<input name={question.id} className="form-control" type="number" min="0" max={question.points} step=".01" required defaultValue={attempt.manualGrades?.[question.id] ?? ""}/></label>)}
             <label>Feedback<textarea name="feedback" className="form-control" maxLength={4000} defaultValue={attempt.feedback ?? ""}/></label>
-            <button className="btn btn-sm btn-outline-primary" disabled={busy}>Save essay grades</button>
+            <button className="btn btn-sm btn-outline-primary" disabled={actionDisabled}>Save essay grades</button>
           </form>}
           {attempt.points !== null && <p className="mb-0">Score: {attempt.points} / {selected.maxScore}</p>}
         </article>;
@@ -589,7 +593,7 @@ export function StudentActivities({ readOnly, subjectId, academicYear, term }: {
     return () => controller.abort();
   }, [requestKey, query]);
 
-  const featureReadOnly = !!readOnly || activitiesReadOnly;
+  const featureReadOnly = !!readOnly || activitiesStudentReadOnly;
 
   async function open(id: string) {
     setFailure(""); setBusy(true); setQuizAttemptId(null); setQuizStartedAt(null); setTimeLeft(null); setLessonPageId(null);
