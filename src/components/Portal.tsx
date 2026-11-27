@@ -1145,7 +1145,7 @@ function effectiveCategoryWeight(category: Category, categories: Category[]) {
 }
 export default function Portal({ user, initialPage = "overview", initialClassId = "", initialClassSection = "setup", initialClassStudent = "", initialAttendanceToday = false }: {
   user: User;
-  initialPage?: "overview" | "classes" | "profile" | "simulator" | "chats";
+  initialPage?: "overview" | "classes" | "profile" | "simulator" | "chats" | "announcements";
   initialClassId?: string;
   initialClassSection?: ClassSection;
   initialClassStudent?: string;
