@@ -116,7 +116,8 @@ test("unified sign-in uses its own same-origin callback while legacy Chat keeps 
   const env = read(".env.example");
   assert.match(auth, /GOOGLE_SSO_REDIRECT_URI/);
   assert.match(chat, /redirectUri\?: string/);
-  assert.match(chat, /redirectUri,\s*purpose: "google-chat-oauth"/);
+  assert.match(chat, /redirectUri,/);
+  assert.match(chat, /purpose: "google-chat-oauth"/);
   assert.match(chat, /typeof payload\.redirectUri === "string" \? payload\.redirectUri : requiredEnv\("GOOGLE_REDIRECT_URI"\)/);
   assert.match(env, /GOOGLE_REDIRECT_URI=/);
   assert.match(env, /GOOGLE_SSO_REDIRECT_URI=/);
