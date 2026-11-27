@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [studentId, setStudentId] = useState("");
   const [schoolId, setSchoolId] = useState("");
   const [emailChanged, setEmailChanged] = useState(false);
+  const [googleError, setGoogleError] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -24,6 +25,7 @@ export default function LoginPage() {
     setSchoolId(params.get("schoolId") || "");
     setLoginType(params.get("studentNumber") ? "STUDENT_ID" : "EMAIL");
     setEmailChanged(params.get("emailChanged") === "1");
+    setGoogleError(params.get("googleError") || "");
   }, []);
 
   function changeIdentity(next: LoginType) {
@@ -81,8 +83,38 @@ export default function LoginPage() {
         <p className="muted mb-4">Teachers and students can sign in with email. Students may also use their registered Student ID.</p>
         <form onSubmit={submit}>
           {emailChanged && <div className="alert alert-success" role="status">Your email was updated. Sign in with your new email address.</div>}
+          {googleError && <div className="alert alert-warning mt-3" role="alert">{({
+            "school-required": "Select your school before continuing with Google.",
+            "school-inactive": "This school workspace is inactive or its subscription has expired. Contact SAGA support.",
+            "throttled": "Too many Google sign-in attempts. Please wait and try again.",
+            "not-configured": "Google Sign-In is not configured yet. Use your regular SAGA sign-in or contact the portal administrator.",
+            "cancelled": "Google sign-in or service authorization was cancelled. You can try again or use your regular SAGA sign-in.",
+            "GOOGLE_ACCOUNT_NOT_FOUND": "This Google email is not registered for the selected school. Use the Google email linked to your SAGA account or contact your subject teacher.",
+            "SCHOOL_INACTIVE": "This school workspace is inactive or its subscription has expired. Contact SAGA support.",
+            "GOOGLE_NOT_CONFIGURED": "Google Sign-In is not configured yet. Contact the portal administrator.",
+            "INVALID_GOOGLE_STATE": "This Google sign-in request expired or could not be verified. Please try again.",
+            "GOOGLE_IDENTITY_UNVERIFIED": "Google did not return a verified email address. Choose a verified Google account.",
+            "GOOGLE_TOKEN_EXCHANGE_FAILED": "Google could not complete sign-in. Please try again.",
+            "failed": "Google sign-in could not be completed. Please try again."
+          } as Record<string, string>)[googleError] || "Google sign-in could not be completed. Please try again."}</div>}
           <label className="form-label" htmlFor="schoolId">School</label>
           <SchoolSelect id="schoolId" value={schoolId} onChange={next => { setSchoolId(next); setChallengeId(""); setError(""); }}/>
+          <a
+            className={`btn btn-outline-secondary btn-lg w-100 d-flex align-items-center justify-content-center gap-2 ${!schoolId ? "disabled" : ""}`}
+            href={schoolId ? `/api/auth/google?schoolId=${encodeURIComponent(schoolId)}` : "#"}
+            aria-disabled={!schoolId}
+            onClick={event => {
+              if (!schoolId) {
+                event.preventDefault();
+                setGoogleError("school-required");
+              }
+            }}
+          >
+            <span aria-hidden="true" className="fw-bold">G</span>
+            Continue with Google
+          </a>
+          <p className="form-text text-center mb-3">Use the Google email registered to your selected school. Teachers can enable Drive and Chat during the first sign-in.</p>
+          <div className="text-center small text-secondary mb-3">Or use your SAGA credentials</div>
           <div className="form-label">Sign in using</div>
           <div className="role-switch mb-3" role="group" aria-label="Choose sign-in method">
             <button type="button" className={loginType === "EMAIL" ? "active" : ""} aria-pressed={loginType === "EMAIL"} onClick={() => changeIdentity("EMAIL")}>Email</button>
