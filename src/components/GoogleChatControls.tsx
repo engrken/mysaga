@@ -106,11 +106,45 @@ export default function GoogleChatControls({ subjectId }: { subjectId: string })
         : <span className="badge text-bg-warning">Chat permission needed</span>}
       {(!connection.connection?.matchesPortalEmail || !connection.connection?.driveEnabled || !connection.connection?.chatEnabled) &&
         <a className="btn btn-outline-secondary btn-sm" href="/api/teacher/google-chat/connect">Reconnect Google services</a>}
-      {connection.connection?.matchesPortalEmail && connection.connection?.chatEnabled
-        ? (!space ? <><button className="btn btn-primary btn-sm" onClick={() => void createSpace()} disabled={busy}>Create class Space</button>
-        {spaces.filter(item => item.externalUserAllowed).length > 0 && <><select className="form-select form-select-sm" style={{maxWidth: "280px"}} value={selectedSpaceName} onChange={event => setSelectedSpaceName(event.target.value)}><option value="">Or choose an existing Space…</option>{spaces.filter(item => item.externalUserAllowed).map(item => <option key={item.name} value={item.name}>{item.displayName}</option>)}</select><button className="btn btn-outline-primary btn-sm" onClick={() => void linkExistingSpace()} disabled={busy || !selectedSpaceName}>Link selected Space</button></>}</> :
-        <><span className="badge text-bg-success">Space linked</span><span className="small">{space.displayName}</span>
-          <button className="btn btn-outline-primary btn-sm" onClick={() => void syncMembers()} disabled={busy}>Sync class members</button></>}
+      {connection.connection?.matchesPortalEmail && connection.connection?.chatEnabled && (
+        !space ? (
+          <>
+            <button className="btn btn-primary btn-sm" onClick={() => void createSpace()} disabled={busy}>
+              Create class Space
+            </button>
+            {spaces.filter(item => item.externalUserAllowed).length > 0 && (
+              <>
+                <select
+                  className="form-select form-select-sm"
+                  style={{ maxWidth: "280px" }}
+                  value={selectedSpaceName}
+                  onChange={event => setSelectedSpaceName(event.target.value)}
+                >
+                  <option value="">Or choose an existing Space…</option>
+                  {spaces.filter(item => item.externalUserAllowed).map(item => (
+                    <option key={item.name} value={item.name}>{item.displayName}</option>
+                  ))}
+                </select>
+                <button
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={() => void linkExistingSpace()}
+                  disabled={busy || !selectedSpaceName}
+                >
+                  Link selected Space
+                </button>
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <span className="badge text-bg-success">Space linked</span>
+            <span className="small">{space.displayName}</span>
+            <button className="btn btn-outline-primary btn-sm" onClick={() => void syncMembers()} disabled={busy}>
+              Sync class members
+            </button>
+          </>
+        )
+      )}
     </div>}
     {space && (!connection?.connection?.matchesPortalEmail || !connection.connection.chatEnabled) &&
       <p className="text-warning small mt-2">Chat actions are paused until the Google account and Chat permissions match your SAGA teacher account. Reconnect Google services to continue.</p>}
