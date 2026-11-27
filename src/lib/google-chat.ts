@@ -4,13 +4,14 @@ import { prisma } from "@/lib/prisma";
 
 export const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 
-export const GOOGLE_SERVICE_SCOPES = [
+export const GOOGLE_CHAT_SCOPES = [
   "https://www.googleapis.com/auth/chat.spaces.readonly",
   "https://www.googleapis.com/auth/chat.spaces.create",
   "https://www.googleapis.com/auth/chat.memberships",
-  "https://www.googleapis.com/auth/chat.messages.create",
-  GOOGLE_DRIVE_SCOPE
+  "https://www.googleapis.com/auth/chat.messages.create"
 ];
+
+export const GOOGLE_SERVICE_SCOPES = [...GOOGLE_CHAT_SCOPES, GOOGLE_DRIVE_SCOPE];
 
 const GOOGLE_SCOPES = [
   "openid",
@@ -150,8 +151,9 @@ export async function completeGoogleOAuth(code: string, state: string) {
     where: { schoolId_teacherId: { schoolId: user.schoolId, teacherId: user.id } },
     select: { encryptedRefreshToken: true, googleSubject: true }
   });
-  if (!tokens.refresh_token && !existingConnection) {
-    throw new Error("Google did not grant offline access. Reconnect and approve the requested access.");
+  const sameExistingGoogleAccount = existingConnection?.googleSubject === identity.sub;
+  if (!tokens.refresh_token && !sameExistingGoogleAccount) {
+    throw new Error("Google did not grant offline access for this account. Reconnect and approve the requested access.");
   }
 
   if (existingConnection && existingConnection.googleSubject !== identity.sub) {
@@ -167,7 +169,9 @@ export async function completeGoogleOAuth(code: string, state: string) {
       schoolId: user.schoolId, teacherId: user.id, googleSubject: identity.sub,
       googleEmail: identity.email.toLowerCase(),
       encryptedAccessToken: encryptGoogleToken(tokens.access_token),
-      encryptedRefreshToken: tokens.refresh_token ? encryptGoogleToken(tokens.refresh_token) : existingConnection!.encryptedRefreshToken,
+      encryptedRefreshToken: tokens.refresh_token
+        ? encryptGoogleToken(tokens.refresh_token)
+        : sameExistingGoogleAccount ? existingConnection!.encryptedRefreshToken : "",
       accessTokenExpiresAt: new Date(Date.now() + Math.max(60, tokens.expires_in ?? 3600) * 1000),
       scopes: tokens.scope ?? GOOGLE_SCOPES.join(" ")
     },
@@ -186,6 +190,16 @@ export async function completeGoogleOAuth(code: string, state: string) {
       ? payload.returnTo
       : "/dashboard"
   };
+}
+
+
+export function googleConnectionMatchesSAGAAccount(
+  connection: { googleSubject: string; googleEmail: string },
+  user: { email: string; authProvider?: string | null; googleSubject?: string | null }
+) {
+  if (connection.googleEmail.trim().toLowerCase() !== user.email.trim().toLowerCase()) return false;
+  if (user.authProvider === "GOOGLE" && connection.googleSubject !== user.googleSubject) return false;
+  return true;
 }
 
 export async function googleChatAccessToken(connection: {
