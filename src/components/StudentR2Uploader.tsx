@@ -7,14 +7,13 @@ type UploadStage = "idle" | "preparing" | "uploading" | "saving" | "success";
 type UploadUrlResponse = {
   uploadUrl: string;
   fileKey: string;
-  publicUrl: string;
   fileName: string;
   fileSize: number;
   mimeType: string;
   uploadHeaders: Record<string, string>;
 };
 type SubmissionAttachmentInput =
-  | { storageProvider: "CLOUDFLARE_R2"; fileKey: string; fileUrl: string; fileName: string; fileSize: number; mimeType: string }
+  | { storageProvider: "CLOUDFLARE_R2"; fileKey: string; fileName: string; fileSize: number; mimeType: string }
   | { storageProvider: "GOOGLE_DRIVE"; fileUrl: string; fileName: string; fileSize: number; mimeType: string };
 type SelectedFile = { id: string; file: File };
 type Props = {
@@ -131,7 +130,7 @@ export function StudentR2Uploader({ assignmentId, disabled = false, onSubmitted 
         });
 
         setStage("uploading");
-        setStatusText("Uploading file " + (index + 1) + " of " + smallFiles.length + " directly to R2…");
+        setStatusText("Uploading file " + (index + 1) + " of " + smallFiles.length + " directly to private storage…");
         const uploaded = await fetch(presigned.uploadUrl, {
           method: "PUT",
           headers: presigned.uploadHeaders,
@@ -143,7 +142,6 @@ export function StudentR2Uploader({ assignmentId, disabled = false, onSubmitted 
         attachments.push({
           storageProvider: "CLOUDFLARE_R2",
           fileKey: presigned.fileKey,
-          fileUrl: presigned.publicUrl,
           fileName: presigned.fileName,
           fileSize: presigned.fileSize,
           mimeType: presigned.mimeType
@@ -190,7 +188,7 @@ export function StudentR2Uploader({ assignmentId, disabled = false, onSubmitted 
         }}
         disabled={disabled || busy}/>
       <p className="small text-secondary mt-2 mb-0">
-        Add files in one or more batches. Each file up to 5 MB uploads directly to SAGA.
+        Add files in one or more batches. Each file up to 5 MB uploads directly to private SAGA storage.
         Larger files stay in Google Drive and are attached using a share link. Any file type is accepted for R2 uploads.
       </p>
     </div>
@@ -246,11 +244,11 @@ export function StudentR2Uploader({ assignmentId, disabled = false, onSubmitted 
             {invalidDriveLink
               ? <small className="text-danger d-block mt-1">Paste a direct file link from Google Drive or Google Docs, not a folder or My Drive page.</small>
               : <small className="text-secondary d-block mt-1">Check that your teacher can open the link before submitting.</small>}
-          </div> : <small className="text-success d-block mt-2">Will upload directly to R2</small>}
+          </div> : <small className="text-success d-block mt-2">Will upload directly to private R2 storage</small>}
         </div>;
       })}
       <div className="small text-secondary">
-        {smallFiles.length} file(s) will upload to R2 · {largeFiles.length} file(s) need Google Drive links.
+        {smallFiles.length} file(s) will upload to private R2 · {largeFiles.length} file(s) need Google Drive links.
         The 5 MB limit applies to each R2 file individually.
       </div>
     </div>}
@@ -258,7 +256,7 @@ export function StudentR2Uploader({ assignmentId, disabled = false, onSubmitted 
     {busy && <div className="d-grid gap-1" role="status" aria-live="polite">
       <progress className="w-100"/>
       <small className="text-secondary">{statusText}</small>
-      <small className="text-secondary">Small file contents go directly from your browser to R2. Only attachment details and Drive links are sent to SAGA.</small>
+      <small className="text-secondary">Small file contents go directly from your browser to private R2. SAGA stores the file record and applies access checks when downloading.</small>
     </div>}
     {success && <p className="alert alert-success mb-0" role="status">{statusText}</p>}
     {error && <p className="alert alert-danger mb-0" role="alert">{error}</p>}
