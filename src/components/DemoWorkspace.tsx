@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, type CSSProperties } from "react";
 import styles from "./DemoWorkspace.module.css";
+import OverviewDashboard from "./student-portal/OverviewDashboard";
+import { STUDENT_PORTAL_ACCENTS, STUDENT_PORTAL_DEFAULTS, type StudentGradeSummary, type StudentPortalPreferences } from "./student-portal/types";
 
 type DemoRole = "teacher" | "student" | "admin";
 type DemoTab = "overview" | "scorebook" | "attendance" | "publication" | "grades" | "simulator" | "schools";
@@ -98,10 +100,41 @@ export default function DemoWorkspace() {
   const [visible, setVisible] = useState<Record<string, boolean>>(seedVisibility);
   const [predicted, setPredicted] = useState<number>(95);
   const [notice, setNotice] = useState("");
+  const [studentPreferences, setStudentPreferences] = useState<StudentPortalPreferences>(STUDENT_PORTAL_DEFAULTS);
+  const [studentCustomizerRequested, setStudentCustomizerRequested] = useState(false);
   const selectedCourse = classes.find(course => course.id === activeClass) || classes[0];
   const currentStatus = statuses[activeClass];
   const canEdit = currentStatus === "DRAFT";
   const student = students[0];
+  const demoStudentGrades: StudentGradeSummary[] = classes.map(course => {
+    const courseScores = marks[course.id]?.[student.id] || {};
+    const mark = attendance[course.id]?.[student.id] || "PRESENT";
+    const absent = mark === "ABSENT" ? 1 : 0;
+    const present = mark === "PRESENT" ? 1 : 0;
+    const excused = mark === "EXCUSED" ? 1 : 0;
+    const counted = present + absent;
+    return {
+      id: course.id,
+      code: course.code,
+      title: course.title,
+      teacher: course.instructor,
+      term: "1st Semester",
+      academicYear: "2026-2027",
+      schedule: course.schedule,
+      status: statuses[course.id],
+      percent: visible[course.id] ? scorePercent(course.id, student.id, marks, attendance) : null,
+      finalGrade: visible[course.id] ? gradeEquivalent(scorePercent(course.id, student.id, marks, attendance)) : null,
+      itemCount: assessmentItems.length,
+      recordedCount: Object.values(courseScores).filter(value => value !== null).length,
+      attendanceSummary: { absent, present, late: 0, excused, counted, percent: counted ? absent / counted * 100 : null }
+    };
+  });
+  const demoAttendanceWarnings = demoStudentGrades.filter(grade => grade.attendanceSummary?.percent !== null && (grade.attendanceSummary?.percent ?? 0) >= 20);
+  const resetStudentLayout = () => {
+    setStudentPreferences(STUDENT_PORTAL_DEFAULTS);
+    setStudentCustomizerRequested(false);
+    setNotice("Student layout restored to its default. Demo data was not changed.");
+  };
   const launchRole = (next: DemoRole) => { setRole(next); setTab("overview"); setNotice(""); };
   const reset = () => {
     setMarks(seedMarks());
@@ -109,7 +142,9 @@ export default function DemoWorkspace() {
     setStatuses(seedStatuses());
     setVisible(seedVisibility());
     setPredicted(95);
-    setNotice("Sample records restored. No real SAGA records were affected.");
+    setStudentPreferences(STUDENT_PORTAL_DEFAULTS);
+    setStudentCustomizerRequested(false);
+    setNotice("Sample records and the student layout were restored. No real SAGA records were affected.");
   };
   const setScore = (studentId: string, assessmentId: string, max: number, raw: string) => {
     const parsed = raw === "" ? null : Number(raw);
@@ -143,7 +178,7 @@ export default function DemoWorkspace() {
   const isStudent = role === "student";
   const pageTitle = menus[role || "teacher"].find(item => item.id === tab)?.label || "Overview";
 
-  return <main className={styles.shell}>
+  return <main className={styles.shell} data-student-glass-theme={isStudent ? studentPreferences.theme : undefined} data-student-wallpaper={isStudent ? studentPreferences.wallpaper : undefined} style={{ "--student-accent": isStudent ? STUDENT_PORTAL_ACCENTS[studentPreferences.accent].color : undefined } as CSSProperties}>
     <div className={styles.topbar}>
       <Link className={styles.logo} href="/" aria-label="SAGA Portal home">
         <span className={styles.logoMark}>S</span><span><strong>SAGA</strong><small>PORTAL DEMO</small></span>
@@ -170,7 +205,7 @@ export default function DemoWorkspace() {
       </div>
       <p className={styles.disclaimer}>All names, grades, schools, and analytics in this demo are fictional. Interactions stay in your browser and reset when you refresh or leave the page. This is a guided simulation, not a sign-in to the real SAGA portal.</p>
     </div> : <>
-      <div className={styles.safetyBar} role="status"><span className={styles.liveDot}/> <strong>DEMO MODE</strong><span>Fictional data only · Local simulation · No account access</span><button type="button" onClick={reset}>↺ Reset demo</button></div>
+      <div className={styles.safetyBar} role="status"><span className={styles.liveDot}/> <strong>DEMO MODE</strong><span>Fictional data only · Local simulation · No account access</span>{isStudent && tab === "overview" && <><button type="button" onClick={() => setStudentPreferences(current => ({ ...current, theme: "dark-glass" }))}>Try Dark Glass</button><button type="button" onClick={resetStudentLayout}>Reset Layout</button></>}<button type="button" onClick={reset}>↺ Reset demo</button></div>
       <div className={styles.workspace}>
         <aside className={styles.sidebar} aria-label="Demo navigation">
           <div className={styles.schoolTag}><span className={styles.schoolMark}>SC</span><span><strong>SAGA Sample College</strong><small>Demonstration workspace</small></span></div>
@@ -183,7 +218,7 @@ export default function DemoWorkspace() {
         <section className={styles.mainContent}>
           <div className={styles.pageHead}>
             <div><span className={styles.kicker}>{role === "teacher" ? "TEACHER PORTAL" : isStudent ? "STUDENT PORTAL" : "TENANT MANAGEMENT PREVIEW"}</span><h1>{pageTitle}</h1><p>{role === "teacher" ? "Manage two sample ECE classes." : isStudent ? "Explore sample academic progress and grades." : "Review fictional school activity without administrative privileges."}</p></div>
-            <button type="button" className={styles.switchButton} onClick={() => setRole(null)}>Change experience</button>
+            {isStudent && tab === "overview" && <button type="button" className={styles.switchButton} onClick={() => setStudentCustomizerRequested(true)}>Customize layout</button>}<button type="button" className={styles.switchButton} onClick={() => setRole(null)}>Change experience</button>
           </div>
           {notice && <div className={styles.notice} role="status">{notice}</div>}
           {role === "teacher" && <div className={styles.classSelect}><label htmlFor="demo-class">Current class</label><select id="demo-class" value={activeClass} onChange={event => { setActiveClass(event.target.value); setNotice(""); }}>{classes.map(course => <option key={course.id} value={course.id}>{course.code} — {course.title}</option>)}</select><span>{selectedCourse.schedule}</span></div>}
@@ -226,17 +261,18 @@ export default function DemoWorkspace() {
             <p className={styles.smallPrint}>This only simulates Teacher actions currently present in SAGA; it does not contact the Registrar or authorize actual grade changes.</p>
           </Panel>}
 
-          {role === "student" && tab === "overview" && <>
-            <div className={styles.metrics}>
-              <Metric label="My Classes" value={String(classes.length)} hint="First semester" />
-              <Metric label="Published Classes" value={String(classes.filter(c => visible[c.id]).length)} hint="Teacher-controlled" />
-              <Metric label="My Grade Average" value={(classes.reduce((total, c) => total + scorePercent(c.id, student.id, marks, attendance), 0) / classes.length).toFixed(1) + "%"} hint="Illustrative only" />
-              <Metric label="School Year" value="2026–27" hint="Sample academic year" />
-            </div>
-            <Panel title={"Welcome, " + student.name} subtitle="Your fictional class results are shown below.">
-              <div className={styles.courseGrid}>{classes.map(course => <article className={styles.courseCard} key={course.id}><span className={styles.kicker}>{course.code}</span><h3>{course.title}</h3><p>{course.instructor}</p>{visible[course.id] ? <><strong className={styles.courseGrade}>{scorePercent(course.id, student.id, marks, attendance).toFixed(2)}%</strong><p><Status status={statuses[course.id]}/></p></> : <p className={styles.hint}>Grades are not yet published.</p>}</article>)}</div>
-            </Panel>
-          </>}
+          {role === "student" && tab === "overview" && <OverviewDashboard
+            fullName={student.name}
+            grades={demoStudentGrades}
+            attendanceWarnings={demoAttendanceWarnings}
+            preferences={studentPreferences}
+            onPreferencesChange={setStudentPreferences}
+            onReset={resetStudentLayout}
+            storageReady={true}
+            customizerRequested={studentCustomizerRequested}
+            onCustomizerOpened={() => setStudentCustomizerRequested(false)}
+            demoMode={true}
+          />}
 
           {role === "student" && tab === "grades" && <Panel title="My Academic Records" subtitle="Students can view only their own sample records here.">
             <div className={styles.tableScroll}><table className={styles.table}><thead><tr><th>Class</th><th>Weighted %</th><th>Sample Equivalent</th><th>Academic Status</th></tr></thead><tbody>{classes.map(course => <tr key={course.id}><td><strong>{course.code}</strong><small>{course.title}</small></td>{visible[course.id] ? <><td>{scorePercent(course.id, student.id, marks, attendance).toFixed(2)}%</td><td>{gradeEquivalent(scorePercent(course.id, student.id, marks, attendance))}</td><td><Status status={statuses[course.id]}/></td></> : <td colSpan={3}>Grades hidden by teacher</td>}</tr>)}</tbody></table></div>
