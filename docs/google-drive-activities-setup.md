@@ -1,64 +1,100 @@
-# SAGA Activities: Google Drive and Google identity setup
+# SAGA Portal: Unified Google Sign-In, Drive, and Chat setup
 
-This integration is an optional **Activities exploration** capability. It does not turn on publishing, grading, student submissions, or other Activity writes.
+SAGA uses one Google identity across portal login, Activities Drive features, and teacher Google Chat integration. This is an alternative to the existing SAGA email/password login; it does not replace SAGA roles, school membership, or class authorization.
 
-## What the integration does
+## User flow
 
-- Teachers can sign in with Google from a class Activity draft and use Google Picker to select a Drive file as the Activity material link.
-- Students can verify a Google account before opening a Google Drive resource or Drive-based submission attachment.
-- Google ID tokens are verified by SAGA on the server. The Google account's verified email must match the email on the currently signed-in SAGA account (trimmed and case-insensitive).
-- A mismatch blocks the action. Students are told to select the correct Google account or contact their subject teacher to correct/confirm their registered SAGA email.
-- SAGA stores the selected Drive URL in the Activity record. It does not copy the Drive file contents, change Drive sharing permissions, or persist the temporary Google access token.
-- The teacher must share the resource with enrolled students as viewers in Google Drive. The Google sign-in check does not grant file permission.
+1. The person selects their school on the SAGA login page and chooses **Continue with Google**.
+2. Google authenticates the account. SAGA verifies the OpenID Connect ID token, including Google's signature, issuer, audience, expiry, nonce, and verified email.
+3. SAGA matches the Google email to an existing account in the selected school. It does not automatically create a user or grant access to another tenant. A student or teacher must use the email already registered by their school.
+4. Students complete sign-in with Google identity only. Their verified SAGA email is used for class access and Google Chat membership invitations. Students are not asked to grant teacher-only Chat administration permissions.
+5. Teachers are automatically redirected to a second Google consent step when Drive and Chat scopes are missing. This incremental authorization stores the encrypted refresh token in the existing teacher Google service connection, allowing the same account to power Drive Picker and Chat API actions. If a teacher declines the additional permissions, SAGA login still succeeds but the connected Drive and Chat actions remain unavailable until authorized.
 
-Google Drive actions remain separate from the existing Google Chat integration and its OAuth callback/scopes.
+Google authorization is server-side using the existing OAuth Web application client and callback. SAGA never receives the user's Google password.
+
+## Google services and permissions
+
+SAGA requests only the permissions needed for the enabled SAGA integrations:
+
+- OpenID Connect `openid email profile` for SAGA login and verified account identity.
+- `https://www.googleapis.com/auth/drive.file` for teacher-selected files through Google Picker. This is narrower than full Drive access.
+- `https://www.googleapis.com/auth/chat.spaces.readonly` to list available Chat spaces.
+- `https://www.googleapis.com/auth/chat.spaces.create` to create class spaces.
+- `https://www.googleapis.com/auth/chat.memberships` to add, list, and remove class-space members.
+- `https://www.googleapis.com/auth/chat.messages.create` to send class announcements.
+
+SAGA does not request Gmail mailbox access or broad read/write access to every Drive file. Teacher service tokens are encrypted at rest. Access tokens are refreshed server-side and are not exposed as long-lived browser credentials. Students do not receive the teacher Chat scopes.
+
+The Google Chat API permissions are user-delegated teacher permissions. Creating a class Chat space, sending messages, or managing memberships still requires a teacher role, ownership of the subject in the selected school, and an authorized Google Chat space. Students are invited using their verified SAGA email and must also be allowed by the relevant Google Chat organization policies.
 
 ## Google Cloud setup
 
-Use the existing Google OAuth **Web application client ID** already configured for SAGA's Google Chat integration. Do not place the client secret in browser code.
+Use the **same Google Cloud project and OAuth Web application client** already configured for SAGA's Google Chat integration. Do not create a new OAuth client or replace its client secret.
 
-1. In the same Google Cloud project, enable **Google Drive API** and **Google Picker API**.
-2. Open the existing OAuth Web application client and add these Authorized JavaScript origins:
+1. In that project, enable:
+   - Google Drive API
+   - Google Picker API
+   - Google Chat API
+2. In Google Auth Platform → Clients, open the existing Web application OAuth client.
+3. Confirm its Authorized redirect URI includes the exact value used by `GOOGLE_REDIRECT_URI`, currently the SAGA callback:
+   `/api/integrations/google/callback`.
+   Do not remove the existing redirect URI; the legacy Chat reconnect path continues using it.
+4. Add these Authorized JavaScript origins for Google Picker and Google Identity Services:
    - `https://my.sagaportal.online`
-   - `https://mysaga.vercel.app` (if this hostname is used)
+   - `https://faculty-grade-portal-git-feat-activities-45ffe4-kentbsece-7567.vercel.app` (SAGA Preview branch alias)
    - `http://localhost:3000` (local development only)
-3. Create a Google API key for Picker. Restrict it to the SAGA web origins using HTTP referrer restrictions. Also allow the Google Picker iframe origin required by the Picker integration (Google documents the `docs.google.com` origin for this purpose).
-4. Restrict the API key to only the Google Picker API and Google Drive API. Do not leave the key unrestricted.
-5. Record the Google Cloud project **number**. Picker uses this as its App ID.
+   Add any other actual SAGA hostnames only when they are used for testing.
+5. Create a Google API key for Picker. Restrict it to the authorized SAGA website referrers using HTTP-referrer restrictions. Also allow the Google Picker iframe origin:
+   `https://docs.google.com/*`.
+6. Restrict the API key to the Google Picker API and Google Drive API. Do not leave the key unrestricted.
+7. Record the Google Cloud **project number** (numeric value). Google Picker uses this as its App ID, not the project ID.
+8. In Google Auth Platform → Data Access, confirm the configured consent screen lists the scopes above. Add test users or complete the required Google verification for the app's publishing status and requested Chat permissions before inviting external users.
 
-The teacher Picker requests the narrow `https://www.googleapis.com/auth/drive.file` scope, which is intended for files the user chooses with the app, rather than broad access to the whole Drive.
+Google recommends incremental authorization so applications request additional API permissions when those features are needed. SAGA therefore uses a minimal OpenID login first, then requests teacher Drive/Chat scopes only for teacher accounts.
 
 ## Vercel environment variables
 
-Add the following values to the SAGA Vercel project. The server-side and public feature switches must both be enabled for the UI and API to operate.
+Use the existing SAGA OAuth values in **Production and Preview**:
+
+| Variable | Purpose |
+| --- | --- |
+| `GOOGLE_CLIENT_ID` | Existing OAuth Web application client ID |
+| `GOOGLE_CLIENT_SECRET` | Existing server-only OAuth client secret |
+| `GOOGLE_REDIRECT_URI` | Exact existing callback URI ending in `/api/integrations/google/callback` |
+| `GOOGLE_TOKEN_ENCRYPTION_KEY` | Existing 32-byte key encoded as 64-character hex or base64; encrypts teacher service tokens |
+| `GOOGLE_DRIVE_API_KEY` | Restricted Google API key for Picker |
+| `GOOGLE_DRIVE_APP_ID` | Numeric Google Cloud project number |
+
+Keep the OAuth client secret and token encryption key server-only. Never use a `NEXT_PUBLIC_` prefix for them.
+
+The following flags control only the optional Activities Drive controls. They do not control the availability of Google Sign-In on the SAGA login page:
 
 | Variable | Value / purpose |
 | --- | --- |
-| `GOOGLE_DRIVE_API_KEY` | Restricted Google API key for Picker |
-| `GOOGLE_DRIVE_APP_ID` | Google Cloud project number (not project ID) |
-| `SAGA_ACTIVITIES_GOOGLE_DRIVE_EXPLORATION` | `true` to enable server-side Drive identity/Picker routes |
-| `NEXT_PUBLIC_SAGA_ACTIVITIES_GOOGLE_DRIVE_EXPLORATION` | `true` to show the optional controls in Activities |
+| `SAGA_ACTIVITIES_GOOGLE_DRIVE_EXPLORATION` | `true` to enable server-side Activities Drive routes |
+| `NEXT_PUBLIC_SAGA_ACTIVITIES_GOOGLE_DRIVE_EXPLORATION` | `true` to show the optional Activities Drive controls |
 
-The existing `GOOGLE_CLIENT_ID` is reused for Google Identity Services and the Picker OAuth token client. Keep `GOOGLE_CLIENT_SECRET` and `GOOGLE_TOKEN_ENCRYPTION_KEY` server-only; this feature does not need to expose either one.
-
-For production exploration, keep these existing guards unchanged:
+For Production exploration, keep these existing Activities guards unchanged:
 
 - `SAGA_ACTIVITIES_EXPLORATION_ONLY=true`
+- `NEXT_PUBLIC_SAGA_ACTIVITIES_EXPLORATION_ONLY=true`
 - `SAGA_ACTIVITIES_PUBLISH_ENABLED=false`
+- `NEXT_PUBLIC_SAGA_ACTIVITIES_PUBLISH_ENABLED=false`
 - `SAGA_ACTIVITIES_TEACHER_WRITE=false`
 - `SAGA_ACTIVITIES_STUDENT_WRITE=false`
-- `NEXT_PUBLIC_SAGA_ACTIVITIES_PUBLISH_ENABLED=false`
-- `NEXT_PUBLIC_SAGA_ACTIVITIES_STUDENT_WRITE=false`
 
-Do not switch on publishing, grading, student submissions, or general Activity writes as part of this Google integration.
+Do not switch on publishing, grading, student submissions, or general Activity writes as part of Google integration.
 
 ## Suggested verification sequence
 
-1. Enable Google Drive exploration only after the OAuth JavaScript origins, APIs, Picker API key, and project number have been configured.
-2. Sign in as a teacher whose SAGA email matches the Google account email. Open a class, add or edit an Activity draft, and select a Drive file from the Picker.
-3. Confirm that only the Drive link is placed in the draft, save the draft, and verify it can be previewed. Do not publish it during exploration.
-4. Sign in to a student SAGA account whose email matches a Google account. Open an already available Drive resource or legacy Drive attachment and complete the Google identity check.
-5. Repeat with a different Google email. The action should be blocked with the message to choose the registered account or contact the subject teacher.
-6. Confirm that students cannot use the feature to bypass Activity publishing or submission restrictions.
+1. Open the SAGA Preview branch alias and confirm the school list loads.
+2. On the login page, select a school and click **Continue with Google**.
+3. Test a Google email that already belongs to a teacher account at that school. Confirm the first screen signs in and the second consent step requests the Drive and Chat permissions.
+4. Complete authorization and verify the teacher connection status reports the same email as the SAGA profile, with Drive and Chat enabled.
+5. Open a class workspace. Confirm Google Chat controls show the connected account and the Activities draft shows **Select from Google Drive** without another Google Sign-In button.
+6. Select a Drive file, save the Activity as a draft, and verify that only the Drive link is saved. Do not publish it during exploration. Share the file with enrolled students as viewers in Google Drive.
+7. Sign in as a student using the Google email registered at the selected school. Confirm SAGA login succeeds and Drive resources open for that account when the teacher has shared them.
+8. Test a Google account whose email does not match an existing account at the selected school. SAGA must reject access and must not create a user or expose another school's account.
+9. Test a teacher who declines the second consent step. The SAGA login should still work, while Drive Picker and Chat actions remain disabled until permissions are granted.
 
-Google sign-in verifies the identity used for the SAGA action. It does not guarantee the file has been shared with that person. Google Drive still enforces the file's actual sharing permissions.
+Google identity does not override Drive file-sharing rules, Chat organization policies, SAGA tenant boundaries, class enrollment, or teacher/student roles.
