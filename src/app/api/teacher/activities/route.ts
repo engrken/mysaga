@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { activityTopicSchema, activityHeaders, questionSchema, quizSnapshotSchema, validDriveLink } from "@/lib/class-activities";
+import { activityTopicSchema, activityHeaders, questionSchema, quizSnapshotSchema, lessonPagesSchema, sanitizeLessonHtml, gradeQuizAnswers, QuizAnswer, validDriveLink } from "@/lib/class-activities";
+import { assertActivitiesWritable } from "@/lib/activity-feature-flags";
+import { buildQuizStatistics } from "@/lib/activity-statistics";
 
 const id = z.string().trim().min(1).max(128);
 const inputSchema = z.discriminatedUnion("action", [
@@ -11,7 +13,7 @@ const inputSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("tag-question"), questionId: id, topic: activityTopicSchema }),
   z.object({
     action: z.literal("draft"), subjectId: id, activityId: id.optional(),
-    kind: z.enum(["QUIZ", "ASSIGNMENT", "RESOURCE"]), title: z.string().trim().min(1).max(120)
+    kind: z.enum(["QUIZ", "ASSIGNMENT", "RESOURCE", "LESSON"]), title: z.string().trim().min(1).max(120)
       .refine(title => !title.toLowerCase().startsWith("attendance ·")),
     instructions: z.string().trim().max(8000),
     practice: z.boolean(), categoryId: id.nullable(), dueAt: z.iso.datetime({ offset: true }).nullable(),
@@ -21,11 +23,22 @@ const inputSchema = z.discriminatedUnion("action", [
     inlineQuestions: z.array(questionSchema).max(50).default([]),
     topic: activityTopicSchema.optional(),
     materialUrl: z.string().trim().max(2048).nullable().optional(),
-    availableAt: z.iso.datetime({ offset: true }).nullable().optional()
+    availableAt: z.iso.datetime({ offset: true }).nullable().optional(),
+    timeLimitMinutes: z.number().int().min(1).max(360).nullable().optional(),
+    attemptsAllowed: z.number().int().min(1).max(10).optional(),
+    gradingMethod: z.enum(["HIGHEST", "AVERAGE", "FIRST", "LAST"]).optional(),
+    releaseGrade: z.boolean().optional(),
+    releaseAnswers: z.boolean().optional(),
+    lessonPages: z.array(z.unknown()).max(50).optional()
   }),
   z.object({ action: z.enum(["open", "close"]), subjectId: id, activityId: id }),
   z.object({ action: z.literal("grade"), subjectId: id, activityId: id, submissionId: id,
-    points: z.number().min(0).max(100000), feedback: z.string().trim().max(4000) })
+    points: z.number().min(0).max(100000), feedback: z.string().trim().max(4000) }),
+  z.object({ action: z.literal("offline-grade"), subjectId: id, activityId: id, enrollmentId: id,
+    points: z.number().min(0).max(100000), feedback: z.string().trim().max(4000) }),
+  z.object({ action: z.literal("grade-quiz"), subjectId: id, activityId: id, attemptId: id,
+    questionPoints: z.record(z.string().max(128), z.number().min(0).max(100000)),
+    feedback: z.string().trim().max(4000) })
 ]);
 
 const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: activityHeaders });
@@ -33,6 +46,7 @@ const error = (message: string, status = 400) => reply({ error: message }, statu
 const activityFields = {
   id: true, title: true, kind: true, instructions: true, topic: true, categoryId: true, assessmentId: true,
   status: true, questions: true, materialUrl: true, availableAt: true, practice: true, maxScore: true, itemWeight: true, dueAt: true,
+  timeLimitMinutes: true, attemptsAllowed: true, gradingMethod: true, releaseGrade: true, releaseAnswers: true, lessonPages: true,
   _count: { select: { submissions: true } }
 } as const;
 
@@ -55,6 +69,21 @@ export async function GET(request: Request) {
   if (!subjectId) return error("Choose a class.");
   const subject = await prisma.subject.findFirst({ where: { id: subjectId, ...subjectScope }, select: { id: true } });
   if (!subject) return error("Class not found.", 404);
+  if (searchParams.get("view") === "stats") {
+    if (!activityId) return error("Choose a quiz.", 400);
+    const activity = await prisma.classActivity.findFirst({
+      where: { id: activityId, subjectId, kind: "QUIZ", subject: subjectScope },
+      select: { title: true, questions: true, maxScore: true, gradingMethod: true }
+    });
+    if (!activity) return error("Quiz not found.", 404);
+    const attempts = await prisma.quizAttempt.findMany({
+      where: { activityId, submittedAt: { not: null } },
+      orderBy: [{ enrollmentId: "asc" }, { attemptNumber: "asc" }],
+      select: { enrollmentId: true, answers: true, points: true, manualGrades: true, gradedAt: true }
+    });
+    return reply(buildQuizStatistics(activity.title, quizSnapshotSchema.parse(activity.questions),
+      attempts, activity.gradingMethod, activity.maxScore));
+  }
   if (activityId) {
     const activity = await prisma.classActivity.findFirst({
       where: { id: activityId, subjectId }, select: { id: true }
@@ -69,14 +98,22 @@ export async function GET(request: Request) {
       select: { id: true, text: true, driveUrl: true, points: true, feedback: true, submittedAt: true, gradedAt: true,
         enrollment: { select: { studentName: true } } }
     });
-    return reply({ submissions: rows.slice(0, 30), nextCursor: rows.length > 30 ? rows[29].id : null });
+    const [roster, quizAttempts] = await Promise.all([
+      prisma.enrollment.findMany({ where: { subjectId }, orderBy: { studentName: "asc" },
+        select: { id: true, studentName: true, studentNumber: true } }),
+      prisma.quizAttempt.findMany({ where: { activityId, submittedAt: { not: null } }, orderBy: [{ enrollmentId: "asc" }, { attemptNumber: "desc" }],
+        select: { id: true, enrollmentId: true, attemptNumber: true, answers: true, points: true, manualGrades: true, feedback: true,
+          startedAt: true, submittedAt: true, gradedAt: true, enrollment: { select: { studentName: true, studentNumber: true } } } })
+    ]);
+    return reply({ submissions: rows.slice(0, 30), nextCursor: rows.length > 30 ? rows[29].id : null,
+      roster, quizAttempts });
   }
   const topic = searchParams.get("topic");
   if (topic && topic.length > 100) return error("Invalid topic.");
   const [activities, bank, topics] = await Promise.all([
     prisma.classActivity.findMany({ where: { subjectId }, orderBy: { createdAt: "desc" }, take: 50, select: activityFields }),
     prisma.bankQuestion.findMany({ where: { teacherId: teacher.id, ...(topic === "" ? { topic: null } : topic ? { topic: { equals: topic, mode: "insensitive" } } : {}) }, orderBy: { createdAt: "desc" }, take: 200,
-      select: { id: true, prompt: true, topic: true } }),
+      select: { id: true, prompt: true, topic: true, type: true, answerText: true, points: true } }),
     prisma.bankQuestion.groupBy({ by: ["topic"], where: { teacherId: teacher.id, topic: { not: null } }, orderBy: { topic: "asc" } })
   ]);
   return reply({ activities, bank, topics: [...new Map(topics.map(({topic}) => [topic!.toLowerCase(), topic])).values()] });
@@ -85,6 +122,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const teacher = await requireRole("TEACHER");
   if (!teacher) return error("Unauthorized.", 401);
+  if (!assertActivitiesWritable("teacher")) return error("Class Activities is in read-only beta mode.", 423);
   const parsed = inputSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return error("Check the activity settings and try again.");
   const input = parsed.data;
@@ -121,7 +159,10 @@ export async function POST(request: Request) {
 
     if (input.action === "draft") {
       if (activity && activity.status !== "DRAFT") return error("Only draft activities can be edited.", 409);
-      const practice = input.kind === "RESOURCE" || input.practice;
+      const practice = input.kind === "RESOURCE" || input.kind === "LESSON" || input.practice;
+      const lessonPages = input.kind === "LESSON"
+        ? lessonPagesSchema.parse(input.lessonPages).map(page => ({ ...page, content: sanitizeLessonHtml(page.content) }))
+        : null;
       if (!practice && input.categoryId && !await tx.gradeCategory.findFirst({
         where: { id: input.categoryId, subjectId: input.subjectId, children: { none: {} } }, select: { id: true }
       })) return error("Choose an assessment category from this class.");
@@ -132,19 +173,28 @@ export async function POST(request: Request) {
       const ordered = [...new Set(input.questionIds)];
       const questions = input.kind === "QUIZ" ? await tx.bankQuestion.findMany({ where: {
         id: { in: ordered }, teacherId: teacher.id
-      }, select: { id: true, prompt: true, options: true, answer: true } }) : [];
+      }, select: { id: true, prompt: true, options: true, answer: true, type: true, answerText: true, points: true } }) : [];
       if (input.kind === "QUIZ" && questions.length !== ordered.length) return error("Choose questions from your own question bank.");
       if (input.kind === "QUIZ" && ordered.length + input.inlineQuestions.length > 50) return error("A quiz can contain up to 50 questions.");
       const snapshot = input.kind === "QUIZ" ? [
-        ...ordered.flatMap(questionId => questions.filter(question => question.id === questionId)),
+        ...ordered.flatMap(questionId => questions.filter(question => question.id === questionId)
+          .map(question => ({ ...question }))),
         ...input.inlineQuestions.map(question => ({ ...question, id: `inline-${randomUUID()}` }))
       ] : [];
       const data = {
         subjectId: input.subjectId, kind: input.kind, title: input.title, instructions: input.instructions,
-        practice, categoryId: practice ? null : input.categoryId, topic: input.topic || null, dueAt: input.kind === "RESOURCE" ? null : dueAt, availableAt, materialUrl: input.kind !== "QUIZ" ? input.materialUrl || null : null,
+        practice, categoryId: practice ? null : input.categoryId, topic: input.topic || null,
+        dueAt: ["RESOURCE", "LESSON"].includes(input.kind) ? null : dueAt, availableAt,
+        materialUrl: input.kind !== "QUIZ" ? input.materialUrl || null : null,
         itemWeight: !practice && input.categoryId ? input.itemWeight : null,
-        maxScore: input.kind === "QUIZ" ? snapshot.length : input.kind === "RESOURCE" ? 0 : input.maxScore,
-        questions: snapshot
+        maxScore: input.kind === "QUIZ" ? snapshot.reduce((sum, question) => sum + question.points, 0)
+          : ["RESOURCE", "LESSON"].includes(input.kind) ? 0 : input.maxScore,
+        questions: snapshot, lessonPages: lessonPages ?? undefined,
+        timeLimitMinutes: input.kind === "QUIZ" ? input.timeLimitMinutes ?? null : null,
+        attemptsAllowed: input.kind === "QUIZ" ? input.attemptsAllowed ?? 1 : 1,
+        gradingMethod: input.kind === "QUIZ" ? input.gradingMethod ?? "HIGHEST" : "HIGHEST",
+        releaseGrade: input.kind === "QUIZ" ? input.releaseGrade ?? true : true,
+        releaseAnswers: input.kind === "QUIZ" ? input.releaseAnswers ?? false : false
       };
       const saved = activity
         ? await tx.classActivity.update({ where: { id: activity.id }, data, select: activityFields })
@@ -159,6 +209,9 @@ export async function POST(request: Request) {
       }
       if (activity.kind === "RESOURCE" && !activity.materialUrl && !activity.instructions) {
         return error("Add resource content or a Google Drive link before publishing.");
+      }
+      if (activity.kind === "LESSON" && !lessonPagesSchema.safeParse(activity.lessonPages).success) {
+        return error("Add at least one valid lesson page before publishing.");
       }
       let assessmentId: string | null = null;
       if (!activity.practice) {
@@ -181,6 +234,62 @@ export async function POST(request: Request) {
         data: { status: "OPEN", openedAt: new Date(), assessmentId } });
       await tx.auditEvent.create({ data: { actorId: teacher.id, entity: "activity", entityId: activity.id, action: "opened class activity" } });
       return reply({ ok: true, assessmentId });
+    }
+    if (input.action === "offline-grade" && activity) {
+      if (activity.kind !== "ASSIGNMENT" || activity.status === "DRAFT") return error("This assignment cannot receive an offline grade.");
+      if (input.points > activity.maxScore) return error("Score exceeds the maximum points.");
+      const enrollment = await tx.enrollment.findFirst({ where: { id: input.enrollmentId, subjectId: input.subjectId }, select: { id: true } });
+      if (!enrollment) return error("Student is not enrolled in this class.", 404);
+      const existing = await tx.activitySubmission.findUnique({
+        where: { activityId_enrollmentId: { activityId: activity.id, enrollmentId: enrollment.id } }, select: { id: true }
+      });
+      if (existing) return error("A submission or offline grade is already recorded for this student.", 409);
+      const now = new Date();
+      const submission = await tx.activitySubmission.create({ data: {
+        activityId: activity.id, enrollmentId: enrollment.id, offline: true,
+        points: input.points, feedback: input.feedback, gradedAt: now, submittedAt: now
+      }, select: { id: true } });
+      if (activity.assessmentId) {
+        const cell = { enrollmentId: enrollment.id, assessmentId: activity.assessmentId };
+        await tx.score.upsert({ where: { enrollmentId_assessmentId: cell },
+          create: { ...cell, points: input.points }, update: { points: input.points, remark: null } });
+      }
+      await tx.auditEvent.create({ data: { actorId: teacher.id, entity: "activity-submission", entityId: submission.id,
+        action: "recorded offline assignment grade" } });
+      return reply({ ok: true, submissionId: submission.id }, 201);
+    }
+    if (input.action === "grade-quiz" && activity) {
+      if (activity.kind !== "QUIZ" || activity.status === "DRAFT") return error("This quiz cannot be graded here.");
+      const questions = quizSnapshotSchema.parse(activity.questions);
+      const essays = questions.filter(question => question.type === "ESSAY");
+      if (!essays.length || essays.some(question => input.questionPoints[question.id] === undefined ||
+          input.questionPoints[question.id] > question.points) ||
+          Object.keys(input.questionPoints).some(key => !essays.some(question => question.id === key))) {
+        return error("Enter a valid score for every essay question.");
+      }
+      const attempt = await tx.quizAttempt.findFirst({ where: {
+        id: input.attemptId, activityId: activity.id, enrollment: { subjectId: input.subjectId }, submittedAt: { not: null }
+      }, select: { id: true, enrollmentId: true, answers: true } });
+      if (!attempt) return error("Quiz attempt not found.", 404);
+      const automatic = gradeQuizAnswers(questions, (attempt.answers ?? {}) as Record<string, QuizAnswer>);
+      const points = automatic.autoGradedPoints + Object.values(input.questionPoints).reduce((a, b) => a + b, 0);
+      const now = new Date();
+      await tx.quizAttempt.update({ where: { id: attempt.id }, data: {
+        manualGrades: input.questionPoints, feedback: input.feedback, points, gradedAt: now
+      } });
+      if (activity.assessmentId) {
+        const rows = await tx.quizAttempt.findMany({ where: {
+          activityId: activity.id, enrollmentId: attempt.enrollmentId, gradedAt: { not: null }
+        }, orderBy: { attemptNumber: "asc" }, select: { points: true } });
+        const scores = rows.map(row => row.points ?? 0);
+        const score = activity.gradingMethod === "FIRST" ? scores[0]
+          : activity.gradingMethod === "LAST" ? scores[scores.length - 1]
+          : activity.gradingMethod === "AVERAGE" ? scores.reduce((a, b) => a + b, 0) / scores.length : Math.max(...scores);
+        const cell = { enrollmentId: attempt.enrollmentId, assessmentId: activity.assessmentId };
+        await tx.score.upsert({ where: { enrollmentId_assessmentId: cell },
+          create: { ...cell, points: score }, update: { points: score, remark: null } });
+      }
+      return reply({ ok: true, points });
     }
     if (input.action === "grade" && activity) {
       if (activity.kind !== "ASSIGNMENT" || activity.status === "DRAFT") return error("This activity cannot be graded here.");

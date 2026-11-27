@@ -266,6 +266,7 @@ model Enrollment {
   scores             Score[]
   gradeChangeHistory GradeChangeHistory[]
   activitySubmissions ActivitySubmission[]
+  quizAttempts        QuizAttempt[]
   googleChatMembership GoogleChatMembershipSync?
 
   @@unique([subjectId, studentNumber])
@@ -416,6 +417,7 @@ enum ClassActivityKind {
   QUIZ
   ASSIGNMENT
   RESOURCE
+  LESSON
 }
 
 enum ClassActivityStatus {
@@ -431,6 +433,9 @@ model BankQuestion {
   prompt    String
   options   Json
   answer    Int
+  type      String   @default("MULTIPLE_CHOICE")
+  answerText String?
+  points    Float    @default(1)
   createdAt DateTime @default(now())
   teacher   User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 
@@ -455,11 +460,18 @@ model ClassActivity {
   materialUrl  String?
   availableAt DateTime?
   dueAt        DateTime?
+  timeLimitMinutes Int?
+  attemptsAllowed Int @default(1)
+  gradingMethod String @default("HIGHEST")
+  releaseGrade Boolean @default(true)
+  releaseAnswers Boolean @default(false)
+  lessonPages Json?
   openedAt     DateTime?
   createdAt    DateTime            @default(now())
   subject      Subject             @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   assessment   Assessment?         @relation(fields: [assessmentId], references: [id], onDelete: NoAction)
   submissions  ActivitySubmission[]
+  quizAttempts QuizAttempt[]
 
   @@index([subjectId, status, createdAt])
 }
@@ -471,6 +483,8 @@ model ActivitySubmission {
   answers      Json?
   text         String?
   driveUrl     String?
+  files        Json?
+  offline      Boolean       @default(false)
   points       Float?
   feedback     String?
   submittedAt  DateTime      @default(now())
@@ -482,6 +496,26 @@ model ActivitySubmission {
   @@unique([activityId, enrollmentId])
   @@index([enrollmentId])
   @@index([activityId, updatedAt])
+}
+
+model QuizAttempt {
+  id            String        @id @default(cuid())
+  activityId    String
+  enrollmentId  String
+  attemptNumber Int
+  answers       Json?
+  points        Float?
+  manualGrades  Json?
+  feedback      String?
+  startedAt     DateTime      @default(now())
+  submittedAt   DateTime?
+  gradedAt      DateTime?
+  activity      ClassActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  enrollment    Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, enrollmentId, attemptNumber])
+  @@index([activityId, submittedAt])
+  @@index([enrollmentId])
 }
 
 

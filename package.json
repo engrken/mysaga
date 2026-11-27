@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate deploy; fi && prisma generate && npm run test:department-logo && npm run test:grades && npm run test:classes && npm run test:simulation && npm run test:scorebook-layout && npm run test:tenant && npm run test:teacher-signup && npm run test:identity && npm run test:invites && npm run test:release && npm run test:theme && npm run test:demo && npm run test:virtual-assistant && next build",
+    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate deploy; fi && prisma generate && npm run test:department-logo && npm run test:grades && npm run test:classes && npm run test:simulation && npm run test:scorebook-layout && npm run test:tenant && npm run test:teacher-signup && npm run test:identity && npm run test:invites && npm run test:release && npm run test:theme && npm run test:demo && npm run test:virtual-assistant && npm run test:activities && npm run lint && next build",
     "test:grades": "node --test tests/grades.test.cjs tests/assessment-setup.test.cjs",
     "test:classes": "node --test tests/class-navigation.test.cjs tests/class-chat-period.test.mjs",
     "postinstall": "prisma generate",
@@ -29,11 +29,16 @@
     "test:theme": "node --test tests/theme-palette.test.cjs",
     "test:demo": "node --test tests/demo-experience.test.cjs tests/authentic-demo-authorization.test.cjs",
     "test:department-logo": "node --test tests/department-logo-media.test.cjs",
-    "test:virtual-assistant": "node --test tests/virtual-assistant.test.cjs"
+    "test:virtual-assistant": "node --test tests/virtual-assistant.test.cjs",
+    "test:activities": "node --experimental-strip-types --test tests/class-activities-engine.test.mjs",
+    "lint": "eslint --max-warnings=0 src/app/api/activities/files/route.ts src/app/api/student/activities src/app/api/teacher/activities src/components/ClassActivities.tsx src/components/ActivityRichEditor.tsx src/lib/class-activities.ts src/lib/activity-feature-flags.ts src/lib/activity-feature-flags.client.ts src/lib/activity-statistics.ts tests/class-activities-engine.test.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
+    "@tiptap/extension-link": "^3.35.0",
+    "@tiptap/react": "^3.35.0",
+    "@tiptap/starter-kit": "^3.35.0",
     "@vercel/blob": "^2.8.2",
     "bcryptjs": "^3.0.2",
     "bootstrap": "^5.3.8",
@@ -43,6 +48,7 @@
     "pg": "^8.16.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "sanitize-html": "^2.18.2",
     "zod": "4.6.7"
   },
   "devDependencies": {
@@ -51,7 +57,10 @@
     "@types/pg": "^8.15.5",
     "@types/react": "^19.0.12",
     "@types/react-dom": "^19.0.4",
+    "@types/sanitize-html": "^2.16.2",
     "dotenv": "^16.4.7",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.4.6",
     "prisma": "^7.10.1",
     "typescript": "^5.8.3"
   },
