@@ -78,7 +78,6 @@ export async function POST(request: Request) {
       Bucket: getR2BucketName(),
       Key: fileKey,
       ContentType: mimeType,
-      ContentDisposition: "attachment; filename=\"" + safeName + "\""
     });
     const uploadUrl = await getSignedUrl(getR2Client(), command, {
       expiresIn: 15 * 60,

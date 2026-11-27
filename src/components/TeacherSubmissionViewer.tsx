@@ -1,6 +1,16 @@
 "use client";
 
 type LegacyAttachment = { pathname: string; filename: string; contentType: string; size: number };
+type SubmissionAttachment = {
+  id: string;
+  storageProvider: "GOOGLE_DRIVE" | "CLOUDFLARE_R2";
+  fileKey: string | null;
+  fileUrl: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  createdAt: string;
+};
 type SubmissionFileRow = {
   id: string;
   submittedAt: string;
@@ -9,6 +19,7 @@ type SubmissionFileRow = {
   fileSize?: number | null;
   mimeType?: string | null;
   storageProvider?: "GOOGLE_DRIVE" | "CLOUDFLARE_R2" | null;
+  attachments?: SubmissionAttachment[];
   driveUrl?: string | null;
   files?: LegacyAttachment[] | null;
   enrollment: { studentName: string; studentNumber: string | null };
@@ -36,9 +47,22 @@ export function TeacherSubmissionViewer({ activityId, submissions }: {
       id: string; studentName: string; studentNumber: string | null; fileName: string;
       mimeType: string; fileSize: number | null; submittedAt: string; href: string; label: string;
     }> = [];
+    for (const file of submission.attachments ?? []) {
+      rows.push({
+        id: file.id,
+        studentName: submission.enrollment.studentName,
+        studentNumber: submission.enrollment.studentNumber,
+        fileName: file.fileName,
+        mimeType: file.storageProvider === "GOOGLE_DRIVE" ? "Google Drive link" : file.mimeType,
+        fileSize: file.fileSize,
+        submittedAt: submission.submittedAt,
+        href: file.fileUrl,
+        label: file.storageProvider === "GOOGLE_DRIVE" ? "Open Google Drive" : "View / download"
+      });
+    }
     if (submission.fileUrl && submission.fileName) {
       rows.push({
-        id: submission.id + "-r2",
+        id: submission.id + "-legacy-r2",
         studentName: submission.enrollment.studentName,
         studentNumber: submission.enrollment.studentNumber,
         fileName: submission.fileName,
@@ -46,7 +70,7 @@ export function TeacherSubmissionViewer({ activityId, submissions }: {
         fileSize: submission.fileSize ?? null,
         submittedAt: submission.submittedAt,
         href: submission.fileUrl,
-        label: "View / download"
+        label: "View / download legacy file"
       });
     }
     for (const file of submission.files ?? []) {
@@ -82,7 +106,7 @@ export function TeacherSubmissionViewer({ activityId, submissions }: {
   if (!entries.length) return null;
   return <div className="table-responsive mb-3">
     <table className="table table-sm table-striped align-middle">
-      <caption className="caption-top">Assignment files</caption>
+      <caption className="caption-top">Assignment files and links</caption>
       <thead><tr>
         <th scope="col">Student</th><th scope="col">File</th><th scope="col">Type</th>
         <th scope="col">Size</th><th scope="col">Submitted</th><th scope="col">Action</th>
