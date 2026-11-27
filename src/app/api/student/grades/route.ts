@@ -28,7 +28,7 @@ export async function GET(request: Request) {
       scores: { select: { assessmentId: true, points: true, remark: true } },
       subject: {
         select: {
-          code: true, title: true, classId: true, term: true, academicYear: true,
+          code: true, title: true, classId: true, schedule: true, term: true, academicYear: true,
           gradeStatus: true, submittedAt: true, verifiedAt: true,
           teacher: { select: { fullName: true } },
           gradeBands: { select: { minPercent: true, finalGrade: true, remarks: true } },
@@ -92,7 +92,8 @@ export async function GET(request: Request) {
     });
     return { id: enrollment.id, code: subject.code, title: subject.title, term: subject.term, academicYear: subject.academicYear, teacher: subject.teacher.fullName, status: subject.gradeStatus, submittedAt: subject.submittedAt, verifiedAt: subject.verifiedAt, percent, finalGrade: enrollment.finalGradeOverride ?? equivalent.finalGrade, remarks: enrollment.remarks || equivalent.remarks,
       itemCount, recordedCount,
-      classId: subject.classId,
+      classId: subject.classId, schedule: subject.schedule,
+      attendanceSummary: attendance,
       attendanceWarning: attendance.percent !== null && attendance.percent >= HIGH_RISK_ABSENCE_PERCENT ? attendance : null,
       droppingWarning: droppingAbsenceStreak(days, id => scoresByItem.get(id), converted),
       categories,
