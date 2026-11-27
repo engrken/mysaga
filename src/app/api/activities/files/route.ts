@@ -27,4 +27,36 @@ export async function GET(request: Request) {
     for (const submission of submissions) {
       if (!Array.isArray(submission.files)) continue;
       const match = submission.files.find((value): value is { pathname: string; filename: string; contentType: string } =>
-       ¶»§q«^
+        !!value && typeof value === "object" && !Array.isArray(value) &&
+        "pathname" in value && value.pathname === pathname && "filename" in value && "contentType" in value);
+      if (match) { file = match; break; }
+    }
+  } else {
+    const submission = await prisma.activitySubmission.findFirst({
+      where: { activityId, enrollment: { OR: activityEnrollmentIdentity(user) },
+        activity: { subject: { schoolId: user.schoolId } } },
+      select: { files: true }
+    });
+    if (submission && Array.isArray(submission.files)) {
+      const match = submission.files.find((value): value is { pathname: string; filename: string; contentType: string } =>
+        !!value && typeof value === "object" && !Array.isArray(value) &&
+        "pathname" in value && value.pathname === pathname && "filename" in value && "contentType" in value);
+      if (match) file = match;
+    }
+  }
+  if (!file) return json("File not found.", 404);
+
+  try {
+    const blob = await get(file.pathname, { access: "private" });
+    if (!blob || blob.statusCode !== 200) return json("File not found.", 404);
+    const filename = file.filename.replace(/[\r\n"]/g, "_").slice(0, 180);
+    return new Response(blob.stream, { status: 200, headers: {
+      "Content-Type": file.contentType,
+      "Content-Disposition": `attachment; filename="attachment"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff"
+    } });
+  } catch {
+    return json("The private file could not be retrieved.", 503);
+  }
+}

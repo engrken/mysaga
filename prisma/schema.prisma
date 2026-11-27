@@ -60,4 +60,527 @@ model School {
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
   users                 User[]
-  subjects              Subje¶»§q«^
+  subjects              Subject[]
+  studentDirectory      StudentDirectory[]
+  tenantPayments        TenantPayment[]
+  invitations           TenantInvitation[]
+  invoices              TenantInvoice[]
+  googleChatConnections GoogleChatConnection[]
+  googleChatSpaces      GoogleChatSpace[]
+  googleChatMemberships GoogleChatMembershipSync[]
+}
+
+model TenantPayment {
+  id           String    @id @default(cuid())
+  schoolId     String
+  amount       Float
+  currency     String    @default("PHP")
+  method       String
+  reference    String?
+  paidAt       DateTime  @default(now())
+  coverageFrom DateTime?
+  coverageTo   DateTime?
+  note         String?
+  recordedBy   String
+  createdAt    DateTime  @default(now())
+  school       School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, paidAt])
+}
+
+model User {
+  id                      String               @id @default(cuid())
+  email                   String
+  passwordHash            String
+  passwordChangedAt       DateTime?
+  emailVerifiedAt          DateTime?
+  emailIdentityChangedAt   DateTime?
+  tenantManagerEmail       String?              @unique
+  isSchoolAdmin          Boolean              @default(false)
+  role                    Role
+  schoolId                String
+  fullName                String
+  positionTitle           String?
+  notedByName             String?
+  notedByPosition         String?
+  profileImagePath        String?
+  studentNumber           String?
+  facultyId               String?
+  defaultGradeSheetComponents String?
+  courseProgram           String?
+  yearLevel               String?
+  section                 String?
+  privacyNoticeAcceptedAt DateTime?
+  termsAcceptedAt         DateTime?
+  termsOfServiceVersion   String?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  school                  School               @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  subjects                Subject[]            @relation("TeacherSubjects")
+  enrollments             Enrollment[]         @relation("StudentEnrollments")
+  auditEvents             AuditEvent[]
+  passwordResetTokens     PasswordResetToken[]
+  emailChangeTokens       EmailChangeToken[]
+  securityOtps            SecurityOtp[]
+  gradeChanges            GradeChangeHistory[] @relation("GradeChangeActor")
+  bankQuestions           BankQuestion[]
+  sentTenantInvitations   TenantInvitation[]
+  googleChatConnections   GoogleChatConnection[]
+  googleChatSpaces        GoogleChatSpace[] @relation("GoogleChatSpaceTeacher")
+
+  @@unique([schoolId, email])
+  @@unique([schoolId, studentNumber])
+  @@unique([schoolId, facultyId])
+  @@index([schoolId, role])
+}
+
+model TenantInvitation {
+  id          String                @id @default(cuid())
+  schoolId    String
+  invitedEmail String
+  tokenHash   String                @unique
+  role        TenantInvitationRole
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdById String
+  createdAt   DateTime              @default(now())
+  school      School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdBy   User                  @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([schoolId, acceptedAt, expiresAt])
+}
+
+model TenantInvoice {
+  id            String             @id @default(cuid())
+  schoolId      String
+  invoiceNumber String             @unique
+  description   String
+  amount        Float
+  currency      String             @default("PHP")
+  issuedAt      DateTime           @default(now())
+  dueAt         DateTime
+  status        TenantInvoiceStatus @default(ISSUED)
+  paidAt        DateTime?
+  note          String?
+  recordedBy    String
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  school        School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  reminders     TenantInvoiceReminder[]
+
+  @@index([schoolId, status, dueAt])
+}
+
+model TenantInvoiceReminder {
+  id        String       @id @default(cuid())
+  invoiceId String
+  daysFromDue Int
+  sentAt    DateTime     @default(now())
+  invoice   TenantInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@unique([invoiceId, daysFromDue])
+  @@index([sentAt])
+}
+
+model StudentDirectory {
+  schoolId      String
+  studentNumber String
+  firstName     String
+  middleName    String?
+  lastName      String
+  fullName      String
+  email         String
+  courseProgram String
+  yearLevel     String
+  section       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  school        School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@id([schoolId, studentNumber])
+  @@unique([schoolId, email])
+}
+
+model Subject {
+  id           String          @id @default(cuid())
+  schoolId     String
+  teacherId    String
+  code         String
+  classId      String?
+  title        String
+  term         String
+  academicYear String
+  schedule     String?
+  courseYear   String?
+  courseProgram String?
+  yearLevel    String?
+  section      String?
+  gradeSheetComponents String?
+  isPublished  Boolean         @default(false)
+  gradeStatus  GradeStatus     @default(DRAFT)
+  joinCodeHash String?         @unique
+  joinCodeExpiresAt DateTime?
+  submittedAt  DateTime?
+  verifiedAt   DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  school       School          @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  teacher      User            @relation("TeacherSubjects", fields: [teacherId], references: [id], onDelete: Cascade)
+  enrollments  Enrollment[]
+  categories   GradeCategory[]
+  gradeBands   GradeBand[]
+  assessments  Assessment[]
+  activities   ClassActivity[]
+  googleChatSpace GoogleChatSpace?
+  googleChatMemberships GoogleChatMembershipSync[]
+
+  @@unique([schoolId, classId])
+  @@index([schoolId, teacherId, academicYear, term])
+  @@index([schoolId, gradeStatus, submittedAt])
+}
+
+model GradeBand {
+  id         String  @id @default(cuid())
+  subjectId  String
+  minPercent Float
+  finalGrade String
+  remarks    String
+  sortOrder  Int     @default(0)
+  subject    Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([subjectId, finalGrade])
+  @@index([subjectId, minPercent])
+}
+
+model Enrollment {
+  id                 String               @id @default(cuid())
+  subjectId          String
+  studentUserId      String?
+  studentName        String
+  studentNumber      String?
+  remarks            String?
+  finalGradeOverride String?
+  createdAt          DateTime             @default(now())
+  subject            Subject              @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  student            User?                @relation("StudentEnrollments", fields: [studentUserId], references: [id], onDelete: SetNull)
+  scores             Score[]
+  gradeChangeHistory GradeChangeHistory[]
+  activitySubmissions ActivitySubmission[]
+  quizAttempts        QuizAttempt[]
+  googleChatMembership GoogleChatMembershipSync?
+
+  @@unique([subjectId, studentNumber])
+  @@index([subjectId, studentName])
+  @@index([studentUserId])
+}
+
+model GradeChangeHistory {
+  id                 String     @id @default(cuid())
+  enrollmentId       String
+  actorId            String
+  previousFinalGrade String?
+  previousRemarks    String?
+  newFinalGrade      String?
+  newRemarks         String?
+  reason             String
+  createdAt          DateTime   @default(now())
+  enrollment         Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  actor              User       @relation("GradeChangeActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([enrollmentId, createdAt])
+  @@index([actorId, createdAt])
+}
+
+model GradeCategory {
+  id             String          @id @default(cuid())
+  subjectId      String
+  parentId       String?
+  name           String
+  weight         Float
+  conversionBase Float           @default(50)
+  sortOrder      Int             @default(0)
+  subject        Subject         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  parent         GradeCategory?  @relation("GradeCategoryTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children       GradeCategory[] @relation("GradeCategoryTree")
+  assessments    Assessment[]
+
+  @@unique([subjectId, name])
+  @@index([subjectId, parentId, sortOrder])
+}
+
+model Assessment {
+  id                     String        @id @default(cuid())
+  subjectId              String
+  categoryId             String
+  title                  String
+  maxScore               Float
+  weight                 Float?
+  dueDate                DateTime?
+  scheduleOverrideReason String?
+  attendanceType         String?
+  sortOrder              Int           @default(0)
+  createdAt              DateTime      @default(now())
+  subject                Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  category               GradeCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  scores                 Score[]
+  activity               ClassActivity?
+
+  @@index([subjectId, categoryId, sortOrder])
+}
+
+model Score {
+  id           String     @id @default(cuid())
+  enrollmentId String
+  assessmentId String
+  points       Float?
+  remark       String?
+  updatedAt    DateTime   @updatedAt
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, assessmentId])
+}
+
+model AuditEvent {
+  id        String   @id @default(cuid())
+  actorId   String
+  action    String
+  entity    String
+  entityId  String
+  createdAt DateTime @default(now())
+  actor     User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([actorId, createdAt])
+}
+
+model AuthThrottle {
+  key       String   @id
+  attempts  Int      @default(0)
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model EmailChangeToken {
+  id           String    @id @default(cuid())
+  userId       String
+  pendingEmail String
+  tokenHash    String    @unique
+  expiresAt    DateTime
+  usedAt       DateTime?
+  createdAt    DateTime  @default(now())
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model SecurityOtp {
+  id        String    @id @default(cuid())
+  userId    String
+  purpose   String
+  target    String
+  codeHash  String
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, expiresAt])
+}
+
+model EmailVerificationChallenge {
+  id          String    @id
+  bindingHash String
+  codeHash    String
+  attempts    Int       @default(0)
+  expiresAt   DateTime
+  usedAt      DateTime?
+
+  @@index([expiresAt])
+}
+
+enum ClassActivityKind {
+  QUIZ
+  ASSIGNMENT
+  RESOURCE
+  LESSON
+}
+
+enum ClassActivityStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+model BankQuestion {
+  id        String   @id @default(cuid())
+  teacherId String
+  topic     String?
+  prompt    String
+  options   Json
+  answer    Int
+  type      String   @default("MULTIPLE_CHOICE")
+  answerText String?
+  points    Float    @default(1)
+  createdAt DateTime @default(now())
+  teacher   User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@index([teacherId, createdAt])
+  @@index([teacherId, topic, createdAt])
+}
+
+model ClassActivity {
+  id           String              @id @default(cuid())
+  subjectId    String
+  categoryId   String?
+  assessmentId String?             @unique
+  title        String
+  instructions String
+  kind         ClassActivityKind
+  status       ClassActivityStatus @default(DRAFT)
+  maxScore     Float
+  itemWeight   Float?
+  practice     Boolean             @default(false)
+  questions    Json
+  topic        String?
+  materialUrl  String?
+  availableAt DateTime?
+  dueAt        DateTime?
+  timeLimitMinutes Int?
+  attemptsAllowed Int @default(1)
+  gradingMethod String @default("HIGHEST")
+  releaseGrade Boolean @default(true)
+  releaseAnswers Boolean @default(false)
+  lessonPages Json?
+  openedAt     DateTime?
+  createdAt    DateTime            @default(now())
+  subject      Subject             @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  assessment   Assessment?         @relation(fields: [assessmentId], references: [id], onDelete: NoAction)
+  submissions  ActivitySubmission[]
+  quizAttempts QuizAttempt[]
+
+  @@index([subjectId, status, createdAt])
+}
+
+model ActivitySubmission {
+  id           String        @id @default(cuid())
+  activityId   String
+  enrollmentId String
+  answers      Json?
+  text         String?
+  driveUrl     String?
+  files        Json?
+  offline      Boolean       @default(false)
+  points       Float?
+  feedback     String?
+  submittedAt  DateTime      @default(now())
+  gradedAt     DateTime?
+  updatedAt    DateTime      @updatedAt
+  activity     ClassActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  enrollment   Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, enrollmentId])
+  @@index([enrollmentId])
+  @@index([activityId, updatedAt])
+}
+
+model QuizAttempt {
+  id            String        @id @default(cuid())
+  activityId    String
+  enrollmentId  String
+  attemptNumber Int
+  answers       Json?
+  points        Float?
+  manualGrades  Json?
+  feedback      String?
+  startedAt     DateTime      @default(now())
+  submittedAt   DateTime?
+  gradedAt      DateTime?
+  activity      ClassActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  enrollment    Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, enrollmentId, attemptNumber])
+  @@index([activityId, submittedAt])
+  @@index([enrollmentId])
+}
+
+
+enum GoogleChatSyncStatus {
+  PENDING
+  INVITED
+  MEMBER
+  REMOVED
+  FAILED
+}
+
+model GoogleChatConnection {
+  id                    String   @id @default(cuid())
+  schoolId              String
+  teacherId             String
+  googleSubject         String
+  googleEmail           String
+  encryptedAccessToken  String
+  encryptedRefreshToken String
+  accessTokenExpiresAt  DateTime
+  scopes                String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  school                School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacher               User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, teacherId])
+  @@index([schoolId, googleEmail])
+}
+
+model GoogleChatSpace {
+  id                  String   @id @default(cuid())
+  schoolId            String
+  subjectId           String   @unique
+  teacherId           String
+  spaceName           String   @unique
+  spaceUri            String?
+  displayName         String
+  externalUserAllowed Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  school              School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  subject             Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher             User     @relation("GoogleChatSpaceTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, teacherId])
+}
+
+model GoogleChatMembershipSync {
+  id                   String              @id @default(cuid())
+  schoolId             String
+  subjectId            String
+  enrollmentId         String              @unique
+  studentEmail         String
+  googleMembershipName String?
+  status               GoogleChatSyncStatus @default(PENDING)
+  attempts             Int                 @default(0)
+  lastError            String?
+  lastAttemptAt        DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  school               School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  subject              Subject             @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  enrollment           Enrollment          @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, status, updatedAt])
+  @@index([subjectId, status])
+}

@@ -21,4 +21,51 @@
     "test:tenant": "node --test tests/tenant-operations.test.cjs tests/tenant-invitations.test.cjs",
     "test:teacher-signup": "node --test tests/teacher-school-registration.test.cjs",
     "test:identity": "node --test tests/account-identity.test.cjs",
-    "version:fix":¶»§q«^
+    "version:fix": "node scripts/bump-release.mjs fix",
+    "version:feature": "node scripts/bump-release.mjs feature",
+    "version:major": "node scripts/bump-release.mjs major",
+    "test:release": "node --test tests/footer-version.test.cjs",
+    "test:invites": "node --test tests/class-invite-code.test.cjs",
+    "test:theme": "node --test tests/theme-palette.test.cjs",
+    "test:demo": "node --test tests/demo-experience.test.cjs tests/authentic-demo-authorization.test.cjs",
+    "test:department-logo": "node --test tests/department-logo-media.test.cjs",
+    "test:virtual-assistant": "node --test tests/virtual-assistant.test.cjs",
+    "test:activities": "node --experimental-strip-types --test tests/class-activities-engine.test.mjs",
+    "lint": "eslint --max-warnings=0 src/app/api/activities/files/route.ts src/app/api/student/activities src/app/api/teacher/activities src/components/ClassActivities.tsx src/components/ActivityRichEditor.tsx src/lib/class-activities.ts src/lib/activity-feature-flags.ts src/lib/activity-feature-flags.client.ts src/lib/activity-statistics.ts tests/class-activities-engine.test.mjs"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
+    "@tiptap/extension-link": "^3.35.0",
+    "@tiptap/react": "^3.35.0",
+    "@tiptap/starter-kit": "^3.35.0",
+    "@vercel/blob": "^2.8.2",
+    "bcryptjs": "^3.0.2",
+    "bootstrap": "^5.3.8",
+    "jose": "^6.0.10",
+    "next": "16.4.6",
+    "nodemailer": "^10.4.0",
+    "pg": "^8.16.3",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "sanitize-html": "^2.18.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.14.0",
+    "@types/pg": "^8.15.5",
+    "@types/react": "^19.0.12",
+    "@types/react-dom": "^19.0.4",
+    "@types/sanitize-html": "^2.16.2",
+    "dotenv": "^16.4.7",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.4.6",
+    "prisma": "^7.10.1",
+    "typescript": "^5.8.3"
+  },
+  "overrides": {
+    "zod": "$zod",
+    "effect": "3.22.2"
+  }
+}
