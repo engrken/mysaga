@@ -64,9 +64,9 @@ function clamp(value: number, min: number, max: number) {
 }
 
 export default function StudentSpatialExperience({
-  fullName, grades, academicYear, term, pendingAssessments, attendanceAlerts, isDemo
+  userId, fullName, grades, academicYear, term, pendingAssessments, attendanceAlerts, isDemo
 }: {
-  fullName: string; grades: StudentGrade[]; academicYear: string; term: string;
+  userId: string; fullName: string; grades: StudentGrade[]; academicYear: string; term: string;
   pendingAssessments: number; attendanceAlerts: number; isDemo?: boolean;
 }) {
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
@@ -87,15 +87,16 @@ export default function StudentSpatialExperience({
     return total ? Math.round(done / total * 100) : 0;
   }, [grades]);
   const storage = useCallback(() => isDemo ? window.sessionStorage : window.localStorage, [isDemo]);
+  const storageKey = `${STORAGE_KEY}:${userId}`;
 
   useEffect(() => {
-    setSettings(safeSettings(storage().getItem(STORAGE_KEY)));
+    setSettings(safeSettings(storage().getItem(storageKey)));
     setReady(true);
-  }, [storage]);
+  }, [storage, storageKey]);
   useEffect(() => {
     if (!ready) return;
-    storage().setItem(STORAGE_KEY, JSON.stringify(settings));
-  }, [ready, settings, storage]);
+    storage().setItem(storageKey, JSON.stringify(settings));
+  }, [ready, settings, storage, storageKey]);
   useEffect(() => {
     let active = true;
     const params = new URLSearchParams({ academicYear, term });
@@ -109,7 +110,7 @@ export default function StudentSpatialExperience({
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) => setSettings(current => ({ ...current, [key]: value }));
   const reset = () => {
     if (!window.confirm("Reset your Student Portal appearance and panel positions to the original defaults?")) return;
-    storage().removeItem(STORAGE_KEY);
+    storage().removeItem(storageKey);
     setSettings(DEFAULTS);
     setToast("Original layout restored");
     window.setTimeout(() => setToast(""), 2600);
@@ -127,8 +128,8 @@ export default function StudentSpatialExperience({
     const panel = event.currentTarget.closest("aside");
     const width = panel?.getBoundingClientRect().width ?? 320;
     const height = panel?.getBoundingClientRect().height ?? 480;
-    const nextX = clamp(active.originX + event.clientX - active.startX, -window.innerWidth + width + 12, window.innerWidth - width - 12);
-    const nextY = clamp(active.originY + event.clientY - active.startY, -120, window.innerHeight - height - 100);
+    const nextX = clamp(active.originX + event.clientX - active.startX, -window.innerWidth + width + 36, 12);
+    const nextY = clamp(active.originY + event.clientY - active.startY, -128, window.innerHeight - height - 152);
     setSettings(current => ({ ...current, offset: { x: nextX, y: nextY } }));
   };
   const onDragEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -197,7 +198,7 @@ export default function StudentSpatialExperience({
       </div> : <div className={styles.panelBody}>
         <div className={styles.customGroup}><label>Glass appearance</label><div className={styles.choiceRow}><button type="button" aria-pressed={settings.theme === "light"} onClick={() => update("theme", "light")}>Light glass</button><button type="button" aria-pressed={settings.theme === "dark"} onClick={() => update("theme", "dark")}>Smoked dark</button><button type="button" aria-pressed={settings.theme === "classic"} onClick={() => update("theme", "classic")}>Classic</button></div></div>
         <div className={styles.customGroup}><label>Ambient wallpaper</label><select value={settings.wallpaper} onChange={event => update("wallpaper", event.target.value as Settings["wallpaper"])}>{WALLPAPERS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}<option value="custom">Custom image URL</option></select>
-          {settings.wallpaper === "custom" && <input type="url" placeholder="https://example.com/wallpaper.jpg" value={settings.customWallpaper} onChange={event => update("customWallpaper", event.target.value)} />}</div>
+          {settings.wallpaper === "custom" && <input type="url" placeholder="https://example.com/wallpaper.jpg" value={settings.customWallpaper} onChange={event => { const value = event.target.value.trim(); update("customWallpaper", !value || /^https:\/\//i.test(value) ? value : ""); }} />}</div>
         <div className={styles.customGroup}><label>Accent palette</label><div className={styles.swatches}>{Object.entries(ACCENTS).map(([key, item]) => <button key={key} type="button" aria-label={item.label} title={item.label} aria-pressed={settings.accent === key} style={{ background: item.value }} onClick={() => update("accent", key as Settings["accent"])}/>)}</div></div>
         <div className={styles.customGroup}><label>Visible modules</label><label className={styles.check}><input type="checkbox" checked={settings.modules.insights} onChange={event => setSettings(current => ({ ...current, modules: { ...current.modules, insights: event.target.checked } }))}/> Class insights</label><label className={styles.check}><input type="checkbox" checked={settings.modules.courses} onChange={event => setSettings(current => ({ ...current, modules: { ...current.modules, courses: event.target.checked } }))}/> Active courses</label></div>
         <div className={styles.customGroup}><label>Window layout</label><div className={styles.choiceRow}><button type="button" aria-pressed={settings.layout === "snapped"} onClick={() => update("layout", "snapped")}>Snapped grid</button><button type="button" aria-pressed={settings.layout === "freeform"} onClick={() => update("layout", "freeform")}>Freeform drag</button></div></div>
