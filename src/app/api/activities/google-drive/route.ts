@@ -4,15 +4,15 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { activityEnrollmentIdentity, activityHeaders } from "@/lib/class-activities";
 import { activitiesGoogleDriveExploration, normalizeGoogleAccountEmail } from "@/lib/google-drive-activities";
+import { GOOGLE_DRIVE_SCOPE, googleChatAccessToken } from "@/lib/google-chat";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 const GOOGLE_JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
 const identitySchema = z.object({
   subjectId: z.string().trim().min(1).max(128),
-  mode: z.enum(["identity", "picker"]),
-  credential: z.string().min(100).max(12000),
-  accessToken: z.string().min(20).max(8192).optional()
+  mode: z.literal("identity"),
+  credential: z.string().min(100).max(12000)
 });
 const reply = (body: unknown, status = 200) =>
   NextResponse.json(body, { status, headers: activityHeaders });
@@ -76,14 +76,47 @@ export async function GET(request: Request) {
 
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   if (!clientId) return error("Google Sign-In is not configured yet.", 503);
-  if (mode === "open") return reply({ clientId });
+
+  if (mode === "open") {
+    const identityVerified = user.authProvider === "GOOGLE" &&
+      Boolean(user.googleSubject) &&
+      normalizeGoogleAccountEmail(user.googleEmail || "") === normalizeGoogleAccountEmail(user.email);
+    return reply({ clientId, identityVerified, email: identityVerified ? user.email : null });
+  }
 
   const apiKey = process.env.GOOGLE_DRIVE_API_KEY?.trim();
   const appId = process.env.GOOGLE_DRIVE_APP_ID?.trim();
   if (!apiKey || !appId) {
     return error("The Google Drive Picker still needs its restricted API key and Google Cloud project number.", 503);
   }
-  return reply({ clientId, apiKey, appId });
+
+  const connection = await prisma.googleChatConnection.findUnique({
+    where: { schoolId_teacherId: { schoolId: user.schoolId, teacherId: user.id } }
+  });
+  if (!connection) {
+    return error("Sign in to SAGA using the Google account registered to your teacher profile to enable Drive and Chat.", 409, "GOOGLE_SERVICES_NOT_CONNECTED");
+  }
+  const portalEmail = normalizeGoogleAccountEmail(user.email);
+  if (normalizeGoogleAccountEmail(connection.googleEmail) !== portalEmail ||
+      (user.authProvider === "GOOGLE" && user.googleSubject !== connection.googleSubject)) {
+    return error("Your saved Google services connection uses a different account. Reconnect using the same Google account you use for SAGA Portal.", 403, "GOOGLE_ACCOUNT_MISMATCH");
+  }
+
+  const grantedScopes = new Set(connection.scopes.split(/\\s+/).filter(Boolean));
+  if (!grantedScopes.has(GOOGLE_DRIVE_SCOPE)) {
+    return error("Google Drive permission is not enabled yet. Use Reconnect Google services in the class Chat settings.", 409, "GOOGLE_DRIVE_SCOPE_MISSING");
+  }
+
+  if (params.get("action") === "token") {
+    try {
+      const accessToken = await googleChatAccessToken(connection);
+      return reply({ accessToken });
+    } catch {
+      return error("Your Google services connection expired or was revoked. Reconnect Google Drive & Chat from the class Chat settings.", 409);
+    }
+  }
+
+  return reply({ clientId, apiKey, appId, identityVerified: true, email: connection.googleEmail });
 }
 
 export async function POST(request: Request) {
@@ -96,10 +129,7 @@ export async function POST(request: Request) {
   const parsed = identitySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return error("The Google sign-in response was incomplete.");
   const input = parsed.data;
-  if (input.mode === "picker" && user.role !== "TEACHER") {
-    return error("Only the assigned subject teacher can select Drive material for this class.", 403);
-  }
-  if (input.mode === "picker" && !input.accessToken) return error("Google Drive access was not granted.", 400);
+  if (user.role !== "STUDENT") return error("Use SAGA's Google sign-in to connect teacher Drive and Chat services.", 403);
   if (!await authorizedSubject(user, input.subjectId)) {
     return error("This class is not available to your SAGA account.", 404);
   }
@@ -127,25 +157,7 @@ export async function POST(request: Request) {
   const googleEmail = normalizeGoogleAccountEmail(identity.email);
   const portalEmail = normalizeGoogleAccountEmail(user.email);
   if (googleEmail !== portalEmail) {
-    const mismatchMessage = user.role === "STUDENT"
-      ? "The Google account you selected does not match the email registered in your SAGA Portal student account. Choose the correct Google account. If your registered email needs to be corrected, please contact your subject teacher."
-      : "The Google account you selected does not match the email registered in your SAGA Portal teacher account. Choose your registered Google account.";
-    return error(mismatchMessage, 403, "GOOGLE_EMAIL_MISMATCH");
-  }
-
-  if (input.mode === "picker") {
-    const userInfoResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
-      headers: { Authorization: "Bearer " + input.accessToken },
-      cache: "no-store"
-    });
-    const userInfo = await userInfoResponse.json().catch(() => null) as null | {
-      sub?: string; email?: string; email_verified?: boolean
-    };
-    if (!userInfoResponse.ok || !userInfo?.sub || userInfo.sub !== identity.sub ||
-        !userInfo.email || userInfo.email_verified !== true ||
-        normalizeGoogleAccountEmail(userInfo.email) !== portalEmail) {
-      return error("Google Drive access must use the same verified Google account as your SAGA teacher account.", 403, "GOOGLE_EMAIL_MISMATCH");
-    }
+    return error("The Google account you selected does not match the email registered in your SAGA Portal student account. Choose the correct Google account. If your registered email needs to be corrected, please contact your subject teacher.", 403, "GOOGLE_EMAIL_MISMATCH");
   }
 
   return reply({ verified: true, email: googleEmail });
