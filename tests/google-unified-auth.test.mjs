@@ -108,3 +108,34 @@ test("unified Google sign-in does not enable Activity publishing or submission w
   assert.match(env, /SAGA_ACTIVITIES_STUDENT_WRITE=false/);
   assert.match(server, /SAGA_ACTIVITIES_PUBLISH_ENABLED === "true"/);
 });
+
+test("unified sign-in uses its own same-origin callback while legacy Chat keeps its configured callback", () => {
+  const auth = read("src/lib/google-auth.ts");
+  const chat = read("src/lib/google-chat.ts");
+  const env = read(".env.example");
+  assert.match(auth, /GOOGLE_SSO_REDIRECT_URI/);
+  assert.match(chat, /redirectUri\?: string/);
+  assert.match(chat, /redirectUri,\s*purpose: "google-chat-oauth"/);
+  assert.match(chat, /typeof payload\.redirectUri === "string" \? payload\.redirectUri : requiredEnv\("GOOGLE_REDIRECT_URI"\)/);
+  assert.match(env, /GOOGLE_REDIRECT_URI=/);
+  assert.match(env, /GOOGLE_SSO_REDIRECT_URI=/);
+});
+
+test("Chat service tokens cannot be used with a different SAGA email or Google subject", () => {
+  const chat = read("src/lib/google-chat.ts");
+  const routes = [
+    read("src/app/api/teacher/google-chat/spaces/route.ts"),
+    read("src/app/api/teacher/google-chat/subjects/[subjectId]/space/route.ts"),
+    read("src/app/api/teacher/google-chat/subjects/[subjectId]/announcements/route.ts"),
+    read("src/app/api/teacher/google-chat/subjects/[subjectId]/sync/route.ts")
+  ].join("\\n");
+  assert.match(chat, /connection\.googleEmail\.trim\(\)\.toLowerCase\(\) !== user\.email\.trim\(\)\.toLowerCase\(\)/);
+  assert.match(chat, /user\.authProvider === "GOOGLE" && connection\.googleSubject !== user\.googleSubject/);
+  assert.equal((routes.match(/googleConnectionMatchesSAGAAccount\(connection, teacher\)/g) || []).length, 4);
+});
+
+test("refresh tokens are never reused when a teacher changes their Google identity", () => {
+  const chat = read("src/lib/google-chat.ts");
+  assert.match(chat, /sameExistingGoogleAccount = existingConnection\?\.googleSubject === identity\.sub/);
+  assert.match(chat, /if \(!tokens\.refresh_token && !sameExistingGoogleAccount\)/);
+});
