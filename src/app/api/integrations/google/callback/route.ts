@@ -29,6 +29,14 @@ export async function GET(request: Request) {
     await clearGoogleSignInCookies();
     return NextResponse.redirect(new URL("/login?googleError=invalid-state", url.origin));
   }
+  const expectedCallback = new URL("/api/integrations/google/callback", url.origin).toString();
+  if (
+    (statePayload.purpose === "google-login" && statePayload.redirectUri !== expectedCallback) ||
+    (typeof statePayload.redirectUri === "string" && statePayload.redirectUri !== expectedCallback)
+  ) {
+    await clearGoogleSignInCookies();
+    return NextResponse.redirect(new URL("/login?googleError=invalid-state", url.origin));
+  }
 
   if (providerError || !code) {
     if (statePayload.purpose === "google-login") {
