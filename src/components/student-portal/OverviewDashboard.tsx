@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { StudentGradeSummary, StudentPortalPreferences } from "./types";
-import { STUDENT_PORTAL_ACCENTS, STUDENT_PORTAL_DEFAULTS } from "./types";
+import { STUDENT_PORTAL_ACCENTS } from "./types";
 import DraggableGlassWindow from "./DraggableGlassWindow";
 import PortalCustomizer from "./PortalCustomizer";
 import ClassInsightsPanel, { scheduleLabel } from "./ClassInsightsPanel";
