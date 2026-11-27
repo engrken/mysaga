@@ -18,6 +18,12 @@ enum GradeStatus {
   VERIFIED
 }
 
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 enum SchoolPlan {
   FREE
   PREMIUM
@@ -68,6 +74,7 @@ model School {
   googleChatConnections GoogleChatConnection[]
   googleChatSpaces      GoogleChatSpace[]
   googleChatMemberships GoogleChatMembershipSync[]
+  announcements         Announcement[]
 }
 
 model TenantPayment {
@@ -127,6 +134,8 @@ model User {
   sentTenantInvitations   TenantInvitation[]
   googleChatConnections   GoogleChatConnection[]
   googleChatSpaces        GoogleChatSpace[] @relation("GoogleChatSpaceTeacher")
+  authoredAnnouncements   Announcement[] @relation("AnnouncementAuthor")
+  announcementReads       AnnouncementRead[] @relation("StudentAnnouncementReads")
 
   @@unique([schoolId, email])
   @@unique([schoolId, studentNumber])
@@ -233,6 +242,7 @@ model Subject {
   activities   ClassActivity[]
   googleChatSpace GoogleChatSpace?
   googleChatMemberships GoogleChatMembershipSync[]
+  announcements         Announcement[]
 
   @@unique([schoolId, classId])
   @@index([schoolId, teacherId, academicYear, term])
@@ -610,4 +620,40 @@ model GoogleChatMembershipSync {
 
   @@index([schoolId, status, updatedAt])
   @@index([subjectId, status])
+}
+
+
+model Announcement {
+  id        String             @id @default(cuid())
+  schoolId  String
+  subjectId String
+  authorId  String
+  title     String
+  body      String
+  status    AnnouncementStatus @default(DRAFT)
+  isPinned  Boolean            @default(false)
+  publishAt DateTime?
+  expiresAt DateTime?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  school    School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  subject   Subject            @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  author    User               @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  reads     AnnouncementRead[]
+
+  @@index([schoolId, status, publishAt])
+  @@index([subjectId, status, isPinned, publishAt])
+  @@index([authorId, createdAt])
+}
+
+model AnnouncementRead {
+  id             String       @id @default(cuid())
+  announcementId String
+  studentId      String
+  readAt         DateTime     @default(now())
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  student        User         @relation("StudentAnnouncementReads", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, studentId])
+  @@index([studentId, readAt])
 }

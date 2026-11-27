@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.15.0-beta.1",
+    "date": "2026-11-27",
+    "kind": "feature",
+    "changes": [
+      "Added a standalone class bulletin board: teachers can draft, publish, schedule, pin, expire, edit, and archive formal class announcements from each class workspace.",
+      "Added a compiled student Announcements feed gathering currently published notices from all enrolled classes, with class filters and per-student read receipts.",
+      "Kept SAGA Announcements independent from Google Chat, which remains the separate real-time classroom messaging integration."
+    ]
+  },
+  {
     "version": "0.14.0-beta.3",
     "date": "2026-11-26",
     "kind": "improvement",
