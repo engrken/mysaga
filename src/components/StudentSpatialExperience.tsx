@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import styles from "./StudentSpatialExperience.module.css";
 
+type StudentSchedule = { id: string; code: string; title: string; term: string; academicYear: string; schedule: string | null };
+type ScheduleItem = { day?: string; startTime?: string; endTime?: string };
 type StudentGrade = {
   id: string; code: string; title: string; teacher: string;
   status: "DRAFT" | "SUBMITTED" | "VERIFIED";
@@ -62,15 +64,16 @@ function clamp(value: number, min: number, max: number) {
 }
 
 export default function StudentSpatialExperience({
-  fullName, grades, pendingAssessments, attendanceAlerts, isDemo
+  fullName, grades, academicYear, term, pendingAssessments, attendanceAlerts, isDemo
 }: {
-  fullName: string; grades: StudentGrade[];
+  fullName: string; grades: StudentGrade[]; academicYear: string; term: string;
   pendingAssessments: number; attendanceAlerts: number; isDemo?: boolean;
 }) {
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   const [ready, setReady] = useState(false);
   const [panelView, setPanelView] = useState<"checklist" | "customize">("checklist");
   const [toast, setToast] = useState("");
+  const [schedule, setSchedule] = useState<StudentSchedule[]>([]);
   const [zIndex, setZIndex] = useState(30);
   const drag = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
   const stageRef = useRef<HTMLElement>(null);
@@ -93,6 +96,15 @@ export default function StudentSpatialExperience({
     if (!ready) return;
     storage().setItem(STORAGE_KEY, JSON.stringify(settings));
   }, [ready, settings, storage]);
+  useEffect(() => {
+    let active = true;
+    const params = new URLSearchParams({ academicYear, term });
+    fetch(`/api/student/classes?${params.toString()}`, { cache: "no-store" })
+      .then(response => response.ok ? response.json() : null)
+      .then(data => { if (active && Array.isArray(data?.classes)) setSchedule(data.classes as StudentSchedule[]); })
+      .catch(() => { if (active) setSchedule([]); });
+    return () => { active = false; };
+  }, [academicYear, term]);
 
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) => setSettings(current => ({ ...current, [key]: value }));
   const reset = () => {
@@ -163,9 +175,13 @@ export default function StudentSpatialExperience({
     </div>}
 
     {settings.modules.courses && <section className={styles.glassCard + " " + styles.activeCourses}>
-      <div className={styles.sectionHead}><div><span className={styles.kicker}>YOUR WEEKLY WORKSPACE</span><h3>Active courses</h3><p>Open a class to review announcements, activities, and grades.</p></div><span className={styles.chartBadge}>{grades.length} ENROLLED</span></div>
-      <div className={styles.activeCourseGrid}>{grades.slice(0, 4).map(grade => <article key={grade.id}><span>{grade.code}</span><strong>{grade.title}</strong><small>{grade.teacher} · {grade.term}</small><b>{grade.finalGrade ?? "Grade pending"}</b></article>)}</div>
-      {!grades.length && <div className={styles.empty}>No active courses are available for this academic period.</div>}
+      <div className={styles.sectionHead}><div><span className={styles.kicker}>YOUR WEEKLY WORKSPACE</span><h3>Weekly class schedule</h3><p>Your enrolled classes and the meeting times published by your instructors.</p></div><span className={styles.chartBadge}>{grades.length} ENROLLED</span></div>
+      <div className={styles.activeCourseGrid}>{schedule.slice(0, 8).map(item => {
+        let meetings: ScheduleItem[] = [];
+        try { const parsed = item.schedule ? JSON.parse(item.schedule) : []; meetings = Array.isArray(parsed) ? parsed : []; } catch { meetings = []; }
+        return <article key={item.id}><span>{item.code}</span><strong>{item.title}</strong>{meetings.length ? meetings.map((meeting, index) => <small key={`${item.id}-${index}`}>{meeting.day || "Schedule"} · {meeting.startTime || "Time TBA"}{meeting.endTime ? `–${meeting.endTime}` : ""}</small>) : <small>Meeting schedule not published</small>}<b>{item.term} · {item.academicYear}</b></article>;
+      })}</div>
+      {!schedule.length && <div className={styles.empty}>No active courses are available for this academic period.</div>}
     </section>}
 
     <aside className={styles.floatingPanel} onMouseDown={() => setZIndex(value => value + 1)} style={{ zIndex, transform: `translate3d(${settings.offset.x}px,${settings.offset.y}px,0)` }} hidden={settings.minimized}>
