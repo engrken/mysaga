@@ -38,7 +38,7 @@ export async function POST(request: Request, context: Context) {
   if (!connection || !googleConnectionMatchesSAGAAccount(connection, teacher)) {
     return NextResponse.json({ error: "Connect the Google account that matches your SAGA teacher profile." }, { status: 409 });
   }
-  const grantedScopes = new Set(connection.scopes.split(/\\s+/).filter(Boolean));
+  const grantedScopes = new Set(connection.scopes.split(/\s+/).filter(Boolean));
   if (!GOOGLE_CHAT_SCOPES.every(scope => grantedScopes.has(scope))) {
     return NextResponse.json({ error: "Reconnect Google services and approve the required Chat permissions." }, { status: 409 });
   }
