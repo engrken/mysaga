@@ -10,12 +10,16 @@ type Props = {
   files?: Array<{ url: string; label: string }>;
   onPicked?: (file: { url: string; name: string }) => void;
 };
-type Config = { clientId: string; apiKey?: string; appId?: string };
+type Config = {
+  clientId: string;
+  apiKey?: string;
+  appId?: string;
+  identityVerified?: boolean;
+  email?: string | null;
+};
 type CredentialResponse = { credential?: string };
-type TokenResponse = { access_token?: string; error?: string };
 type PickerDocument = { id?: string; name?: string; url?: string };
 type PickerData = { action?: string; docs?: PickerDocument[] };
-type TokenClient = { requestAccessToken: (options?: { prompt?: string }) => void };
 type PickerBuilder = {
   addView: (view: string) => PickerBuilder;
   setOAuthToken: (token: string) => PickerBuilder;
@@ -28,11 +32,13 @@ type PickerBuilder = {
 type GoogleNamespace = {
   accounts: {
     id: {
-      initialize: (options: { client_id: string; callback: (response: CredentialResponse) => void; auto_select?: boolean; cancel_on_tap_outside?: boolean }) => void;
+      initialize: (options: {
+        client_id: string;
+        callback: (response: CredentialResponse) => void;
+        auto_select?: boolean;
+        cancel_on_tap_outside?: boolean;
+      }) => void;
       renderButton: (element: HTMLElement, options: Record<string, string | number | boolean>) => void;
-    };
-    oauth2: {
-      initTokenClient: (options: { client_id: string; scope: string; callback: (response: TokenResponse) => void; error_callback?: (error: { type?: string; message?: string }) => void }) => TokenClient;
     };
   };
   picker?: {
@@ -77,7 +83,6 @@ export function ActivityGoogleDrive({ subjectId, mode, fileUrl, files = [], onPi
   const [config, setConfig] = useState<Config | null>(null);
   const [scriptsReady, setScriptsReady] = useState(false);
   const [verifiedEmail, setVerifiedEmail] = useState("");
-  const [credential, setCredential] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -85,14 +90,21 @@ export function ActivityGoogleDrive({ subjectId, mode, fileUrl, files = [], onPi
 
   useEffect(() => {
     let active = true;
+    setConfig(null);
+    setScriptsReady(false);
+    setVerifiedEmail("");
+    setError("");
     fetch("/api/activities/google-drive?mode=" + mode + "&subjectId=" + encodeURIComponent(subjectId), { cache: "no-store" })
       .then(async response => {
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Google Drive is not configured.");
-        if (active) setConfig(data as Config);
+        if (!response.ok) throw new Error(data.error || "Google services are not configured.");
+        if (active) {
+          setConfig(data as Config);
+          if (data.identityVerified && data.email) setVerifiedEmail(String(data.email));
+        }
       })
       .catch(reason => {
-        if (active) setError(reason instanceof Error ? reason.message : "Google Drive is not configured.");
+        if (active) setError(reason instanceof Error ? reason.message : "Google services are not configured.");
       });
     return () => { active = false; };
   }, [mode, subjectId]);
@@ -102,12 +114,13 @@ export function ActivityGoogleDrive({ subjectId, mode, fileUrl, files = [], onPi
     let active = true;
     void (async () => {
       try {
-        await loadScript("saga-google-identity-services", "https://accounts.google.com/gsi/client");
         if (mode === "picker") {
           await loadScript("saga-google-api-client", "https://apis.google.com/js/api.js");
           const gapi = (window as BrowserWindow).gapi;
           if (!gapi) throw new Error("Google Picker could not be initialized.");
           await new Promise<void>(resolve => gapi.load("picker", resolve));
+        } else if (!config.identityVerified) {
+          await loadScript("saga-google-identity-services", "https://accounts.google.com/gsi/client");
         }
         if (active) setScriptsReady(true);
       } catch (reason) {
@@ -130,11 +143,9 @@ export function ActivityGoogleDrive({ subjectId, mode, fileUrl, files = [], onPi
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Google sign-in could not be verified.");
-      setCredential(googleCredential);
       setVerifiedEmail(String(data.email || ""));
       setNotice("Your Google account matches your SAGA Portal email.");
     } catch (reason) {
-      setCredential("");
       setVerifiedEmail("");
       setError(reason instanceof Error ? reason.message : "Google sign-in could not be verified.");
     } finally {
@@ -143,9 +154,12 @@ export function ActivityGoogleDrive({ subjectId, mode, fileUrl, files = [], onPi
   }, [subjectId]);
 
   useEffect(() => {
-    if (!config || !scriptsReady || !signInMount.current) return;
+    if (mode !== "open" || config?.identityVerified || !config || !scriptsReady || !signInMount.current) return;
     const google = (window as BrowserWindow).google;
-    if (!google) return;
+    if (!google) {
+      setError("Google Sign-In could not be initialized. Refresh the page and try again.");
+      return;
+    }
     google.accounts.id.initialize({
       client_id: config.clientId,
       auto_select: false,
@@ -163,77 +177,56 @@ export function ActivityGoogleDrive({ subjectId, mode, fileUrl, files = [], onPi
       text: "continue_with",
       width: 250
     });
-  }, [config, scriptsReady, verifyIdentity]);
+  }, [config, mode, scriptsReady, verifyIdentity]);
 
   async function chooseFromDrive() {
-    if (!config?.apiKey || !config.appId || !credential || busy) return;
+    if (!config?.apiKey || !config.appId || busy) return;
     const google = (window as BrowserWindow).google;
-    if (!google?.accounts?.oauth2 || !google.picker) {
+    if (!google?.picker) {
       setError("Google Picker is not ready. Refresh the page and try again.");
       return;
     }
     setBusy(true);
     setError("");
     setNotice("Connecting to Google Drive…");
-    const tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: config.clientId,
-      scope: "openid email https://www.googleapis.com/auth/drive.file",
-      callback: async token => {
-        if (!token.access_token) {
-          setBusy(false);
-          setError(token.error || "Google Drive access was not granted.");
-          setNotice("");
-          return;
-        }
-        try {
-          const response = await fetch("/api/activities/google-drive", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              subjectId,
-              mode: "picker",
-              credential,
-              accessToken: token.access_token
-            }),
-            cache: "no-store"
-          });
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.error || "Google Drive access could not be verified.");
-          const picker = new google.picker!.PickerBuilder()
-            .addView(google.picker!.ViewId.DOCS)
-            .setOAuthToken(token.access_token!)
-            .setDeveloperKey(config.apiKey!)
-            .setAppId(config.appId!)
-            .setTitle("Choose an Activity Material")
-            .setCallback(result => {
-              if (result.action !== google.picker!.Action.PICKED || !result.docs?.length) return;
-              const doc = result.docs[0];
-              if (!doc.id) {
-                setError("Google Drive did not return a file ID. Please select another file.");
-                return;
-              }
-              const url = doc.url && validDriveUrl(doc.url)
-                ? doc.url
-                : "https://drive.google.com/open?id=" + encodeURIComponent(doc.id);
-              onPicked?.({ url, name: doc.name || "Google Drive file" });
-              setNotice("Selected " + (doc.name || "Google Drive file") + ". Remember to give enrolled students viewing permission in Google Drive.");
-              setError("");
-            })
-            .build();
-          picker.setVisible(true);
-        } catch (reason) {
-          setError(reason instanceof Error ? reason.message : "Google Drive could not be opened.");
-        } finally {
-          setBusy(false);
-        }
-      },
-      error_callback: error => {
-        setBusy(false);
-        setNotice("");
-        setError(error.message || "Google Drive access was not granted.");
+    try {
+      const tokenResponse = await fetch(
+        "/api/activities/google-drive?mode=picker&action=token&subjectId=" + encodeURIComponent(subjectId),
+        { cache: "no-store" }
+      );
+      const tokenData = await tokenResponse.json();
+      if (!tokenResponse.ok || !tokenData.accessToken) {
+        throw new Error(tokenData.error || "Your Google Drive connection needs to be refreshed.");
       }
-    });
-    tokenClient.requestAccessToken({ prompt: "select_account" });
+      const picker = new google.picker.PickerBuilder()
+        .addView(google.picker.ViewId.DOCS)
+        .setOAuthToken(String(tokenData.accessToken))
+        .setDeveloperKey(config.apiKey)
+        .setAppId(config.appId)
+        .setTitle("Choose an Activity Material")
+        .setCallback(result => {
+          if (result.action !== google.picker!.Action.PICKED || !result.docs?.length) return;
+          const doc = result.docs[0];
+          if (!doc.id) {
+            setError("Google Drive did not return a file ID. Please select another file.");
+            return;
+          }
+          const url = doc.url && validDriveUrl(doc.url)
+            ? doc.url
+            : "https://drive.google.com/open?id=" + encodeURIComponent(doc.id);
+          onPicked?.({ url, name: doc.name || "Google Drive file" });
+          setNotice("Selected " + (doc.name || "Google Drive file") + ". Remember to give enrolled students viewing permission in Google Drive.");
+          setError("");
+        })
+        .build();
+      picker.setVisible(true);
+      setNotice("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Google Drive could not be opened.");
+      setNotice("");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function openDriveFile(url: string) {
@@ -247,23 +240,29 @@ export function ActivityGoogleDrive({ subjectId, mode, fileUrl, files = [], onPi
   }
 
   return <div className="d-grid gap-2">
-    {!verifiedEmail
-      ? <div>
-          <div ref={signInMount} aria-label="Sign in with Google"/>
-          {busy && <small className="text-secondary" role="status">Checking that your Google email matches your SAGA account…</small>}
+    {mode === "picker" ? (
+      <div className="d-flex flex-wrap align-items-center gap-2">
+        {verifiedEmail && <span className="badge text-bg-success">Google services connected · {verifiedEmail}</span>}
+        <button type="button" className="btn btn-sm btn-outline-primary"
+          disabled={busy || !scriptsReady || !verifiedEmail} onClick={() => void chooseFromDrive()}>
+          {busy ? "Connecting…" : "Select from Google Drive"}
+        </button>
+      </div>
+    ) : verifiedEmail ? (
+      <div className="d-flex flex-wrap align-items-center gap-2">
+        <span className="badge text-bg-success">Google account verified · {verifiedEmail}</span>
+        <div className="d-flex flex-wrap gap-2">
+          {(files.length ? files : fileUrl ? [{ url: fileUrl, label: "Open in Google Drive" }] : [])
+            .map(item => <button key={item.url} type="button" className="btn btn-sm btn-outline-primary"
+              onClick={() => openDriveFile(item.url)}>{item.label}</button>)}
         </div>
-      : <div className="d-flex flex-wrap align-items-center gap-2">
-          <span className="badge text-bg-success">Google account verified · {verifiedEmail}</span>
-          {mode === "open"
-            ? <div className="d-flex flex-wrap gap-2">
-                {(files.length ? files : fileUrl ? [{ url: fileUrl, label: "Open in Google Drive" }] : [])
-                  .map(item => <button key={item.url} type="button" className="btn btn-sm btn-outline-primary"
-                    onClick={() => openDriveFile(item.url)}>{item.label}</button>)}
-              </div>
-            : <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy || !scriptsReady} onClick={() => void chooseFromDrive()}>
-                {busy ? "Connecting…" : "Select from Google Drive"}
-              </button>}
-        </div>}
+      </div>
+    ) : (
+      <div>
+        <div ref={signInMount} aria-label="Verify Google account for Drive access"/>
+        {busy && <small className="text-secondary" role="status">Checking that your Google email matches your SAGA account…</small>}
+      </div>
+    )}
     {notice && <p className="small text-success mb-0" role="status">{notice}</p>}
     {error && <p className="alert alert-danger small mb-0" role="alert">{error}</p>}
   </div>;
