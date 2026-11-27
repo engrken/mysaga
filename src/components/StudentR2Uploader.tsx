@@ -74,6 +74,8 @@ export function StudentR2Uploader({ assignmentId, disabled = false, onSubmitted 
       file
     }));
     setFiles(current => [...current, ...additions]);
+    setStage("idle");
+    setStatusText("");
     setError("");
     setSuccess(false);
   }
@@ -85,6 +87,8 @@ export function StudentR2Uploader({ assignmentId, disabled = false, onSubmitted 
       delete next[id];
       return next;
     });
+    setStage("idle");
+    setStatusText("");
     setError("");
     setSuccess(false);
   }
@@ -168,7 +172,13 @@ export function StudentR2Uploader({ assignmentId, disabled = false, onSubmitted 
   return <form className="d-grid gap-3" onSubmit={submit}>
     <label>Text response (optional)
       <textarea className="form-control" maxLength={12000} rows={4} value={text}
-        onChange={event => setText(event.target.value)} disabled={disabled || busy}/>
+        onChange={event => {
+          setText(event.target.value);
+          setStage("idle");
+          setStatusText("");
+          setSuccess(false);
+          setError("");
+        }} disabled={disabled || busy}/>
     </label>
 
     <div>
@@ -225,7 +235,13 @@ export function StudentR2Uploader({ assignmentId, disabled = false, onSubmitted 
               autoComplete="url" aria-describedby={"drive-upload-help-" + id}
               placeholder="https://drive.google.com/file/d/…"
               value={driveLink}
-              onChange={event => setDriveLinks(current => ({ ...current, [id]: event.target.value }))}
+              onChange={event => {
+                setDriveLinks(current => ({ ...current, [id]: event.target.value }));
+                setStage("idle");
+                setStatusText("");
+                setSuccess(false);
+                setError("");
+              }}
               disabled={disabled || busy}/>
             {invalidDriveLink
               ? <small className="text-danger d-block mt-1">Paste a direct file link from Google Drive or Google Docs, not a folder or My Drive page.</small>
