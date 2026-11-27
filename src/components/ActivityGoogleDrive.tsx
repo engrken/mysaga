@@ -17,6 +17,7 @@ type Config = {
   identityVerified?: boolean;
   email?: string | null;
 };
+type ScopedValue<T> = { key: string; value: T };
 type CredentialResponse = { credential?: string };
 type PickerDocument = { id?: string; name?: string; url?: string };
 type PickerData = { action?: string; docs?: PickerDocument[] };
@@ -80,34 +81,46 @@ function validDriveUrl(value: string) {
 }
 
 export function ActivityGoogleDrive({ subjectId, mode, fileUrl, files = [], onPicked }: Props) {
-  const [config, setConfig] = useState<Config | null>(null);
-  const [scriptsReady, setScriptsReady] = useState(false);
-  const [verifiedEmail, setVerifiedEmail] = useState("");
+  const requestKey = mode + ":" + subjectId;
+  const [configState, setConfigState] = useState<ScopedValue<Config> | null>(null);
+  const [scriptsReadyKey, setScriptsReadyKey] = useState("");
+  const [verifiedEmailState, setVerifiedEmailState] = useState<ScopedValue<string> | null>(null);
+  const [errorState, setErrorState] = useState<ScopedValue<string> | null>(null);
+  const [noticeState, setNoticeState] = useState<ScopedValue<string> | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
   const signInMount = useRef<HTMLDivElement>(null);
+
+  const config = configState?.key === requestKey ? configState.value : null;
+  const scriptsReady = scriptsReadyKey === requestKey;
+  const verifiedEmail = verifiedEmailState?.key === requestKey ? verifiedEmailState.value : "";
+  const error = errorState?.key === requestKey ? errorState.value : "";
+  const notice = noticeState?.key === requestKey ? noticeState.value : "";
 
   useEffect(() => {
     let active = true;
-    setConfig(null);
-    setScriptsReady(false);
-    setVerifiedEmail("");
-    setError("");
     fetch("/api/activities/google-drive?mode=" + mode + "&subjectId=" + encodeURIComponent(subjectId), { cache: "no-store" })
       .then(async response => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Google services are not configured.");
-        if (active) {
-          setConfig(data as Config);
-          if (data.identityVerified && data.email) setVerifiedEmail(String(data.email));
+        if (!active) return;
+        setConfigState({ key: requestKey, value: data as Config });
+        setErrorState({ key: requestKey, value: "" });
+        if (data.identityVerified && data.email) {
+          setVerifiedEmailState({ key: requestKey, value: String(data.email) });
+        } else {
+          setVerifiedEmailState({ key: requestKey, value: "" });
         }
       })
       .catch(reason => {
-        if (active) setError(reason instanceof Error ? reason.message : "Google services are not configured.");
+        if (active) {
+          setErrorState({
+            key: requestKey,
+            value: reason instanceof Error ? reason.message : "Google services are not configured."
+          });
+        }
       });
     return () => { active = false; };
-  }, [mode, subjectId]);
+  }, [mode, requestKey, subjectId]);
 
   useEffect(() => {
     if (!config) return;
@@ -121,19 +134,27 @@ export function ActivityGoogleDrive({ subjectId, mode, fileUrl, files = [], onPi
           await new Promise<void>(resolve => gapi.load("picker", resolve));
         } else if (!config.identityVerified) {
           await loadScript("saga-google-identity-services", "https://accounts.google.com/gsi/client");
+          if (!(window as BrowserWindow).google) {
+            throw new Error("Google Sign-In could not be initialized. Refresh the page and try again.");
+          }
         }
-        if (active) setScriptsReady(true);
+        if (active) setScriptsReadyKey(requestKey);
       } catch (reason) {
-        if (active) setError(reason instanceof Error ? reason.message : "Google's sign-in tools could not be loaded.");
+        if (active) {
+          setErrorState({
+            key: requestKey,
+            value: reason instanceof Error ? reason.message : "Google's sign-in tools could not be loaded."
+          });
+        }
       }
     })();
     return () => { active = false; };
-  }, [config, mode]);
+  }, [config, mode, requestKey]);
 
   const verifyIdentity = useCallback(async (googleCredential: string) => {
     setBusy(true);
-    setError("");
-    setNotice("");
+    setErrorState({ key: requestKey, value: "" });
+    setNoticeState({ key: requestKey, value: "" });
     try {
       const response = await fetch("/api/activities/google-drive", {
         method: "POST",
@@ -143,30 +164,30 @@ export function ActivityGoogleDrive({ subjectId, mode, fileUrl, files = [], onPi
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Google sign-in could not be verified.");
-      setVerifiedEmail(String(data.email || ""));
-      setNotice("Your Google account matches your SAGA Portal email.");
+      setVerifiedEmailState({ key: requestKey, value: String(data.email || "") });
+      setNoticeState({ key: requestKey, value: "Your Google account matches your SAGA Portal email." });
     } catch (reason) {
-      setVerifiedEmail("");
-      setError(reason instanceof Error ? reason.message : "Google sign-in could not be verified.");
+      setVerifiedEmailState({ key: requestKey, value: "" });
+      setErrorState({
+        key: requestKey,
+        value: reason instanceof Error ? reason.message : "Google sign-in could not be verified."
+      });
     } finally {
       setBusy(false);
     }
-  }, [subjectId]);
+  }, [requestKey, subjectId]);
 
   useEffect(() => {
     if (mode !== "open" || config?.identityVerified || !config || !scriptsReady || !signInMount.current) return;
     const google = (window as BrowserWindow).google;
-    if (!google) {
-      setError("Google Sign-In could not be initialized. Refresh the page and try again.");
-      return;
-    }
+    if (!google) return;
     google.accounts.id.initialize({
       client_id: config.clientId,
       auto_select: false,
       cancel_on_tap_outside: true,
       callback: response => {
         if (response.credential) void verifyIdentity(response.credential);
-        else setError("Google did not return a sign-in credential. Please try again.");
+        else setErrorState({ key: requestKey, value: "Google did not return a sign-in credential. Please try again." });
       }
     });
     signInMount.current.replaceChildren();
@@ -177,18 +198,18 @@ export function ActivityGoogleDrive({ subjectId, mode, fileUrl, files = [], onPi
       text: "continue_with",
       width: 250
     });
-  }, [config, mode, scriptsReady, verifyIdentity]);
+  }, [config, mode, requestKey, scriptsReady, verifyIdentity]);
 
   async function chooseFromDrive() {
     if (!config?.apiKey || !config.appId || busy) return;
     const google = (window as BrowserWindow).google;
     if (!google?.picker) {
-      setError("Google Picker is not ready. Refresh the page and try again.");
+      setErrorState({ key: requestKey, value: "Google Picker is not ready. Refresh the page and try again." });
       return;
     }
     setBusy(true);
-    setError("");
-    setNotice("Connecting to Google Drive…");
+    setErrorState({ key: requestKey, value: "" });
+    setNoticeState({ key: requestKey, value: "Connecting to Google Drive…" });
     try {
       const tokenResponse = await fetch(
         "/api/activities/google-drive?mode=picker&action=token&subjectId=" + encodeURIComponent(subjectId),
@@ -208,22 +229,28 @@ export function ActivityGoogleDrive({ subjectId, mode, fileUrl, files = [], onPi
           if (result.action !== google.picker!.Action.PICKED || !result.docs?.length) return;
           const doc = result.docs[0];
           if (!doc.id) {
-            setError("Google Drive did not return a file ID. Please select another file.");
+            setErrorState({ key: requestKey, value: "Google Drive did not return a file ID. Please select another file." });
             return;
           }
           const url = doc.url && validDriveUrl(doc.url)
             ? doc.url
             : "https://drive.google.com/open?id=" + encodeURIComponent(doc.id);
           onPicked?.({ url, name: doc.name || "Google Drive file" });
-          setNotice("Selected " + (doc.name || "Google Drive file") + ". Remember to give enrolled students viewing permission in Google Drive.");
-          setError("");
+          setNoticeState({
+            key: requestKey,
+            value: "Selected " + (doc.name || "Google Drive file") + ". Remember to give enrolled students viewing permission in Google Drive."
+          });
+          setErrorState({ key: requestKey, value: "" });
         })
         .build();
       picker.setVisible(true);
-      setNotice("");
+      setNoticeState({ key: requestKey, value: "" });
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Google Drive could not be opened.");
-      setNotice("");
+      setErrorState({
+        key: requestKey,
+        value: reason instanceof Error ? reason.message : "Google Drive could not be opened."
+      });
+      setNoticeState({ key: requestKey, value: "" });
     } finally {
       setBusy(false);
     }
@@ -231,12 +258,12 @@ export function ActivityGoogleDrive({ subjectId, mode, fileUrl, files = [], onPi
 
   function openDriveFile(url: string) {
     if (!validDriveUrl(url)) {
-      setError("This Google Drive link is invalid. Ask your subject teacher to check the activity material.");
+      setErrorState({ key: requestKey, value: "This Google Drive link is invalid. Ask your subject teacher to check the activity material." });
       return;
     }
     const opened = window.open(url, "_blank");
     if (opened) opened.opener = null;
-    else setError("Your browser blocked the new tab. Allow pop-ups for SAGA Portal, then try again.");
+    else setErrorState({ key: requestKey, value: "Your browser blocked the new tab. Allow pop-ups for SAGA Portal, then try again." });
   }
 
   return <div className="d-grid gap-2">
