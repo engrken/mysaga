@@ -68,6 +68,8 @@ export async function GET(request: Request) {
       submissions: { where: { enrollmentId: { in: enrollmentIds } },
         select: { text: true, driveUrl: true, files: true, storageProvider: true, fileUrl: true,
           fileName: true, fileSize: true, mimeType: true, offline: true, submittedAt: true,
+          attachments: { select: { id: true, storageProvider: true, fileKey: true, fileUrl: true,
+            fileName: true, fileSize: true, mimeType: true, createdAt: true } },
           points: true, feedback: true, gradedAt: true } },
       quizAttempts: { where: { enrollmentId: { in: enrollmentIds } },
         orderBy: { attemptNumber: "desc" }, select: { id: true, attemptNumber: true, startedAt: true,
@@ -101,6 +103,7 @@ export async function GET(request: Request) {
         text: submission.text, driveUrl: submission.driveUrl, files: submission.files, offline: submission.offline,
         storageProvider: submission.storageProvider, fileUrl: submission.fileUrl, fileName: submission.fileName,
         fileSize: submission.fileSize, mimeType: submission.mimeType,
+        attachments: submission.attachments,
         submittedAt: submission.submittedAt, graded: submission.gradedAt !== null,
         points: release ? submission.points : null, feedback: release ? submission.feedback : null
       } : null
