@@ -7,7 +7,7 @@ import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { assertActivitiesWritable } from "@/lib/activity-feature-flags";
 import { activityEnrollmentIdentity, activityHeaders } from "@/lib/class-activities";
-import { getR2BucketName, getR2Client, getR2PublicUrl, sanitizeR2FileName } from "@/lib/r2";
+import { getR2BucketName, getR2Client, sanitizeR2FileName } from "@/lib/r2";
 
 export const runtime = "nodejs";
 
@@ -92,7 +92,6 @@ export async function POST(request: Request) {
       uploadUrl,
       uploadHeaders,
       fileKey,
-      publicUrl: getR2PublicUrl(fileKey),
       fileName: safeName,
       fileSize: input.fileSize,
       mimeType
