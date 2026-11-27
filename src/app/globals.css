@@ -2475,7 +2475,6 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
 .portal-layout[data-saga-role="student"][data-student-glass-theme="classic"] .student-floating-window{background:#fff;border:1px solid #e3e9f2;box-shadow:0 4px 18px rgba(30,50,83,.05);backdrop-filter:none}
 .portal-layout[data-saga-role="student"][data-student-glass-theme="classic"] .student-glass-analytics{background:#f8faff}
 .portal-layout[data-saga-role="student"][data-student-glass-theme="classic"] .student-floating-window{border-radius:14px}
-.portal-layout[data-saga-role="student"] .student-glass-dock-pill{--student-accent:var(--student-accent,#3985e8)}
 @media(min-width:1181px){
   .portal-layout[data-saga-role="student"] .content-wrap:has(.student-floating-window:not(.is-minimized)){padding-right:370px}
 }
