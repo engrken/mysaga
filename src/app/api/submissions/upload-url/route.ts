@@ -11,19 +11,13 @@ import { getR2BucketName, getR2Client, getR2PublicUrl, sanitizeR2FileName } from
 
 export const runtime = "nodejs";
 
-const MAX_FILE_SIZE = 15 * 1024 * 1024;
-const ALLOWED_TYPES = new Set([
-  "application/pdf", "text/plain", "image/jpeg", "image/png", "image/webp",
-  "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/zip"
-]);
+export const MAX_R2_FILE_SIZE = 5 * 1024 * 1024;
+const mimeTypePattern = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i;
 const inputSchema = z.object({
   assignmentId: z.string().trim().min(1).max(128),
   fileName: z.string().trim().min(1).max(180),
-  fileType: z.string().trim().min(1).max(120),
-  fileSize: z.number().int().positive().max(MAX_FILE_SIZE)
+  fileType: z.string().trim().max(255).regex(mimeTypePattern).optional(),
+  fileSize: z.number().int().positive().max(MAX_R2_FILE_SIZE)
 });
 const reply = (body: unknown, status = 200) =>
   NextResponse.json(body, { status, headers: activityHeaders });
@@ -37,9 +31,9 @@ export async function POST(request: Request) {
   }
 
   const parsed = inputSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return error("Check the file details and try again.");
+  if (!parsed.success) return error("Files uploaded to SAGA must be 5 MB or smaller. Use Google Drive for larger files.");
   const input = parsed.data;
-  if (!ALLOWED_TYPES.has(input.fileType)) return error("This file type is not supported.");
+  const mimeType = input.fileType || "application/octet-stream";
   const safeName = sanitizeR2FileName(input.fileName);
 
   const activity = await prisma.classActivity.findFirst({
@@ -80,22 +74,28 @@ export async function POST(request: Request) {
   try {
     const fileKey = "assignments/" + activity.id + "/" + student.id + "-" +
       Date.now() + "-" + randomUUID() + "-" + safeName;
+    const uploadHeaders = {
+      "Content-Type": mimeType,
+      "Content-Disposition": 'attachment; filename="' + safeName + '"'
+    };
     const command = new PutObjectCommand({
       Bucket: getR2BucketName(),
       Key: fileKey,
-      ContentType: input.fileType
+      ContentType: mimeType,
+      ContentDisposition: uploadHeaders["Content-Disposition"]
     });
     const uploadUrl = await getSignedUrl(getR2Client(), command, {
       expiresIn: 15 * 60,
-      signableHeaders: new Set(["content-type"])
+      signableHeaders: new Set(["content-type", "content-disposition"])
     });
     return reply({
       uploadUrl,
+      uploadHeaders,
       fileKey,
       publicUrl: getR2PublicUrl(fileKey),
       fileName: safeName,
       fileSize: input.fileSize,
-      mimeType: input.fileType
+      mimeType
     }, 201);
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : "R2 is not configured.";
