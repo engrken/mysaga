@@ -52,7 +52,6 @@ export function TeacherClassAnnouncements({ subjectId, readOnly = false }: { sub
   useEffect(() => {
     if (readOnly) return;
     let active = true;
-    setLoading(true);
     fetch("/api/teacher/subjects/" + encodeURIComponent(subjectId) + "/announcements", { cache: "no-store" })
       .then(async response => {
         const data = await response.json();
@@ -130,7 +129,7 @@ export function TeacherClassAnnouncements({ subjectId, readOnly = false }: { sub
 
   return <section className="section-block class-announcements">
     <div className="section-heading">
-      <div><span className="eyebrow">CLASS BULLETIN BOARD</span><h2>Announcements</h2><p className="muted">Post formal notices and reminders for students enrolled in this class. Published notices appear in each student's compiled Announcements feed.</p></div>
+      <div><span className="eyebrow">CLASS BULLETIN BOARD</span><h2>Announcements</h2><p className="muted">Post formal notices and reminders for students enrolled in this class. Published notices appear in each student&apos;s compiled Announcements feed.</p></div>
       <button className="btn btn-primary" type="button" onClick={startNew}>＋ New announcement</button>
     </div>
     {notice && <div className="alert alert-success" role="status">{notice}</div>}
@@ -175,7 +174,6 @@ export function StudentAnnouncements({ readOnly = false }: { readOnly?: boolean 
   useEffect(() => {
     if (readOnly) return;
     let active = true;
-    setLoading(true);
     fetch("/api/student/announcements", { cache: "no-store" })
       .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not load announcements."); if (active) setItems(Array.isArray(data.announcements) ? data.announcements : []); })
       .catch(reason => { if (active) setError(reason instanceof Error ? reason.message : "Could not load announcements."); })
