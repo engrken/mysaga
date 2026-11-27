@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-type Connection = { connected: boolean; connection: { googleEmail: string } | null };
+type Connection = { connected: boolean; connection: {
+  googleEmail: string; matchesPortalEmail: boolean; driveEnabled: boolean; chatEnabled: boolean
+} | null };
 type Space = { spaceName: string; displayName: string; externalUserAllowed: boolean } | null;
 type SpaceOption = { name: string; displayName: string; externalUserAllowed: boolean };
 
@@ -85,15 +87,27 @@ export default function GoogleChatControls({ subjectId }: { subjectId: string })
   return <section className="surface gradebook-card mt-3" aria-label="Google Chat class integration">
     <div className="section-heading">
       <div><span className="eyebrow">OPTIONAL CLASS TOOL</span><h2>Google Chat Space</h2>
-        <p className="muted">Connect your Google account and keep this class Space aligned with the SAGA roster. Students are invited using their verified SAGA email, which must be the Google account email they use in Chat. External Gmail and Workspace invitations also depend on both organizations’ Chat policies; invited students may need to accept.</p>
+        <p className="muted">Use the same Google account you use to sign in to SAGA Portal. Teacher Google sign-in can authorize both the Drive Picker and class Chat tools, so you do not need separate Google accounts for each feature. Students are invited using their verified SAGA email; external Gmail and Workspace invitations still depend on both organizations' Chat policies.</p>
       </div>
     </div>
     {!connection?.connected ? <div className="d-flex flex-wrap align-items-center gap-2">
-      <a className="btn btn-outline-primary" href="/api/teacher/google-chat/connect">Connect Google account</a>
-      <span className="muted small">Connect once; you can use the same account for your other classes.</span>
+      <a className="btn btn-outline-primary" href="/api/teacher/google-chat/connect">Enable Google Drive &amp; Chat</a>
+      <span className="muted small">This uses the Google email registered to your SAGA teacher account.</span>
     </div> : <div className="d-flex flex-wrap align-items-center gap-2">
-      <span className="small">Connected as <b>{connection.connection?.googleEmail}</b></span> <a className="btn btn-outline-secondary btn-sm" href="/api/teacher/google-chat/connect">Reconnect Google account</a>
-      {!space ? <><button className="btn btn-primary btn-sm" onClick={() => void createSpace()} disabled={busy}>Create class Space</button>
+      <span className="small">Google account <b>{connection.connection?.googleEmail}</b></span>
+      {connection.connection?.matchesPortalEmail
+        ? <span className="badge text-bg-success">Matches SAGA</span>
+        : <span className="badge text-bg-warning">Different from SAGA email</span>}
+      {connection.connection?.driveEnabled
+        ? <span className="badge text-bg-success">Drive enabled</span>
+        : <span className="badge text-bg-warning">Drive permission needed</span>}
+      {connection.connection?.chatEnabled
+        ? <span className="badge text-bg-success">Chat enabled</span>
+        : <span className="badge text-bg-warning">Chat permission needed</span>}
+      {(!connection.connection?.matchesPortalEmail || !connection.connection?.driveEnabled || !connection.connection?.chatEnabled) &&
+        <a className="btn btn-outline-secondary btn-sm" href="/api/teacher/google-chat/connect">Reconnect Google services</a>}
+      {connection.connection?.matchesPortalEmail && connection.connection?.chatEnabled
+        ? (!space ? <><button className="btn btn-primary btn-sm" onClick={() => void createSpace()} disabled={busy}>Create class Space</button>
         {spaces.filter(item => item.externalUserAllowed).length > 0 && <><select className="form-select form-select-sm" style={{maxWidth: "280px"}} value={selectedSpaceName} onChange={event => setSelectedSpaceName(event.target.value)}><option value="">Or choose an existing Space…</option>{spaces.filter(item => item.externalUserAllowed).map(item => <option key={item.name} value={item.name}>{item.displayName}</option>)}</select><button className="btn btn-outline-primary btn-sm" onClick={() => void linkExistingSpace()} disabled={busy || !selectedSpaceName}>Link selected Space</button></>}</> :
         <><span className="badge text-bg-success">Space linked</span><span className="small">{space.displayName}</span>
           <button className="btn btn-outline-primary btn-sm" onClick={() => void syncMembers()} disabled={busy}>Sync class members</button></>}
