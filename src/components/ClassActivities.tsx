@@ -749,6 +749,8 @@ export function StudentActivities({ readOnly, subjectId, academicYear, term }: {
         {active.submission.files?.map(file => <p key={file.pathname}><a href={"/api/activities/files?activityId=" + encodeURIComponent(active.id) + "&pathname=" + encodeURIComponent(file.pathname)}>{file.filename}</a> <small className="text-secondary">({Math.ceil(file.size / 1024)} KB)</small></p>)}
         {active.submission.points !== null ? <p>Score · <strong>{active.submission.points} / {active.maxScore}</strong></p> : <p>{active.submission.graded ? "Your grade has not been released." : "Waiting for grading."}</p>}
         {active.submission.feedback && <div className="border-start border-3 ps-3"><strong>Teacher feedback</strong><p className="mb-0" style={{ whiteSpace: "pre-wrap" }}>{active.submission.feedback}</p></div>}
+        {canSubmit && <div className="border-top pt-3 mt-3"><p className="mb-2"><strong>Replace or resubmit your work</strong></p><StudentR2Uploader assignmentId={active.id} disabled={busy || featureReadOnly}
+          onSubmitted={() => { setActive(null); setRevision(current => current + 1); }}/></div>}
       </section> : canSubmit ? <StudentR2Uploader assignmentId={active.id} disabled={busy || featureReadOnly}
           onSubmitted={() => { setActive(null); setRevision(current => current + 1); }}/> : <p className="mb-0">Submissions are closed.</p>)}
     </article>}
