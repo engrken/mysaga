@@ -1,187 +1,36 @@
 [
   {
+    "version": "0.15.0-beta.1",
+    "date": "2026-11-27",
+    "kind": "feature",
+    "changes": [
+      "Added a class Announcement Board for students and class-scoped announcements for teachers.",
+      "Added a class Learning Resources library with Google Drive Picker sharing and private SAGA storage.",
+      "Protected R2 assignment and class-resource downloads behind class enrollment and teacher authorization.",
+      "Added school-level R2 storage quotas, verified-submission retention notices, and scheduled file cleanup.",
+      "Preserved the 5 MB per-file direct R2 assignment upload limit; larger student files continue through Google Drive share links."
+    ]
+  },
+  {
     "version": "0.14.0-beta.3",
     "date": "2026-11-26",
     "kind": "improvement",
     "changes": [
       "Added Student Roster filters for program, year level, and section in tenant management."
     ]
-  },{
+  },
+  {
     "version": "0.14.0-beta.2",
     "date": "2026-11-26",
     "kind": "improvement",
     "changes": [
       "Made Class ID optional when creating or editing a class; duplicate checks still apply when an ID is entered."
     ]
-  },{
+  },
+  {
     "version": "0.14.0-beta.1",
     "date": "2026-11-26",
     "kind": "feature",
     "changes": [
       "Added structured Course/Program, Year Level, and Section fields to class creation and class editing, with editable suggestions and support for custom entries.",
-      "Extended student directory and student account records with an optional Section field; administrators can edit section alongside program and year level, with Section A used as the default for new class-only records.",
-      "Preserved existing student enrollments and grade records while introducing structured class cohort metadata."
-    ]
-  },
-  {
-    "version": "0.13.0-beta.1",
-    "date": "2026-11-25",
-    "kind": "feature",
-    "changes": [
-      "Moved the former sidebar menu into a responsive top navigation bar, with an active-period My Classes dropdown and mobile-friendly navigation controls."
-    ]
-  },
-  {
-    "version": "0.12.0-beta.1",
-    "date": "2026-11-24",
-    "kind": "feature",
-    "changes": [
-      "Enhanced the public read-only demo with a local Class Chats simulation so visitors can explore chat workflows without connecting to live Google Chat.",
-      "Enabled tenant managers to edit class-only student records, including student program and year details.",
-      "Moved grading-sheet signatory names and positions into individual teacher profiles, with validation before export and a backfill for existing teacher accounts."
-    ]
-  },
-  {
-    "version": "0.11.0-beta.1",
-    "date": "2026-11-22",
-    "kind": "feature",
-    "changes": [
-      "Added Google Chat integration for class Spaces, including secure teacher account linking, student membership invitations and roster synchronization, and teacher announcements.",
-      "Introduced the Class Chats hub for teachers and students, with role-scoped class Spaces, invitation and membership status, and direct links to Google Chat."
-    ]
-  },
-  {
-    "version": "0.10.0-beta.1",
-    "date": "2026-11-18",
-    "kind": "feature",
-    "changes": [
-      "Added school workspace administration, invitations, manual invoicing, billing reminders, and an improved tenant management interface."
-    ]
-  },
-  {
-    "version": "0.9.0-beta.1",
-    "date": "2026-11-17",
-    "kind": "feature",
-    "changes": [
-      "Added an activity chooser, read-only resources, student class activities, and topic filters for the question bank."
-    ]
-  },
-  {
-    "version": "0.8.0-beta.1",
-    "date": "2026-11-17",
-    "kind": "feature",
-    "changes": [
-      "Added teacher-posted Drive activities, scheduled openings, and quizzes with optional question-bank reuse."
-    ]
-  },
-  {
-    "version": "0.7.0-beta.1",
-    "date": "2026-11-17",
-    "kind": "feature",
-    "changes": [
-      "Added class activities, a question bank and auto-graded quizzes, assignment submissions, and linked class record scores."
-    ]
-  },
-  {
-    "version": "0.6.0-beta.5",
-    "date": "2026-11-17",
-    "kind": "fix",
-    "changes": [
-      "Reflect saved tenant tier changes immediately and show the current plan and its limits in Tenant Management."
-    ]
-  },
-  {
-    "version": "0.6.0-beta.4",
-    "date": "2026-11-17",
-    "kind": "fix",
-    "changes": [
-      "Validate assessment dates and category item weights before saving, and reject duplicate assessment or category IDs and malformed score requests.",
-      "Keep the student name visible on narrow screens while allowing the attendance summary and meeting columns to scroll."
-    ]
-  },
-  {
-    "version": "0.6.0-beta.3",
-    "date": "2026-11-17",
-    "kind": "fix",
-    "changes": [
-      "Limit the display of student IDs to authorized rosters. Remove IDs from attendance alerts, scorebook screens, student lookup results, grade previews, profiles, and Quick Grade Check results."
-    ]
-  },
-  {
-    "version": "0.6.0-beta.2",
-    "date": "2026-11-17",
-    "kind": "fix",
-    "changes": [
-      "Use the same attendance cutoff in Class Attendance and Teacher Overview, and refresh the overview after attendance changes so early warnings stay out of the dashboard."
-    ]
-  },
-  {
-    "version": "0.6.0-beta.1",
-    "date": "2026-11-17",
-    "kind": "feature",
-    "changes": [
-      "Added attendance risk alerts with absence dates, consecutive absence streaks, and automatic treatment of every third consecutive late as absent. Teacher Overview highlights high-risk attendance and danger of failing. Class Attendance shows early and dropping warnings."
-    ]
-  },
-  {
-    "version": "0.5.0-beta.2",
-    "date": "2026-11-14",
-    "kind": "fix",
-    "changes": [
-      "Replaced the separate Test the Software imitation with one-click guest access to SAGA's actual Teacher and Student pages.",
-      "Created a dedicated fictional college, class roster, assessments and grade records for the authentic read-only demo.",
-      "Demo sessions expire in 45 minutes and cannot modify any SAGA API; school and account permissions remain enforced.",
-      "Retained the original editable sample simulator under a clearly labeled optional Practice Simulator page.",
-      "Kept the demo school hidden from regular registration and added security regression checks. No Dean role was introduced."
-    ]
-  },
-  {
-    "version": "0.5.0-beta.1",
-    "date": "2026-11-14",
-    "kind": "feature",
-    "changes": [
-      "Launched a public interactive Test the Software tour featuring Teacher, Student, and read-only Platform Administrator previews.",
-      "Teacher demo includes editable gradebook scores, attendance, grade visibility, and simulated submission states using fictional records.",
-      "Student demo includes sample grades and an isolated what-if score simulator; switching roles retains in-browser sample changes until reset.",
-      "Public demo data never invokes production authentication, grades, tenant management APIs, or Neon database writes.",
-      "Added responsive light and dark demo palettes, accessible navigation controls, and a landing-page entry point."
-    ]
-  },
-  {
-    "version": "0.4.0-beta.1",
-    "date": "2026-11-13",
-    "kind": "feature",
-    "changes": [
-      "Teachers can now search and add registered, email-verified students from their own school directly to a class roster.",
-      "Teachers can generate, copy, rotate, or revoke seven-day class invitation codes for verified students.",
-      "Students can join an eligible class from their Student Portal using a teacher-provided invitation code and view their linked class list.",
-      "Enrollment now preserves existing attendance, assessment scores, and grade history when linking registered students to existing class records.",
-      "Added duplicate-enrollment, tenant-isolation, account-verification, and invitation-code protections."
-    ]
-  },
-  {
-    "version": "0.3.0-beta.1",
-    "date": "2026-11-13",
-    "kind": "feature",
-    "changes": [
-      "The global copyright footer now follows the saved Light/Dark appearance setting on all portal and administration pages.",
-      "Teachers now have a calm navy-and-blue interface with warm highlights; students have a welcoming teal-and-sky palette, each with dark-mode alternatives.",
-      "Improved contrast for navigation, grade-summary cards, controls, and account preferences without changing academic status colors.",
-      "The footer stays aligned with the class sidebar on desktop, adapts to mobile screens, and remains hidden from printed grade reports."
-    ]
-  },
-  {
-    "version": "0.2.0-beta.1",
-    "date": "2026-11-13",
-    "kind": "feature",
-    "changes": [
-      "Added a consistent copyright and release-version footer across SAGA, including a link to this version history.",
-      "Improved My Classes navigation: desktop hover opens the menu, while mobile uses tap-to-expand without selecting a class.",
-      "Added Student ID or email sign-in for registered students and Faculty IDs for teacher registration and profiles.",
-      "Added existing-school selection and a Not listed option to teacher signup.",
-      "Expanded Tenant Operations with school health, subscription follow-ups, verification totals, activity and payment reporting.",
-      "Improved student grade summaries, on-demand assessment details, grade simulation navigation and mobile layouts.",
-      "Optimized class records, workbook score saving, roster imports and attendance completion checks."
-    ]
-  }
-]
+      "Extended student directory and student account records with an optional Section field; adm¶»§q«^
