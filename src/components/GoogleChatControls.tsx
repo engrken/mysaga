@@ -18,18 +18,29 @@ export default function GoogleChatControls({ subjectId }: { subjectId: string })
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  async function refresh() {
-    const [connectionResponse, spaceResponse, spacesResponse] = await Promise.all([
-      fetch("/api/teacher/google-chat/connection", { cache: "no-store" }),
-      fetch(`/api/teacher/google-chat/subjects/${encodeURIComponent(subjectId)}/space`, { cache: "no-store" }),
-      fetch("/api/teacher/google-chat/spaces", { cache: "no-store" })
-    ]);
-    if (connectionResponse.ok) setConnection(await connectionResponse.json());
-    if (spaceResponse.ok) setSpace((await spaceResponse.json()).space);
-    if (spacesResponse.ok) { const data = await spacesResponse.json(); setSpaces(data.spaces || []); }
-  }
-
-  useEffect(() => { void refresh(); }, [subjectId]);
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const [connectionResponse, spaceResponse, spacesResponse] = await Promise.all([
+          fetch("/api/teacher/google-chat/connection", { cache: "no-store" }),
+          fetch(`/api/teacher/google-chat/subjects/${encodeURIComponent(subjectId)}/space`, { cache: "no-store" }),
+          fetch("/api/teacher/google-chat/spaces", { cache: "no-store" })
+        ]);
+        if (!active) return;
+        if (connectionResponse.ok) setConnection(await connectionResponse.json());
+        if (spaceResponse.ok) setSpace((await spaceResponse.json()).space);
+        if (spacesResponse.ok) {
+          const data = await spacesResponse.json();
+          if (active) setSpaces(data.spaces || []);
+        }
+      } catch (reason) {
+        if (active) setError(reason instanceof Error ? reason.message : "Could not load Google Chat status.");
+      }
+    };
+    void load();
+    return () => { active = false; };
+  }, [subjectId]);
 
   async function createSpace() {
     setBusy(true); setError(""); setMessage("");
@@ -87,11 +98,11 @@ export default function GoogleChatControls({ subjectId }: { subjectId: string })
   return <section className="surface gradebook-card mt-3" aria-label="Google Chat class integration">
     <div className="section-heading">
       <div><span className="eyebrow">OPTIONAL CLASS TOOL</span><h2>Google Chat Space</h2>
-        <p className="muted">Use the same Google account you use to sign in to SAGA Portal. Teacher Google sign-in can authorize both the Drive Picker and class Chat tools, so you do not need separate Google accounts for each feature. Students are invited using their verified SAGA email; external Gmail and Workspace invitations still depend on both organizations' Chat policies.</p>
+        <p className="muted">Use the same Google account you use to sign in to SAGA Portal. Teacher Google sign-in can authorize both the Drive Picker and class Chat tools, so you do not need separate Google accounts for each feature. Students are invited using their verified SAGA email; external Gmail and Workspace invitations still depend on both organizations&apos; Chat policies.</p>
       </div>
     </div>
     {!connection?.connected ? <div className="d-flex flex-wrap align-items-center gap-2">
-      <a className="btn btn-outline-primary" href="/api/teacher/google-chat/connect">Enable Google Drive &amp; Chat</a>
+      <button type="button" className="btn btn-outline-primary" onClick={() => window.location.assign("/api/teacher/google-chat/connect")}>Enable Google Drive &amp; Chat</button>
       <span className="muted small">This uses the Google email registered to your SAGA teacher account.</span>
     </div> : <div className="d-flex flex-wrap align-items-center gap-2">
       <span className="small">Google account <b>{connection.connection?.googleEmail}</b></span>
@@ -105,7 +116,7 @@ export default function GoogleChatControls({ subjectId }: { subjectId: string })
         ? <span className="badge text-bg-success">Chat enabled</span>
         : <span className="badge text-bg-warning">Chat permission needed</span>}
       {(!connection.connection?.matchesPortalEmail || !connection.connection?.driveEnabled || !connection.connection?.chatEnabled) &&
-        <a className="btn btn-outline-secondary btn-sm" href="/api/teacher/google-chat/connect">Reconnect Google services</a>}
+        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => window.location.assign("/api/teacher/google-chat/connect")}>Reconnect Google services</button>}
       {connection.connection?.matchesPortalEmail && connection.connection?.chatEnabled && (
         !space ? (
           <>
