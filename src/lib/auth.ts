@@ -11,9 +11,17 @@ function key() {
   return new TextEncoder().encode(secret);
 }
 
-export async function createSession(user: { id: string; role: string; schoolId: string; emailIdentityChangedAt?: Date | null }, managerVerified = false, demo = false) {
+export async function createSession(
+  user: { id: string; role: string; schoolId: string; emailIdentityChangedAt?: Date | null },
+  managerVerified = false,
+  demo = false,
+  googleIdentity?: { subject: string; email: string }
+) {
   const token = await new SignJWT({
     role: user.role,
+    authProvider: googleIdentity ? "GOOGLE" : "PASSWORD",
+    googleSubject: googleIdentity?.subject ?? null,
+    googleEmail: googleIdentity?.email ?? null,
     schoolId: user.schoolId,
     emailVerified: true,
     managerVerified: demo ? false : managerVerified,
@@ -53,6 +61,9 @@ export async function getSession() {
       isTenantManager,
       isSchoolAdmin: !isDemo && user.role === "TEACHER" && user.isSchoolAdmin,
       isDemo,
+      authProvider: payload.authProvider === "GOOGLE" ? "GOOGLE" : "PASSWORD",
+      googleSubject: typeof payload.googleSubject === "string" ? payload.googleSubject : null,
+      googleEmail: typeof payload.googleEmail === "string" ? payload.googleEmail : null,
       emailDeliveryEnabled: emailDeliveryConfigured()
     };
   } catch { return null; }
