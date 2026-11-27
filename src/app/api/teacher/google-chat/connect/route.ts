@@ -11,7 +11,11 @@ export async function GET() {
     const returnTo = `/${encodeURIComponent(teacher.school.slug)}/overview?googleServices=connected`;
     return NextResponse.redirect(await createGoogleOAuthUrl(
       { id: teacher.id, schoolId: teacher.schoolId },
-      { loginHint: teacher.email, returnTo }
+      {
+        loginHint: teacher.email,
+        redirectUri: process.env.GOOGLE_SSO_REDIRECT_URI?.trim(),
+        returnTo
+      }
     ));
   } catch {
     return NextResponse.json({ error: "Google Drive and Chat authorization is not configured yet." }, { status: 503 });
