@@ -117,7 +117,9 @@ export default function LoginPage() {
                 setGoogleErrorOverride("school-required");
                 return;
               }
-              window.location.assign(`/api/auth/google?schoolId=${encodeURIComponent(schoolId)}`);
+              const oauthUrl = new URL("/api/auth/google", window.location.origin);
+              oauthUrl.searchParams.set("schoolId", schoolId);
+              window.location.assign(oauthUrl.toString());
             }}
           >
             <span aria-hidden="true" className="fw-bold">G</span>
