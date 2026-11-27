@@ -2507,3 +2507,15 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
 @media(prefers-reduced-motion:reduce){
   .student-glass-kpi-card,.student-glass-course-row,.student-glass-schedule-card,.student-floating-window,.student-glass-progress i{transition:none}
 }
+
+/* Optional freeform movement for the three primary overview modules. */
+.student-draggable-module{position:relative;min-width:0;width:100%;margin:0 0 15px;transform-origin:center top}
+.student-draggable-module.is-freeform{z-index:2;transition:transform .18s cubic-bezier(.2,.8,.2,1),filter .18s ease}
+.student-draggable-module.is-freeform.is-module-active{z-index:18;filter:drop-shadow(0 16px 24px rgba(30,55,90,.12));transition:none}
+.student-module-drag-handle{display:flex;align-items:center;gap:8px;width:fit-content;max-width:100%;margin:0 0 7px 4px;padding:5px 9px;border:1px solid rgba(255,255,255,.65);border-radius:999px;background:rgba(255,255,255,.55);color:#6c7e97;backdrop-filter:blur(16px);font-size:.57rem;font-weight:850;letter-spacing:.04em;cursor:grab;touch-action:none}
+.student-module-drag-handle:active{cursor:grabbing}
+.student-module-drag-handle>span{color:var(--student-accent);font-size:.86rem}
+.student-module-drag-handle small{margin-left:3px;color:#9ba8b9;font-size:.45rem;letter-spacing:.13em}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-module-drag-handle{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.18);color:#d3deed}
+@media(max-width:767px){.student-module-drag-handle{display:none!important}.student-draggable-module.is-freeform{transform:none!important}}
+@media(prefers-reduced-motion:reduce){.student-draggable-module.is-freeform{transition:none}}
