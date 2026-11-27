@@ -140,3 +140,21 @@ test("refresh tokens are never reused when a teacher changes their Google identi
   assert.match(chat, /sameExistingGoogleAccount = existingConnection\?\.googleSubject === identity\.sub/);
   assert.match(chat, /if \(!tokens\.refresh_token && !sameExistingGoogleAccount\)/);
 });
+
+test("stored Google OAuth scopes are tokenized on whitespace", () => {
+  const files = [
+    "src/lib/google-auth.ts",
+    "src/lib/google-chat.ts",
+    "src/app/api/teacher/google-chat/connection/route.ts",
+    "src/app/api/teacher/google-chat/spaces/route.ts",
+    "src/app/api/teacher/google-chat/subjects/[subjectId]/space/route.ts",
+    "src/app/api/teacher/google-chat/subjects/[subjectId]/announcements/route.ts",
+    "src/app/api/teacher/google-chat/subjects/[subjectId]/sync/route.ts",
+    "src/app/api/activities/google-drive/route.ts"
+  ];
+  for (const file of files) {
+    const source = read(file);
+    assert.ok(source.includes(String.raw`split(/\s+/)`), `${file} must split OAuth scopes on whitespace`);
+    assert.ok(!source.includes(String.raw`split(/\\s+/)`), `${file} must not split OAuth scopes on a literal backslash`);
+  }
+});
