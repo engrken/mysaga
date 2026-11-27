@@ -133,6 +133,10 @@ test("Chat service tokens cannot be used with a different SAGA email or Google s
   assert.match(chat, /connection\.googleEmail\.trim\(\)\.toLowerCase\(\) !== user\.email\.trim\(\)\.toLowerCase\(\)/);
   assert.match(chat, /user\.authProvider === "GOOGLE" && connection\.googleSubject !== user\.googleSubject/);
   assert.equal((routes.match(/googleConnectionMatchesSAGAAccount\(connection, teacher\)/g) || []).length, 4);
+  const reconnect = read("src/app/api/teacher/google-chat/connect/route.ts");
+  const status = read("src/app/api/teacher/google-chat/connection/route.ts");
+  assert.match(reconnect, /redirectUri: process\.env\.GOOGLE_SSO_REDIRECT_URI/);
+  assert.match(status, /connection\.googleSubject === teacher\.googleSubject/);
 });
 
 test("refresh tokens are never reused when a teacher changes their Google identity", () => {
