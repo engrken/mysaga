@@ -24,6 +24,7 @@ test("student theme preferences are account-scoped, validated, and never persist
   assert.match(types, /url\.protocol === "https:"/);
   assert.match(types, /STUDENT_PORTAL_DEFAULTS/);
   assert.match(types, /modules: \{ metrics: true, insights: true, courses: true \}/);
+  assert.match(types, /modulePositions: \{ metrics: \{ x: 0, y: 0 \}, insights: \{ x: 0, y: 0 \}, courses: \{ x: 0, y: 0 \} \}/);
 });
 
 test("dashboard includes the requested KPI, insights, schedule, quick panel, and reset controls", () => {
@@ -87,4 +88,20 @@ test("glass layout has responsive stacking, floating drawer, and reduced-motion 
   assert.match(css, /@media\(max-width:767px\)/);
   assert.match(css, /student-floating-window\{left:12px!important;right:12px!important;top:auto!important;bottom:12px/);
   assert.match(css, /@media\(prefers-reduced-motion:reduce\)/);
+});
+
+test("freeform mode enables independently draggable and persistent overview modules", () => {
+  const dashboard = read("src/components/student-portal/OverviewDashboard.tsx");
+  const module = read("src/components/student-portal/DraggableGlassModule.tsx");
+  const customizer = read("src/components/student-portal/PortalCustomizer.tsx");
+  const css = read("src/app/globals.css");
+  assert.match(dashboard, /enabled=\{preferences\.layout === "freeform"\}/);
+  assert.match(dashboard, /updateModulePosition\("metrics"/);
+  assert.match(dashboard, /updateModulePosition\("insights"/);
+  assert.match(dashboard, /updateModulePosition\("courses"/);
+  assert.match(module, /onPointerDown=\{begin\}/);
+  assert.match(module, /onPointerMove=\{move\}/);
+  assert.match(module, /onKeyDown=\{nudge\}/);
+  assert.match(customizer, /drag the small handle above each overview module/i);
+  assert.match(css, /student-module-drag-handle/);
 });
