@@ -1,36 +1,46 @@
 "use client";
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import SchoolSelect from "@/components/SchoolSelect";
 
 type LoginType = "EMAIL" | "STUDENT_ID";
 
+function subscribeToSearchChanges(callback: () => void) {
+  window.addEventListener("popstate", callback);
+  return () => window.removeEventListener("popstate", callback);
+}
+
+function getClientSearch() {
+  return window.location.search;
+}
+
+function getServerSearch() {
+  return "";
+}
+
 export default function LoginPage() {
   const router = useRouter();
+  const search = useSyncExternalStore(subscribeToSearchChanges, getClientSearch, getServerSearch);
+  const params = useMemo(() => new URLSearchParams(search), [search]);
   const [error, setError] = useState("");
   const [challengeId, setChallengeId] = useState("");
   const [busy, setBusy] = useState(false);
-  const [loginType, setLoginType] = useState<LoginType>("EMAIL");
-  const [email, setEmail] = useState("");
-  const [studentId, setStudentId] = useState("");
-  const [schoolId, setSchoolId] = useState("");
-  const [emailChanged, setEmailChanged] = useState(false);
-  const [googleError, setGoogleError] = useState("");
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setEmail(params.get("email") || "");
-    setStudentId(params.get("studentNumber") || "");
-    setSchoolId(params.get("schoolId") || "");
-    setLoginType(params.get("studentNumber") ? "STUDENT_ID" : "EMAIL");
-    setEmailChanged(params.get("emailChanged") === "1");
-    setGoogleError(params.get("googleError") || "");
-  }, []);
+  const [loginTypeOverride, setLoginTypeOverride] = useState<LoginType | null>(null);
+  const [emailOverride, setEmailOverride] = useState<string | null>(null);
+  const [studentIdOverride, setStudentIdOverride] = useState<string | null>(null);
+  const [schoolIdOverride, setSchoolIdOverride] = useState<string | null>(null);
+  const [googleErrorOverride, setGoogleErrorOverride] = useState<string | null>(null);
+  const loginType = loginTypeOverride ?? (params.get("studentNumber") ? "STUDENT_ID" : "EMAIL");
+  const email = emailOverride ?? params.get("email") ?? "";
+  const studentId = studentIdOverride ?? params.get("studentNumber") ?? "";
+  const schoolId = schoolIdOverride ?? params.get("schoolId") ?? "";
+  const emailChanged = params.get("emailChanged") === "1";
+  const googleError = googleErrorOverride ?? params.get("googleError") ?? "";
 
   function changeIdentity(next: LoginType) {
     if (loginType === next) return;
-    setLoginType(next);
+    setLoginTypeOverride(next);
     setChallengeId("");
     setError("");
   }
@@ -98,13 +108,13 @@ export default function LoginPage() {
             "failed": "Google sign-in could not be completed. Please try again."
           } as Record<string, string>)[googleError] || "Google sign-in could not be completed. Please try again."}</div>}
           <label className="form-label" htmlFor="schoolId">School</label>
-          <SchoolSelect id="schoolId" value={schoolId} onChange={next => { setSchoolId(next); setChallengeId(""); setError(""); }}/>
+          <SchoolSelect id="schoolId" value={schoolId} onChange={next => { setSchoolIdOverride(next); setChallengeId(""); setError(""); }}/>
           <button
             type="button"
             className="btn btn-outline-secondary btn-lg w-100 d-flex align-items-center justify-content-center gap-2"
             onClick={() => {
               if (!schoolId) {
-                setGoogleError("school-required");
+                setGoogleErrorOverride("school-required");
                 return;
               }
               window.location.assign(`/api/auth/google?schoolId=${encodeURIComponent(schoolId)}`);
@@ -124,12 +134,12 @@ export default function LoginPage() {
             <label className="form-label" htmlFor="email">Email address</label>
             <input className="form-control form-control-lg mb-3" id="email" name="identifier" type="email"
               autoComplete="username" placeholder="name@example.com" value={email} required maxLength={200}
-              onChange={event => { setEmail(event.target.value); setChallengeId(""); setError(""); }}/>
+              onChange={event => { setEmailOverride(event.target.value); setChallengeId(""); setError(""); }}/>
           </> : <>
             <label className="form-label" htmlFor="studentLoginId">Student ID</label>
             <input className="form-control form-control-lg mb-2" id="studentLoginId" name="identifier" type="text"
               autoComplete="username" placeholder="Enter your registered Student ID" value={studentId}
-              onChange={event => { setStudentId(event.target.value); setChallengeId(""); setError(""); }}
+              onChange={event => { setStudentIdOverride(event.target.value); setChallengeId(""); setError(""); }}
               required maxLength={40}/>
             <p className="form-text mb-3">Only registered student accounts can use Student ID. Choose your school above.</p>
           </>}
