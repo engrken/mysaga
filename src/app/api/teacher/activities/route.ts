@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { activityTopicSchema, activityHeaders, questionSchema, quizSnapshotSchema, lessonPagesSchema, sanitizeLessonHtml, gradeQuizAnswers, QuizAnswer, validDriveLink } from "@/lib/class-activities";
-import { assertActivitiesWritable } from "@/lib/activity-feature-flags";
+import { assertActivitiesActionAllowed, assertActivitiesPublishEnabled, assertActivitiesWritable } from "@/lib/activity-feature-flags";
 import { buildQuizStatistics } from "@/lib/activity-statistics";
 
 const id = z.string().trim().min(1).max(128);
@@ -126,6 +126,12 @@ export async function POST(request: Request) {
   const parsed = inputSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return error("Check the activity settings and try again.");
   const input = parsed.data;
+  if (input.action === "open" && !assertActivitiesPublishEnabled()) {
+    return error("Publishing is disabled during exploration mode.", 423);
+  }
+  if (!assertActivitiesActionAllowed(input.action)) {
+    return error("Exploration mode only allows saving drafts and managing the question bank. Publishing, submissions, grading, and changes to opened activities are disabled.", 423);
+  }
   if (input.action === "tag-question") {
     const updated = await prisma.bankQuestion.updateMany({
       where: { id: input.questionId, teacherId: teacher.id }, data: { topic: input.topic || null }
