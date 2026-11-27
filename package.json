@@ -1,6 +1,6 @@
 {
   "name": "fcu-student-portal",
-  "version": "0.14.0-beta.3",
+  "version": "0.15.0-beta.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate deploy; fi && prisma generate && npm run test:department-logo && npm run test:grades && npm run test:classes && npm run test:simulation && npm run test:scorebook-layout && npm run test:tenant && npm run test:teacher-signup && npm run test:identity && npm run test:invites && npm run test:release && npm run test:theme && npm run test:demo && npm run test:virtual-assistant && npm run test:activities && npm run lint && next build",
+    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate deploy; fi && prisma generate && npm run test:department-logo && npm run test:grades && npm run test:classes && npm run test:simulation && npm run test:scorebook-layout && npm run test:tenant && npm run test:teacher-signup && npm run test:identity && npm run test:invites && npm run test:release && npm run test:theme && npm run test:demo && npm run test:virtual-assistant && npm run test:activities && npm run test:announcements && npm run lint && next build",
     "test:grades": "node --test tests/grades.test.cjs tests/assessment-setup.test.cjs",
     "test:classes": "node --test tests/class-navigation.test.cjs tests/class-chat-period.test.mjs",
     "postinstall": "prisma generate",
@@ -31,7 +31,8 @@
     "test:department-logo": "node --test tests/department-logo-media.test.cjs",
     "test:virtual-assistant": "node --test tests/virtual-assistant.test.cjs",
     "test:activities": "node --experimental-strip-types --test tests/class-activities-engine.test.mjs",
-    "lint": "eslint --max-warnings=0 src/app/api/activities/files/route.ts src/app/api/student/activities src/app/api/teacher/activities src/components/ClassActivities.tsx src/components/ActivityRichEditor.tsx src/lib/class-activities.ts src/lib/activity-feature-flags.ts src/lib/activity-feature-flags.client.ts src/lib/activity-statistics.ts tests/class-activities-engine.test.mjs"
+    "test:announcements": "node --test tests/announcements.test.cjs",
+    "lint": "eslint --max-warnings=0 src/app/api/activities/files/route.ts src/app/api/student/activities src/app/api/teacher/activities src/components/ClassActivities.tsx src/components/ActivityRichEditor.tsx src/lib/class-activities.ts src/lib/activity-feature-flags.ts src/lib/activity-feature-flags.client.ts src/lib/activity-statistics.ts tests/class-activities-engine.test.mjs src/app/api/teacher/subjects/\\[subjectId\\]/announcements/route.ts src/app/api/teacher/announcements/\\[announcementId\\]/route.ts src/app/api/student/announcements src/components/SagaAnnouncements.tsx"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",

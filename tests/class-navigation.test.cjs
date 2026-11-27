@@ -83,3 +83,10 @@ test("class directory has dedicated responsive and dark-mode presentation styles
   assert.ok(styles.includes("@media(max-width:1100px){"));
   assert.ok(styles.includes(".class-directory-stats{grid-template-columns:repeat(2,minmax(0,1fr))}"));
 });
+
+
+test("announcements is a supported deep-link section in the class workspace", () => {
+  const url = classWorkspaceHref("fcu", "class-a", "announcements", undefined, subjects);
+  assert.equal(url, "/fcu/classes/ece-18?section=announcements");
+  assert.equal(parseClassWorkspaceQuery({ section: "announcements" }).section, "announcements");
+});
