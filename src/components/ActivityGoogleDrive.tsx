@@ -7,6 +7,7 @@ type Props = {
   subjectId: string;
   mode: Mode;
   fileUrl?: string;
+  files?: Array<{ url: string; label: string }>;
   onPicked?: (file: { url: string; name: string }) => void;
 };
 type Config = { clientId: string; apiKey?: string; appId?: string };
@@ -72,7 +73,7 @@ function validDriveUrl(value: string) {
   }
 }
 
-export function ActivityGoogleDrive({ subjectId, mode, fileUrl, onPicked }: Props) {
+export function ActivityGoogleDrive({ subjectId, mode, fileUrl, files = [], onPicked }: Props) {
   const [config, setConfig] = useState<Config | null>(null);
   const [scriptsReady, setScriptsReady] = useState(false);
   const [verifiedEmail, setVerifiedEmail] = useState("");
@@ -235,12 +236,12 @@ export function ActivityGoogleDrive({ subjectId, mode, fileUrl, onPicked }: Prop
     tokenClient.requestAccessToken({ prompt: "select_account" });
   }
 
-  function openDriveFile() {
-    if (!fileUrl || !validDriveUrl(fileUrl)) {
+  function openDriveFile(url: string) {
+    if (!validDriveUrl(url)) {
       setError("This Google Drive link is invalid. Ask your subject teacher to check the activity material.");
       return;
     }
-    const opened = window.open(fileUrl, "_blank");
+    const opened = window.open(url, "_blank");
     if (opened) opened.opener = null;
     else setError("Your browser blocked the new tab. Allow pop-ups for SAGA Portal, then try again.");
   }
@@ -254,7 +255,11 @@ export function ActivityGoogleDrive({ subjectId, mode, fileUrl, onPicked }: Prop
       : <div className="d-flex flex-wrap align-items-center gap-2">
           <span className="badge text-bg-success">Google account verified · {verifiedEmail}</span>
           {mode === "open"
-            ? <button type="button" className="btn btn-sm btn-outline-primary" onClick={openDriveFile}>Open in Google Drive</button>
+            ? <div className="d-flex flex-wrap gap-2">
+                {(files.length ? files : fileUrl ? [{ url: fileUrl, label: "Open in Google Drive" }] : [])
+                  .map(item => <button key={item.url} type="button" className="btn btn-sm btn-outline-primary"
+                    onClick={() => openDriveFile(item.url)}>{item.label}</button>)}
+              </div>
             : <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy || !scriptsReady} onClick={() => void chooseFromDrive()}>
                 {busy ? "Connecting…" : "Select from Google Drive"}
               </button>}
