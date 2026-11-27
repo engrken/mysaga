@@ -173,6 +173,22 @@ export default async function PrivacyPage({ searchParams }: PrivacyPageProps) {
           the relevant account and Chat activity under Google's own terms and privacy
           information.
         </p>
+        <p>
+          <strong>Activities Google Drive exploration:</strong> SAGA may ask a teacher
+          or student to verify a Google account before using a Drive-related Activity
+          action. The verified Google email must match the email on that person's
+          existing SAGA Portal account. If a student's email does not match, the
+          student cannot continue and is directed to contact the subject teacher to
+          correct or confirm the portal account. For teachers selecting Activity
+          material, the optional Google Picker uses Google's narrower
+          <code>drive.file</code> permission for files the teacher chooses. SAGA
+          stores the selected Drive link with the Activity; it does not copy the
+          Drive file contents, change its sharing permissions, or store the
+          temporary Drive access token. Teachers remain responsible for granting
+          enrolled students the appropriate viewer access in Google Drive. This
+          optional Activity feature is separate from Google Chat and does not change
+          the portal's own sign-in session.
+        </p>
 
         <h2>5. Assignments, uploaded files, and Google Drive links</h2>
         <p>
