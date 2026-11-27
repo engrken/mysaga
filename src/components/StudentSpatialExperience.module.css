@@ -2,3 +2,5 @@
 :global(.student-progress-heading),:global(.student-overview-stats){display:none!important}
 
 .stage:before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:inherit;opacity:.78}
+
+@media(max-width:480px){.kpis{grid-template-columns:1fr}.activeCourseGrid{grid-template-columns:1fr}}
