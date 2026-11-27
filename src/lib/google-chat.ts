@@ -278,7 +278,7 @@ export async function syncGoogleChatEnrollment(enrollmentId: string, schoolId: s
       !googleConnectionMatchesSAGAAccount(connection, { email: enrollment.subject.teacher.email })) {
     return { synced: false, reason: "teacher-not-connected" };
   }
-  const grantedScopes = new Set(connection.scopes.split(/\\s+/).filter(Boolean));
+  const grantedScopes = new Set(connection.scopes.split(/\s+/).filter(Boolean));
   if (!grantedScopes.has("https://www.googleapis.com/auth/chat.memberships")) {
     return { synced: false, reason: "teacher-chat-permission-missing" };
   }
@@ -362,7 +362,7 @@ export async function removeGoogleChatEnrollment(enrollmentId: string, schoolId:
       !googleConnectionMatchesSAGAAccount(connection, { email: sync.subject.teacher.email })) {
     return { ok: false, error: "Reconnect the teacher's Google account that matches the SAGA profile before removing this member." };
   }
-  const grantedScopes = new Set(connection.scopes.split(/\\s+/).filter(Boolean));
+  const grantedScopes = new Set(connection.scopes.split(/\s+/).filter(Boolean));
   if (!grantedScopes.has("https://www.googleapis.com/auth/chat.memberships")) {
     return { ok: false, error: "Reconnect Google services and approve the Chat membership permission before removing this member." };
   }
