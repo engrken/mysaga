@@ -210,3 +210,4 @@ export async function POST(request: Request) {
   }
 
   return error("Assignment submissions must use the R2 submission endpoint.", 410);
+}
