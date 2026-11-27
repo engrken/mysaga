@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { activityEnrollmentIdentity, activityHeaders } from "@/lib/class-activities";
-import { activitiesGoogleDriveExploration } from "@/lib/google-drive-activities";
+import { activitiesGoogleDriveExploration, normalizeGoogleAccountEmail } from "@/lib/google-drive-activities";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -46,10 +46,6 @@ async function authorizedSubject(user: PortalIdentity, subjectId: string) {
     });
   }
   return null;
-}
-
-function normalized(value: string) {
-  return value.trim().toLowerCase();
 }
 
 export async function GET(request: Request) {
@@ -118,8 +114,8 @@ export async function POST(request: Request) {
     return error("Google must provide a verified email address for this account.", 401);
   }
 
-  const googleEmail = normalized(identity.email);
-  const portalEmail = normalized(user.email);
+  const googleEmail = normalizeGoogleAccountEmail(identity.email);
+  const portalEmail = normalizeGoogleAccountEmail(user.email);
   if (googleEmail !== portalEmail) {
     const mismatchMessage = user.role === "STUDENT"
       ? "The Google account you selected does not match the email registered in your SAGA Portal student account. Choose the correct Google account. If your registered email needs to be corrected, please contact your subject teacher."
@@ -137,7 +133,7 @@ export async function POST(request: Request) {
     };
     if (!userInfoResponse.ok || !userInfo?.sub || userInfo.sub !== identity.sub ||
         !userInfo.email || userInfo.email_verified !== true ||
-        normalized(userInfo.email) !== portalEmail) {
+        normalizeGoogleAccountEmail(userInfo.email) !== portalEmail) {
       return error("Google Drive access must use the same verified Google account as your SAGA teacher account.", 403, "GOOGLE_EMAIL_MISMATCH");
     }
   }
