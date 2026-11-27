@@ -179,8 +179,15 @@ export default function StudentSpatialExperience({
       <div className={styles.sectionHead}><div><span className={styles.kicker}>YOUR WEEKLY WORKSPACE</span><h3>Weekly class schedule</h3><p>Your enrolled classes and the meeting times published by your instructors.</p></div><span className={styles.chartBadge}>{grades.length} ENROLLED</span></div>
       <div className={styles.activeCourseGrid}>{schedule.slice(0, 8).map(item => {
         let meetings: ScheduleItem[] = [];
-        try { const parsed = item.schedule ? JSON.parse(item.schedule) : []; meetings = Array.isArray(parsed) ? parsed : []; } catch { meetings = []; }
-        return <article key={item.id}><span>{item.code}</span><strong>{item.title}</strong>{meetings.length ? meetings.map((meeting, index) => <small key={`${item.id}-${index}`}>{meeting.day || "Schedule"} · {meeting.startTime || "Time TBA"}{meeting.endTime ? `–${meeting.endTime}` : ""}</small>) : <small>Meeting schedule not published</small>}<b>{item.term} · {item.academicYear}</b></article>;
+        let legacySchedule = "";
+        try {
+          const parsed = item.schedule ? JSON.parse(item.schedule) : [];
+          meetings = Array.isArray(parsed) ? parsed : [];
+          if (typeof parsed === "string") legacySchedule = parsed;
+        } catch { legacySchedule = item.schedule ?? ""; }
+        return <article key={item.id}><span>{item.code}</span><strong>{item.title}</strong>
+          {meetings.length ? meetings.map((meeting, index) => <small key={`${item.id}-${index}`}>{meeting.day || "Schedule"} · {meeting.startTime || "Time TBA"}{meeting.endTime ? `–${meeting.endTime}` : ""}</small>) : <small>{legacySchedule || "Meeting schedule not published"}</small>}
+          <b>{item.term} · {item.academicYear}</b></article>;
       })}</div>
       {!schedule.length && <div className={styles.empty}>No active courses are available for this academic period.</div>}
     </section>}
