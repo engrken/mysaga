@@ -46,21 +46,23 @@ test("Google access is role, tenant, subject and enrollment scoped", () => {
   assert.match(api, /enrollments: \{ some: \{ OR: activityEnrollmentIdentity\(user\) \} \}/);
   assert.match(api, /mode === "open" && user\.role !== "STUDENT"/);
   assert.match(api, /mode === "picker" && user\.role !== "TEACHER"/);
-  assert.match(api, /input\.mode === "picker" && user\.role !== "TEACHER"/);
-  assert.doesNotMatch(api, /input\.mode === "identity" && user\.role !== "STUDENT"/);
+  assert.match(api, /user\.role !== "STUDENT"/);
+  assert.match(api, /mode: z\.literal\("identity"\)/);
   assert.match(api, /user\.isDemo/);
 });
 
-test("teacher Picker requests selected-file Drive access and verifies the same Google account", () => {
+test("teacher Picker uses the saved SAGA Google services connection and narrow Drive scope", () => {
   const component = read("src/components/ActivityGoogleDrive.tsx");
   const api = read("src/app/api/activities/google-drive/route.ts");
-  assert.match(component, /scope: "openid email https:\/\/www\.googleapis\.com\/auth\/drive\.file"/);
+  const services = read("src/lib/google-chat.ts");
+  assert.match(services, /https:\/\/www\.googleapis\.com\/auth\/drive\.file/);
   assert.match(component, /setDeveloperKey\(config\.apiKey/);
   assert.match(component, /setAppId\(config\.appId/);
-  assert.match(api, /mode === "picker"/);
-  assert.match(api, /userInfo\.sub !== identity\.sub/);
-  assert.match(api, /normalizeGoogleAccountEmail\(userInfo\.email\) !== portalEmail/);
-  assert.doesNotMatch(api, /prisma\.(create|upsert|update)\(/);
+  assert.match(component, /setOAuthToken\(String\(tokenData\.accessToken\)\)/);
+  assert.match(api, /googleChatAccessToken\(connection\)/);
+  assert.match(api, /connection\.googleEmail/);
+  assert.match(api, /GOOGLE_DRIVE_SCOPE/);
+  assert.match(api, /GOOGLE_ACCOUNT_MISMATCH/);
 });
 
 test("teacher drafts use Picker, while student Drive opens require email verification", () => {
@@ -69,7 +71,7 @@ test("teacher drafts use Picker, while student Drive opens require email verific
   assert.match(activities, /mode="picker"/);
   assert.match(activities, /mode="open"/);
   assert.match(activities, /activitiesGoogleDriveExploration/);
-  assert.match(component, /Sign in with Google/);
+  assert.match(component, /Verify Google account for Drive access/);
   assert.match(component, /Your Google account matches your SAGA Portal email/);
   assert.match(component, /Open in Google Drive/);
 });
@@ -88,9 +90,9 @@ test("Google Drive controls do not enable Activity publishing or student submiss
 
 test("privacy notice documents Google account email matching and Drive file handling", () => {
   const privacy = read("src/app/privacy/page.tsx");
-  assert.match(privacy, /Activities Google Drive exploration/);
-  assert.match(privacy, /must match the email/);
-  assert.match(privacy, /contact the subject teacher/);
-  assert.match(privacy, /does not copy the\s+Drive file contents/);
+  assert.match(privacy, /Google Sign-In is an alternative way to authenticate/);
+  assert.match(privacy, /matches the verified\s+Google email to an existing account/);
+  assert.match(privacy, /does not copy the Drive file contents/);
   assert.match(privacy, /drive\.file/);
+  assert.match(privacy, /encrypted Google service\s+tokens/);
 });
