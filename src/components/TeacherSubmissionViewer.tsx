@@ -5,7 +5,7 @@ type SubmissionAttachment = {
   id: string;
   storageProvider: "GOOGLE_DRIVE" | "CLOUDFLARE_R2";
   fileKey: string | null;
-  fileUrl: string;
+  fileUrl: string | null;
   fileName: string;
   fileSize: number;
   mimeType: string;
@@ -59,7 +59,7 @@ export function TeacherSubmissionViewer({ activityId, submissions }: {
         submittedAt: submission.submittedAt,
         href: file.storageProvider === "CLOUDFLARE_R2"
           ? "/api/submissions/download?attachmentId=" + encodeURIComponent(file.id)
-          : file.fileUrl,
+          : file.fileUrl || "#",
         label: file.storageProvider === "GOOGLE_DRIVE" ? "Open Google Drive" : "Download securely"
       });
     }
