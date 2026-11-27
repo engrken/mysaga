@@ -10,6 +10,7 @@ type UploadUrlResponse = {
   fileName: string;
   fileSize: number;
   mimeType: string;
+  uploadHeaders: Record<string, string>;
 };
 type SubmissionAttachmentInput =
   | { storageProvider: "CLOUDFLARE_R2"; fileKey: string; fileUrl: string; fileName: string; fileSize: number; mimeType: string }
@@ -123,7 +124,7 @@ export function StudentR2Uploader({ assignmentId, disabled = false, onSubmitted 
         setStatusText("Uploading file " + (index + 1) + " of " + smallFiles.length + " directly to R2…");
         const uploaded = await fetch(presigned.uploadUrl, {
           method: "PUT",
-          headers: { "Content-Type": presigned.mimeType },
+          headers: presigned.uploadHeaders,
           body: file
         });
         if (!uploaded.ok) {

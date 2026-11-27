@@ -74,17 +74,23 @@ export async function POST(request: Request) {
   try {
     const fileKey = "assignments/" + activity.id + "/" + student.id + "-" +
       Date.now() + "-" + randomUUID() + "-" + safeName;
+    const uploadHeaders = {
+      "Content-Type": mimeType,
+      "Content-Disposition": "attachment; filename=\\\""+safeName+"\\\""
+    };
     const command = new PutObjectCommand({
       Bucket: getR2BucketName(),
       Key: fileKey,
       ContentType: mimeType,
+      ContentDisposition: uploadHeaders["Content-Disposition"]
     });
     const uploadUrl = await getSignedUrl(getR2Client(), command, {
       expiresIn: 15 * 60,
-      signableHeaders: new Set(["content-type"])
+      signableHeaders: new Set(["content-type", "content-disposition"])
     });
     return reply({
       uploadUrl,
+      uploadHeaders,
       fileKey,
       publicUrl: getR2PublicUrl(fileKey),
       fileName: safeName,

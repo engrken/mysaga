@@ -28,14 +28,14 @@ Replace the origins with the exact SAGA origins used by each environment:
       "http://localhost:3000"
     ],
     "AllowedMethods": ["PUT", "GET", "HEAD"],
-    "AllowedHeaders": ["Content-Type"],
+    "AllowedHeaders": ["Content-Type", "Content-Disposition"],
     "ExposeHeaders": ["ETag"],
     "MaxAgeSeconds": 3600
   }
 ]
 ```
 
-Add the exact Vercel preview origin when testing from a preview URL. CORS is required because browsers upload directly to R2. Presigned URLs expire after 15 minutes and sign the Content-Type header.
+Add the exact Vercel preview origin when testing from a preview URL. CORS is required because browsers upload directly to R2. Presigned URLs expire after 15 minutes and sign the Content-Type and Content-Disposition headers. The browser must send both returned upload headers exactly as provided.
 
 ## 3. Per-file upload policy
 
