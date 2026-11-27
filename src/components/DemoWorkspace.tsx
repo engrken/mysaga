@@ -102,6 +102,7 @@ export default function DemoWorkspace() {
   const [notice, setNotice] = useState("");
   const [studentPreferences, setStudentPreferences] = useState<StudentPortalPreferences>(STUDENT_PORTAL_DEFAULTS);
   const [studentCustomizerRequested, setStudentCustomizerRequested] = useState(false);
+  const [studentLayoutResetVersion, setStudentLayoutResetVersion] = useState(0);
   const selectedCourse = classes.find(course => course.id === activeClass) || classes[0];
   const currentStatus = statuses[activeClass];
   const canEdit = currentStatus === "DRAFT";
@@ -133,6 +134,7 @@ export default function DemoWorkspace() {
   const resetStudentLayout = () => {
     setStudentPreferences(STUDENT_PORTAL_DEFAULTS);
     setStudentCustomizerRequested(false);
+    setStudentLayoutResetVersion(version => version + 1);
     setNotice("Student layout restored to its default. Demo data was not changed.");
   };
   const launchRole = (next: DemoRole) => { setRole(next); setTab("overview"); setNotice(""); };
@@ -144,6 +146,7 @@ export default function DemoWorkspace() {
     setPredicted(95);
     setStudentPreferences(STUDENT_PORTAL_DEFAULTS);
     setStudentCustomizerRequested(false);
+    setStudentLayoutResetVersion(version => version + 1);
     setNotice("Sample records and the student layout were restored. No real SAGA records were affected.");
   };
   const setScore = (studentId: string, assessmentId: string, max: number, raw: string) => {
@@ -262,6 +265,7 @@ export default function DemoWorkspace() {
           </Panel>}
 
           {role === "student" && tab === "overview" && <OverviewDashboard
+            key={`demo-student-layout-${studentLayoutResetVersion}`}
             fullName={student.name}
             grades={demoStudentGrades}
             attendanceWarnings={demoAttendanceWarnings}
