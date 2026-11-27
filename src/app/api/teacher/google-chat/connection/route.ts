@@ -15,7 +15,7 @@ export async function GET() {
       headers: { "Cache-Control": "private, no-store" }
     });
   }
-  const scopes = new Set(connection.scopes.split(/\\s+/).filter(Boolean));
+  const scopes = new Set(connection.scopes.split(/\s+/).filter(Boolean));
   const chatScopes = GOOGLE_SERVICE_SCOPES.filter(scope => scope !== GOOGLE_DRIVE_SCOPE);
   return NextResponse.json({
     connected: true,
