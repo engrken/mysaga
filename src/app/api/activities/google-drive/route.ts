@@ -102,7 +102,7 @@ export async function GET(request: Request) {
     return error("Your saved Google services connection uses a different account. Reconnect using the same Google account you use for SAGA Portal.", 403, "GOOGLE_ACCOUNT_MISMATCH");
   }
 
-  const grantedScopes = new Set(connection.scopes.split(/\\s+/).filter(Boolean));
+  const grantedScopes = new Set(connection.scopes.split(/\s+/).filter(Boolean));
   if (!grantedScopes.has(GOOGLE_DRIVE_SCOPE)) {
     return error("Google Drive permission is not enabled yet. Use Reconnect Google services in the class Chat settings.", 409, "GOOGLE_DRIVE_SCOPE_MISSING");
   }
