@@ -35,7 +35,7 @@ export class GoogleSignInError extends Error {
 
 export async function createGoogleSignInOAuthUrl(schoolId: string) {
   const clientId = requiredGoogleEnv("GOOGLE_CLIENT_ID");
-  const redirectUri = requiredGoogleEnv("GOOGLE_REDIRECT_URI");
+  const redirectUri = requiredGoogleEnv("GOOGLE_SSO_REDIRECT_URI");
   const nonce = randomBytes(32).toString("base64url");
   const verifier = randomBytes(32).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
@@ -100,7 +100,7 @@ export async function completeGoogleSignInOAuth(code: string, state: string) {
       code,
       client_id: clientId,
       client_secret: requiredGoogleEnv("GOOGLE_CLIENT_SECRET"),
-      redirect_uri: requiredGoogleEnv("GOOGLE_REDIRECT_URI"),
+      redirect_uri: requiredGoogleEnv("GOOGLE_SSO_REDIRECT_URI"),
       grant_type: "authorization_code",
       code_verifier: verifierCookie
     }),
@@ -198,6 +198,7 @@ export async function completeGoogleSignInOAuth(code: string, state: string) {
           {
             expectedGoogleSubject: payload.sub,
             loginHint: email,
+            redirectUri: requiredGoogleEnv("GOOGLE_SSO_REDIRECT_URI"),
             returnTo: withQuery(returnTo, "googleServices", "connected")
           }
         );
