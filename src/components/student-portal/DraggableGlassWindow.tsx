@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useRef, useState, type PointerEvent, type ReactNode } from "react";
 
 type Position = { x: number; y: number };
 
@@ -28,11 +28,6 @@ export default function DraggableGlassWindow({
   const currentPositionRef = useRef(position);
   const dragOffset = useRef({ x: 0, y: 0 });
   const dragPointer = useRef<number | null>(null);
-
-  useEffect(() => {
-    currentPositionRef.current = position;
-    setCurrentPosition(position);
-  }, [position.x, position.y]);
 
   const startDrag = (event: PointerEvent<HTMLButtonElement>) => {
     if (minimized || window.matchMedia("(max-width: 767px)").matches) return;
