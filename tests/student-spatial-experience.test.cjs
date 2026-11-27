@@ -38,7 +38,9 @@ test("floating companion supports pointer dragging, minimizing and restoring", (
 
 test("student schedule endpoint returns the actual class schedule for the selected academic period", () => {
   const route = read("src/app/api/student/classes/route.ts");
-  assert.match(route, /schedule: true/);\n  assert.match(component, /item\\.isPublished/);
+  const component = read("src/components/StudentSpatialExperience.tsx");
+  assert.match(route, /schedule: true/);
+  assert.match(component, /item\.isPublished/);
   assert.match(route, /academicYear/);
   assert.match(route, /term/);
 });
