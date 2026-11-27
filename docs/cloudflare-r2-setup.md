@@ -24,6 +24,7 @@ Replace the origins with the exact SAGA origins used by each environment:
 [
   {
     "AllowedOrigins": [
+      "https://my.sagaportal.online",
       "https://mysaga.vercel.app",
       "http://localhost:3000"
     ],
@@ -35,7 +36,7 @@ Replace the origins with the exact SAGA origins used by each environment:
 ]
 ```
 
-Add the exact Vercel preview origin when testing from a preview URL. CORS is required because browsers upload directly to R2. Presigned URLs expire after 15 minutes and sign the Content-Type and Content-Disposition headers. The browser must send both returned upload headers exactly as provided.
+Add the exact Vercel preview origin when testing from a preview URL. Keep both the custom production hostname (my.sagaportal.online) and the Vercel production hostname (mysaga.vercel.app) in the allowlist when both are used. CORS is required because browsers upload directly to R2. Presigned URLs expire after 15 minutes and sign the Content-Type and Content-Disposition headers. The browser must send both returned upload headers exactly as provided.
 
 ## 3. Per-file upload policy
 
