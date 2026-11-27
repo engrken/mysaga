@@ -88,7 +88,7 @@ export default function OverviewDashboard({
       <div className="student-glass-module-heading"><div><span>THIS ACADEMIC PERIOD</span><h2>Active courses &amp; weekly schedule</h2></div><span className="student-glass-count">{grades.length} course(s)</span></div>
       {grades.length ? <div className="student-glass-schedule-grid">{grades.map(grade => <a className="student-glass-schedule-card" key={grade.id} href={`#student-grade-${encodeURIComponent(grade.id)}`}>
         <span className="student-glass-course-mark">{grade.code.slice(0, 2)}</span><span><b>{grade.code} — {grade.title}</b><small>{grade.teacher}</small><small>{scheduleLabel(grade.schedule)}</small></span><strong>{grade.percent === null ? "—" : `${grade.percent.toFixed(1)}%`}</strong>
-      </a>)}</div> : <div className="student-glass-empty">No course records are visible yet. Your teachers' shared classes will appear here.</div>}
+      </a>)}</div> : <div className="student-glass-empty">No course records are visible yet. Your teachers&apos; shared classes will appear here.</div>}
     </section>}
 
     <DraggableGlassWindow
@@ -106,7 +106,7 @@ export default function OverviewDashboard({
         <button type="button" role="tab" aria-selected={customizerRequested || panelTab === "customizer"} className={customizerRequested || panelTab === "customizer" ? "active" : ""} onClick={() => { setPanelTab("customizer"); setPanelMinimized(false); if (customizerRequested) onCustomizerOpened(); }}>Customize</button>
       </div>
       {!customizerRequested && panelTab === "checklist" ? <div className="student-glass-checklist">
-        {checklist.map((item, index) => <article key={item.title} className={`student-glass-checklist-item state-${item.state}`}>
+        {checklist.map(item => <article key={item.title} className={`student-glass-checklist-item state-${item.state}`}>
           <span aria-hidden="true">{item.state === "done" ? "✓" : item.state === "attention" ? "!" : "◷"}</span><div><b>{item.title}</b><small>{item.detail}</small></div>
         </article>)}
         {demoMode && <p className="student-glass-demo-note">Sample activity statuses are fictional and included to demonstrate the interface.</p>}
