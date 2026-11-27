@@ -258,16 +258,29 @@ export async function syncGoogleChatEnrollment(enrollmentId: string, schoolId: s
     where: { id: enrollmentId, subject: { schoolId }, student: { is: { schoolId, role: "STUDENT", emailVerifiedAt: { not: null } } } },
     select: {
       id: true, student: { select: { email: true } },
-      subject: { select: { id: true, schoolId: true, teacherId: true, googleChatSpace: { select: { spaceName: true } } } }
+      subject: {
+        select: {
+          id: true, schoolId: true, teacherId: true,
+          teacher: { select: { email: true } },
+          googleChatSpace: { select: { spaceName: true } }
+        }
+      }
     }
   });
   if (!enrollment?.student?.email || !enrollment.subject.googleChatSpace) return { synced: false, reason: "not-configured" };
   const spaceName = enrollment.subject.googleChatSpace.spaceName;
   const studentEmail = enrollment.student.email.toLowerCase();
-  const [connection] = await prisma.googleChatConnection.findMany({
-    where: { schoolId, teacherId: enrollment.subject.teacherId }, take: 1
+  const connection = await prisma.googleChatConnection.findUnique({
+    where: { schoolId_teacherId: { schoolId, teacherId: enrollment.subject.teacherId } }
   });
-  if (!connection) return { synced: false, reason: "teacher-not-connected" };
+  if (!connection ||
+      !googleConnectionMatchesSAGAAccount(connection, { email: enrollment.subject.teacher.email })) {
+    return { synced: false, reason: "teacher-not-connected" };
+  }
+  const grantedScopes = new Set(connection.scopes.split(/\\s+/).filter(Boolean));
+  if (!grantedScopes.has("https://www.googleapis.com/auth/chat.memberships")) {
+    return { synced: false, reason: "teacher-chat-permission-missing" };
+  }
 
   const sync = await prisma.googleChatMembershipSync.upsert({
     where: { enrollmentId },
@@ -327,7 +340,13 @@ export async function removeGoogleChatEnrollment(enrollmentId: string, schoolId:
     where: { enrollmentId, schoolId },
     select: {
       id: true, studentEmail: true, googleMembershipName: true,
-      subject: { select: { teacherId: true, googleChatSpace: { select: { spaceName: true } } } }
+      subject: {
+        select: {
+          teacherId: true,
+          teacher: { select: { email: true } },
+          googleChatSpace: { select: { spaceName: true } }
+        }
+      }
     }
   });
   if (!sync) return { ok: true };
@@ -338,7 +357,14 @@ export async function removeGoogleChatEnrollment(enrollmentId: string, schoolId:
   const connection = await prisma.googleChatConnection.findUnique({
     where: { schoolId_teacherId: { schoolId, teacherId: sync.subject.teacherId } }
   });
-  if (!connection) return { ok: false, error: "Reconnect the teacher's Google account before removing this member." };
+  if (!connection ||
+      !googleConnectionMatchesSAGAAccount(connection, { email: sync.subject.teacher.email })) {
+    return { ok: false, error: "Reconnect the teacher's Google account that matches the SAGA profile before removing this member." };
+  }
+  const grantedScopes = new Set(connection.scopes.split(/\\s+/).filter(Boolean));
+  if (!grantedScopes.has("https://www.googleapis.com/auth/chat.memberships")) {
+    return { ok: false, error: "Reconnect Google services and approve the Chat membership permission before removing this member." };
+  }
   try {
     const token = await googleChatAccessToken(connection);
     let membershipName = sync.googleMembershipName;
