@@ -31,7 +31,7 @@
     "test:department-logo": "node --test tests/department-logo-media.test.cjs",
     "test:virtual-assistant": "node --test tests/virtual-assistant.test.cjs",
     "test:activities": "node --experimental-strip-types --test tests/class-activities-engine.test.mjs",
-    "lint": "eslint --max-warnings=0 src/app/api/activities/files/route.ts src/app/api/student/activities src/app/api/teacher/activities src/components/ClassActivities.tsx src/components/ActivityRichEditor.tsx src/lib/class-activities.ts src/lib/activity-feature-flags.ts src/lib/activity-feature-flags.client.ts src/lib/activity-statistics.ts tests/class-activities-engine.test.mjs"
+    "lint": "eslint --max-warnings=0 src/app/api/activities/files/route.ts src/app/api/student/activities src/app/api/teacher/activities src/components/ClassActivities.tsx src/components/ActivityRichEditor.tsx src/components/StudentR2Uploader.tsx src/lib/drive-link.ts src/lib/class-activities.ts src/lib/activity-feature-flags.ts src/lib/activity-feature-flags.client.ts src/lib/activity-statistics.ts tests/class-activities-engine.test.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
