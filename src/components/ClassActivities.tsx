@@ -600,7 +600,6 @@ export function StudentActivities({ readOnly, subjectId, academicYear, term }: {
     setFailure(""); setBusy(true); setQuizAttemptId(null); setQuizStartedAt(null); setTimeLeft(null); setLessonPageId(null);
     try {
       const data = await request(`${studentPath}?activityId=${encodeURIComponent(id)}${academicYear && term ? `&academicYear=${encodeURIComponent(academicYear)}&term=${encodeURIComponent(term)}` : ""}`);
-      setStudentId(data.studentId);
       const activity = data.activities[0] as Activity;
       setActive(activity);
       setLessonPageId(activity.lessonPages?.[0]?.id ?? null);

@@ -106,7 +106,7 @@ export async function GET(request: Request) {
       } : null
     };
   });
-  return reply({ studentId: student.id, activities, classes: [...enrollmentByClass.values()].map(({ subject }) => subject) });
+  return reply({ activities, classes: [...enrollmentByClass.values()].map(({ subject }) => subject) });
 }
 
 export async function POST(request: Request) {
@@ -117,9 +117,6 @@ export async function POST(request: Request) {
   if (!parsed.success) return error("Check your submission and try again.");
   const input = parsed.data;
   if (!input.action) return error("Assignment submissions now use the R2 submission endpoint.", 410);
-  if (input.files && (input.files.reduce((sum, file) => sum + file.size, 0) > 30 * 1024 * 1024)) {
-    return error("Attachments must total 30 MB or less.");
-  }
   const target = await prisma.classActivity.findFirst({ where: {
     id: input.activityId, status: { not: "DRAFT" }, kind: "QUIZ",
     subject: { schoolId: student.schoolId, enrollments: { some: { OR: activityEnrollmentIdentity(student) } } }
