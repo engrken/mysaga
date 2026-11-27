@@ -22,6 +22,7 @@ export default function DraggableGlassModule({
   const pointerRef = useRef<number | null>(null);
   const startRef = useRef({ x: 0, y: 0 });
   const originRef = useRef(position);
+  const boundsRef = useRef({ left: 0, right: 0, top: 0, bottom: 0 });
 
   const begin = (event: PointerEvent<HTMLButtonElement>) => {
     if (!enabled || window.matchMedia("(max-width: 767px)").matches) return;
@@ -31,9 +32,9 @@ export default function DraggableGlassModule({
     pointerRef.current = event.pointerId;
     originRef.current = base;
     startRef.current = { x: event.clientX, y: event.clientY };
+    if (rect) boundsRef.current = { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
     event.currentTarget.setPointerCapture(event.pointerId);
     setActive(true);
-    if (rect) event.currentTarget.dataset.moduleWidth = String(rect.width);
   };
 
   const move = (event: PointerEvent<HTMLButtonElement>) => {
@@ -42,10 +43,11 @@ export default function DraggableGlassModule({
     const rect = element?.getBoundingClientRect();
     const dx = event.clientX - startRef.current.x;
     const dy = event.clientY - startRef.current.y;
-    const minX = rect ? Math.min(0, 12 - rect.left) : -600;
-    const maxX = rect ? Math.max(0, window.innerWidth - rect.right - 12) : 600;
-    const minY = rect ? Math.min(0, 82 - rect.top) : -400;
-    const maxY = rect ? Math.max(0, window.innerHeight - rect.bottom - 12) : 600;
+    const bounds = boundsRef.current;
+    const minX = rect ? Math.min(0, 12 - bounds.left) : -600;
+    const maxX = rect ? Math.max(0, window.innerWidth - bounds.right - 12) : 600;
+    const minY = rect ? Math.min(0, 82 - bounds.top) : -400;
+    const maxY = rect ? Math.max(0, window.innerHeight - bounds.bottom - 12) : 600;
     const next = {
       x: Math.max(-600, Math.min(600, originRef.current.x + Math.max(minX, Math.min(maxX, dx)))),
       y: Math.max(-400, Math.min(600, originRef.current.y + Math.max(minY, Math.min(maxY, dy))))
