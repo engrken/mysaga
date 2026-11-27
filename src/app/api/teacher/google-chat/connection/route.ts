@@ -23,7 +23,9 @@ export async function GET() {
       googleEmail: connection.googleEmail,
       createdAt: connection.createdAt,
       updatedAt: connection.updatedAt,
-      matchesPortalEmail: connection.googleEmail.trim().toLowerCase() === teacher.email.trim().toLowerCase(),
+      matchesPortalEmail:
+        connection.googleEmail.trim().toLowerCase() === teacher.email.trim().toLowerCase() &&
+        (teacher.authProvider !== "GOOGLE" || connection.googleSubject === teacher.googleSubject),
       driveEnabled: scopes.has(GOOGLE_DRIVE_SCOPE),
       chatEnabled: chatScopes.every(scope => scopes.has(scope))
     }
