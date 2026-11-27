@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { StudentGradeSummary, StudentPortalPreferences } from "./types";
 import { STUDENT_PORTAL_ACCENTS } from "./types";
 import DraggableGlassWindow from "./DraggableGlassWindow";
@@ -50,11 +50,14 @@ export default function OverviewDashboard({
     && preferences.layout === "snapped"
     && preferences.modules.metrics && preferences.modules.insights && preferences.modules.courses
     && preferences.panelPosition.x === 0 && preferences.panelPosition.y === 116;
+  const wasOriginalLayout = useRef(isOriginalLayout);
   useEffect(() => {
-    if (!isOriginalLayout) return;
-    setPanelMinimized(false);
-    setPanelTab("checklist");
-    setPanelFront(false);
+    if (isOriginalLayout && !wasOriginalLayout.current) {
+      setPanelMinimized(false);
+      setPanelTab("checklist");
+      setPanelFront(false);
+    }
+    wasOriginalLayout.current = isOriginalLayout;
   }, [isOriginalLayout]);
 
   const metrics = useMemo(() => {
