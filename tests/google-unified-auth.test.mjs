@@ -19,6 +19,8 @@ test("SAGA login exposes a school-scoped Continue with Google option", () => {
 test("Google sign-in uses state, nonce, PKCE, and server-verified OpenID identity", () => {
   const auth = read("src/lib/google-auth.ts");
   assert.match(auth, /scope: "openid email profile"/);
+  assert.match(auth, /purpose: "google-login"[\\s\\S]*redirectUri/);
+  assert.match(auth, /statePayload\\.redirectUri !== requiredGoogleEnv\\("GOOGLE_SSO_REDIRECT_URI"\\)/);
   assert.match(auth, /code_challenge_method: "S256"/);
   assert.match(auth, /code_verifier: verifierCookie/);
   assert.match(auth, /NONCE_COOKIE/);
@@ -64,6 +66,7 @@ test("Google Chat service authorization must remain tied to the SAGA teacher ide
 test("OAuth callback dispatches Google login and Google service authorization separately", () => {
   const callback = read("src/app/api/integrations/google/callback/route.ts");
   assert.match(callback, /purpose === "google-login"/);
+  assert.match(callback, /statePayload\\.redirectUri !== expectedCallback/);
   assert.match(callback, /completeGoogleSignInOAuth/);
   assert.match(callback, /purpose === "google-chat-oauth"/);
   assert.match(callback, /completeGoogleOAuth/);
@@ -162,4 +165,18 @@ test("stored Google OAuth scopes are tokenized on whitespace", () => {
     assert.ok(source.includes(String.raw`split(/\s+/)`), `${file} must split OAuth scopes on whitespace`);
     assert.ok(!source.includes(String.raw`split(/\\s+/)`), `${file} must not split OAuth scopes on a literal backslash`);
   }
+});
+
+test("Google teacher service connection requires explicit scope confirmation", () => {
+  const chat = read("src/lib/google-chat.ts");
+  assert.match(chat, /typeof tokens\\.scope !== "string" \\|\\| !tokens\\.scope\\.trim\\(\\)/);
+  assert.match(chat, /new Set\\(tokens\\.scope\\.split\\(\\/\\\\s\\+\\/\\)\\)/);
+  assert.match(chat, /scopes: tokens\\.scope/);
+  assert.doesNotMatch(chat, /tokens\\.scope \\?\\? GOOGLE_SCOPES/);
+});
+
+test("Google login button starts OAuth only on deliberate user activation", () => {
+  const login = read("src/app/login/page.tsx");
+  assert.match(login, /type="button"[\\s\\S]*window\\.location\\.assign/);
+  assert.doesNotMatch(login, /href=\\{schoolId \\? `\\/api\\/auth\\/google/);
 });
