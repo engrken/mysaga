@@ -19,6 +19,8 @@ test("Google ID tokens are verified against Google's keys, issuer and configured
   const api = read("src/app/api/activities/google-drive/route.ts");
   assert.match(api, /createRemoteJWKSet\(new URL\("https:\/\/www\.googleapis\.com\/oauth2\/v3\/certs"\)\)/);
   assert.match(api, /jwtVerify\(input\.credential, GOOGLE_JWKS/);
+  assert.match(api, /isSameOriginRequest\(request\)/);
+  assert.match(api, /new URL\(origin\)\.origin === new URL\(request\.url\)\.origin/);
   assert.match(api, /algorithms: \["RS256"\]/);
   assert.match(api, /issuer: \["accounts\.google\.com", "https:\/\/accounts\.google\.com"\]/);
   assert.match(api, /audience: clientId/);
