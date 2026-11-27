@@ -3,15 +3,7 @@ const DRIVE_FILE_ID = "[A-Za-z0-9_-]+";
 export function validDriveLink(value: string): boolean {
   try {
     const url = new URL(value.trim());
-    if (
-      url.protocol !== "https:" ||
-      url.username ||
-      url.password ||
-      url.port ||
-      url.searchParams.has("authuser") && url.searchParams.get("authuser") === ""
-    ) {
-      return false;
-    }
+    if (url.protocol !== "https:" || url.username || url.password || url.port) return false;
 
     if (url.hostname === "drive.google.com") {
       const filePath = new RegExp("^/file/d/" + DRIVE_FILE_ID + "(?:/|$)");
