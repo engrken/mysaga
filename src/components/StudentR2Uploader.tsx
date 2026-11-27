@@ -22,7 +22,9 @@ type Props = {
 };
 
 const MAX_R2_FILE_SIZE = 5 * 1024 * 1024;
-const GOOGLE_DRIVE_UPLOAD_URL = "https://drive.google.com/drive/my-drive";
+// Google requires authentication when the user is signed out. This takes the
+// student to their Drive workspace, where the supported upload flow is New > File upload.
+const GOOGLE_DRIVE_UPLOAD_URL = "https://drive.google.com/drive/u/0/my-drive";
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const response = await fetch(url, {
@@ -169,8 +171,7 @@ export function StudentR2Uploader({ assignmentId, disabled = false, onSubmitted 
       <input id={"assignment-files-" + assignmentId} className="form-control" type="file" multiple
         onChange={event => selectFiles(event.target.files)} disabled={disabled || busy}/>
       <p className="small text-secondary mt-2 mb-0">
-        Attach as many files as needed. Each file up to 5 MB uploads directly to SAGA. Larger files use Google Drive.
-        Any file type is accepted for R2 uploads.
+        Attach as many files as needed. Each file up to 5 MB uploads directly to SAGA. Larger files stay in Google Drive and are attached using a share link. Any file type is accepted for R2 uploads.
       </p>
     </div>
 
@@ -186,17 +187,29 @@ export function StudentR2Uploader({ assignmentId, disabled = false, onSubmitted 
           </div>
           {large ? <div className="mt-2">
             <p className="small text-warning-emphasis mb-2">
-              Larger than 5 MB. Upload this file to Google Drive, then paste its share link below. It will not be sent to R2.
+              This file is over 5 MB. Upload it to Google Drive, then copy its share link into SAGA below. The file itself will stay in your Google Drive.
             </p>
             <a className="btn btn-sm btn-outline-primary mb-2" href={GOOGLE_DRIVE_UPLOAD_URL}
-              target="_blank" rel="noreferrer">Open Google Drive to upload</a>
+              target="_blank" rel="noopener noreferrer">
+              <span className="me-1" aria-hidden="true">↗</span> Open Google Drive
+            </a>
+            <div className="border rounded bg-body-tertiary p-3 mb-2" id={"drive-upload-help-" + key}>
+              <strong className="small d-block mb-2">Upload and attach this file</strong>
+              <ol className="small ps-3 mb-0">
+                <li>Sign in to Google if it asks, then open <strong>+ New → File upload</strong>.</li>
+                <li>Select <strong>{file.name}</strong> from your device and wait for the upload to finish.</li>
+                <li>In Drive, open the file's <strong>Share</strong> settings. Give your teacher access, or set General access to <strong>Anyone with the link — Viewer</strong> if that is allowed by your class.</li>
+                <li>Copy the file link, return to SAGA, and paste it below.</li>
+              </ol>
+            </div>
             <label className="form-label small" htmlFor={"drive-link-" + key}>Google Drive share link</label>
             <input id={"drive-link-" + key} className="form-control" type="url" inputMode="url"
+              autoComplete="url" aria-describedby={"drive-upload-help-" + key}
               placeholder="https://drive.google.com/file/d/…"
               value={driveLinks[key] || ""}
               onChange={event => setDriveLinks(current => ({ ...current, [key]: event.target.value }))}
               disabled={disabled || busy}/>
-            <small className="text-secondary">Make sure your teacher has permission to open the file.</small>
+            <small className="text-secondary">Check that your teacher can open the link before submitting.</small>
           </div> : <small className="text-success">Will upload directly to R2</small>}
         </div>;
       })}
