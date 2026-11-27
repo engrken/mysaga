@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type { StudentGradeSummary, StudentPortalPreferences } from "./types";
 import { STUDENT_PORTAL_ACCENTS } from "./types";
 import DraggableGlassWindow from "./DraggableGlassWindow";
@@ -35,30 +35,6 @@ export default function OverviewDashboard({
   const [panelMinimized, setPanelMinimized] = useState(false);
   const [panelTab, setPanelTab] = useState<"checklist" | "customizer">("checklist");
   const [panelFront, setPanelFront] = useState(false);
-
-  useEffect(() => {
-    if (customizerRequested) {
-      setPanelTab("customizer");
-      setPanelMinimized(false);
-      onCustomizerOpened();
-    }
-  }, [customizerRequested, onCustomizerOpened]);
-  const isOriginalLayout = preferences.theme === "light-glass"
-    && preferences.wallpaper === "mesh"
-    && preferences.customBackgroundUrl === ""
-    && preferences.accent === "ocean"
-    && preferences.layout === "snapped"
-    && preferences.modules.metrics && preferences.modules.insights && preferences.modules.courses
-    && preferences.panelPosition.x === 0 && preferences.panelPosition.y === 116;
-  const wasOriginalLayout = useRef(isOriginalLayout);
-  useEffect(() => {
-    if (isOriginalLayout && !wasOriginalLayout.current) {
-      setPanelMinimized(false);
-      setPanelTab("checklist");
-      setPanelFront(false);
-    }
-    wasOriginalLayout.current = isOriginalLayout;
-  }, [isOriginalLayout]);
 
   const metrics = useMemo(() => {
     const visiblePercents = grades.map(grade => grade.percent).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
@@ -118,7 +94,7 @@ export default function OverviewDashboard({
     <DraggableGlassWindow
       key={`${preferences.panelPosition.x}:${preferences.panelPosition.y}`}
       title="Student quick panel"
-      minimized={panelMinimized}
+      minimized={panelMinimized && !customizerRequested}
       onMinimize={() => setPanelMinimized(true)}
       onExpand={() => { setPanelMinimized(false); setPanelFront(true); }}
       position={preferences.panelPosition}
@@ -126,10 +102,10 @@ export default function OverviewDashboard({
       onActivate={() => setPanelFront(true)}
     >
       <div className="student-floating-tabs" role="tablist" aria-label="Quick panel views">
-        <button type="button" role="tab" aria-selected={panelTab === "checklist"} className={panelTab === "checklist" ? "active" : ""} onClick={() => setPanelTab("checklist")}>Live class &amp; tasks</button>
-        <button type="button" role="tab" aria-selected={panelTab === "customizer"} className={panelTab === "customizer" ? "active" : ""} onClick={() => setPanelTab("customizer")}>Customize</button>
+        <button type="button" role="tab" aria-selected={!customizerRequested && panelTab === "checklist"} className={!customizerRequested && panelTab === "checklist" ? "active" : ""} onClick={() => { setPanelTab("checklist"); setPanelMinimized(false); if (customizerRequested) onCustomizerOpened(); }}>Live class &amp; tasks</button>
+        <button type="button" role="tab" aria-selected={customizerRequested || panelTab === "customizer"} className={customizerRequested || panelTab === "customizer" ? "active" : ""} onClick={() => { setPanelTab("customizer"); setPanelMinimized(false); if (customizerRequested) onCustomizerOpened(); }}>Customize</button>
       </div>
-      {panelTab === "checklist" ? <div className="student-glass-checklist">
+      {!customizerRequested && panelTab === "checklist" ? <div className="student-glass-checklist">
         {checklist.map((item, index) => <article key={item.title} className={`student-glass-checklist-item state-${item.state}`}>
           <span aria-hidden="true">{item.state === "done" ? "✓" : item.state === "attention" ? "!" : "◷"}</span><div><b>{item.title}</b><small>{item.detail}</small></div>
         </article>)}
@@ -137,6 +113,6 @@ export default function OverviewDashboard({
         {!demoMode && <p className="student-glass-demo-note">SAGA shows recorded class and assessment information here. It does not infer a live meeting from a timetable.</p>}
       </div> : <PortalCustomizer preferences={preferences} onChange={onPreferencesChange} onReset={onReset}/>}
     </DraggableGlassWindow>
-    <div className="student-glass-dashboard-footer"><span>{storageReady && !demoMode ? "Preferences saved in this browser" : "Changes stay in this session"}</span><button type="button" onClick={() => { setPanelTab("customizer"); setPanelMinimized(false); }}>Customize portal</button></div>
+    <div className="student-glass-dashboard-footer"><span>{storageReady && !demoMode ? "Preferences saved in this browser" : "Changes stay in this session"}</span><button type="button" onClick={() => { setPanelTab("customizer"); setPanelMinimized(false); if (customizerRequested) onCustomizerOpened(); }}>Customize portal</button></div>
   </div>;
 }
