@@ -10,7 +10,7 @@ type AnnouncementItem = {
   subject?: { id: string; classId: string | null; code: string; title: string; term: string; academicYear: string };
   author?: { fullName: string };
 };
-type AnnouncementForm = { title: string; body: string; status: "DRAFT" | "PUBLISHED"; isPinned: boolean; publishAt: string; expiresAt: string };
+type AnnouncementForm = { title: string; body: string; status: AnnouncementStatus; isPinned: boolean; publishAt: string; expiresAt: string };
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not scheduled";
@@ -69,7 +69,7 @@ export function TeacherClassAnnouncements({ subjectId, readOnly = false }: { sub
   }
   function startEdit(item: AnnouncementItem) {
     setForm({
-      title: item.title, body: item.body, status: item.status === "PUBLISHED" ? "PUBLISHED" : "DRAFT",
+      title: item.title, body: item.body, status: item.status,
       isPinned: item.isPinned, publishAt: item.status === "PUBLISHED" ? toLocalDateTime(item.publishAt) : "",
       expiresAt: toLocalDateTime(item.expiresAt)
     });
@@ -80,7 +80,7 @@ export function TeacherClassAnnouncements({ subjectId, readOnly = false }: { sub
     try {
       const payload = {
         title: form.title, body: form.body, status: form.status, isPinned: form.isPinned,
-        publishAt: form.status === "PUBLISHED" ? asIso(form.publishAt) : null, expiresAt: asIso(form.expiresAt)
+        publishAt: form.status === "DRAFT" ? null : asIso(form.publishAt), expiresAt: asIso(form.expiresAt)
       };
       const response = await fetch(
         editingId ? "/api/teacher/announcements/" + encodeURIComponent(editingId) : "/api/teacher/subjects/" + encodeURIComponent(subjectId) + "/announcements",
@@ -142,8 +142,8 @@ export function TeacherClassAnnouncements({ subjectId, readOnly = false }: { sub
       <label className="form-label" htmlFor="class-announcement-body">Announcement</label>
       <textarea id="class-announcement-body" className="form-control mb-3" rows={6} value={form.body} onChange={event => setForm(current => ({ ...current, body: event.target.value }))} maxLength={12000} required placeholder="Write the official notice, instructions, or reminder…"/>
       <div className="row g-3">
-        <div className="col-12 col-md-4"><label className="form-label" htmlFor="class-announcement-status">Publishing</label><select id="class-announcement-status" className="form-select" value={form.status} onChange={event => setForm(current => ({ ...current, status: event.target.value as "DRAFT" | "PUBLISHED" }))}><option value="PUBLISHED">Publish / schedule</option><option value="DRAFT">Save as draft</option></select></div>
-        <div className="col-12 col-md-4"><label className="form-label" htmlFor="class-announcement-publish">Publish date and time (optional)</label><input id="class-announcement-publish" className="form-control" type="datetime-local" value={form.publishAt} disabled={form.status === "DRAFT"} onChange={event => setForm(current => ({ ...current, publishAt: event.target.value }))}/><small className="text-body-secondary">Leave blank to publish immediately. Scheduled notices appear when the date arrives.</small></div>
+        <div className="col-12 col-md-4"><label className="form-label" htmlFor="class-announcement-status">Publishing</label><select id="class-announcement-status" className="form-select" value={form.status} onChange={event => setForm(current => ({ ...current, status: event.target.value as AnnouncementStatus }))}><option value="PUBLISHED">Publish / schedule</option><option value="DRAFT">Save as draft</option>{editingId && <option value="ARCHIVED">Keep archived</option>}</select></div>
+        <div className="col-12 col-md-4"><label className="form-label" htmlFor="class-announcement-publish">Publish date and time (optional)</label><input id="class-announcement-publish" className="form-control" type="datetime-local" value={form.publishAt} disabled={form.status !== "PUBLISHED"} onChange={event => setForm(current => ({ ...current, publishAt: event.target.value }))}/><small className="text-body-secondary">Leave blank to publish immediately. Scheduled notices appear when the date arrives.</small></div>
         <div className="col-12 col-md-4"><label className="form-label" htmlFor="class-announcement-expiry">Expiration (optional)</label><input id="class-announcement-expiry" className="form-control" type="datetime-local" value={form.expiresAt} onChange={event => setForm(current => ({ ...current, expiresAt: event.target.value }))}/></div>
       </div>
       <div className="form-check my-3"><input id="class-announcement-pin" className="form-check-input" type="checkbox" checked={form.isPinned} onChange={event => setForm(current => ({ ...current, isPinned: event.target.checked }))}/><label className="form-check-label" htmlFor="class-announcement-pin">Pin this announcement at the top of the class feed</label></div>
