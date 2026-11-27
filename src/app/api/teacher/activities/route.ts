@@ -109,8 +109,10 @@ export async function GET(request: Request) {
         select: { id: true, enrollmentId: true, attemptNumber: true, answers: true, points: true, manualGrades: true, feedback: true,
           startedAt: true, submittedAt: true, gradedAt: true, enrollment: { select: { studentName: true, studentNumber: true } } } })
     ]);
-    return reply({ submissions: rows.slice(0, 30), nextCursor: rows.length > 30 ? rows[29].id : null,
-      roster, quizAttempts });
+    return reply({ submissions: rows.slice(0, 30).map(row => ({
+      ...row,
+      attachments: row.attachments.map(file => ({ ...file, fileSize: Number(file.fileSize) }))
+    })), nextCursor: rows.length > 30 ? rows[29].id : null, roster, quizAttempts });
   }
   const topic = searchParams.get("topic");
   if (topic && topic.length > 100) return error("Invalid topic.");

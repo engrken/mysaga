@@ -103,7 +103,7 @@ export async function GET(request: Request) {
         text: submission.text, driveUrl: submission.driveUrl, files: submission.files, offline: submission.offline,
         storageProvider: submission.storageProvider, fileUrl: submission.fileUrl, fileName: submission.fileName,
         fileSize: submission.fileSize, mimeType: submission.mimeType,
-        attachments: submission.attachments,
+        attachments: submission.attachments.map(file => ({ ...file, fileSize: Number(file.fileSize) })),
         submittedAt: submission.submittedAt, graded: submission.gradedAt !== null,
         points: release ? submission.points : null, feedback: release ? submission.feedback : null
       } : null

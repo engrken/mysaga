@@ -14,7 +14,7 @@ const DRIVE_FILE_SIZE_MIN = MAX_R2_FILE_SIZE + 1;
 const mimeTypePattern = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i;
 const fileBaseSchema = {
   fileName: z.string().trim().min(1).max(180),
-  fileSize: z.number().int().positive(),
+  fileSize: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   mimeType: z.string().trim().min(1).max(255).regex(mimeTypePattern)
 };
 const attachmentSchema = z.discriminatedUnion("storageProvider", [
@@ -204,7 +204,7 @@ export async function POST(request: Request) {
     await tx.activitySubmissionFile.deleteMany({ where: { submissionId: row.id } });
     if (verifiedAttachments.length) {
       await tx.activitySubmissionFile.createMany({
-        data: verifiedAttachments.map(file => ({ submissionId: row.id, ...file }))
+        data: verifiedAttachments.map(file => ({ submissionId: row.id, ...file, fileSize: BigInt(file.fileSize) }))
       });
     }
     return { submissionId: row.id, previousFileKeys };

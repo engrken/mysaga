@@ -5,7 +5,7 @@ CREATE TABLE "ActivitySubmissionFile" (
   "fileKey" TEXT,
   "fileUrl" TEXT NOT NULL,
   "fileName" TEXT NOT NULL,
-  "fileSize" INTEGER NOT NULL,
+  "fileSize" BIGINT NOT NULL,
   "mimeType" TEXT NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "ActivitySubmissionFile_pkey" PRIMARY KEY ("id")
