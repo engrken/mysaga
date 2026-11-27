@@ -1,0 +1,43 @@
+name: Restore recovered Activities source
+
+on:
+  push:
+    branches:
+      - feat/class-workspace-activities-beta-20261127
+
+permissions:
+  contents: write
+
+jobs:
+  restore-source:
+    if: github.event.head_commit.message == 'Trigger recovered source transfer'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Restore original, validated source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 5 --retry-delay 2 \
+            "https://sb-3s6y0317k32i.vercel.run/activities-source.tar.gz" \
+            --output /tmp/activities-source.tar.gz
+          echo "c7c99aa5d974cd47b2d3964ecd3c635a02e1a1ce0aa3c991f20e490cb4d2f5b9  /tmp/activities-source.tar.gz" | sha256sum --check
+          tar -xzf /tmp/activities-source.tar.gz -C "$GITHUB_WORKSPACE"
+          test "$(wc -c < package-lock.json)" -eq 323782
+          echo "c73117555af4a42fc8298ef5accc5a60264327e26315bc5183634770554181e1  package-lock.json" | sha256sum --check
+          node -e "const p=require('./package-lock.json'); if(p.name!=='fcu-student-portal'||p.version!=='0.14.0-beta.3') process.exit(1)"
+          node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))"
+          rm -rf recovery-lock-parts
+          rm -f .github/workflows/rebuild-activities-lockfile.yml
+
+      - name: Commit complete source and exact lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Restore exact Activities source files"
+          git push
