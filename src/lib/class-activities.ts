@@ -105,7 +105,7 @@ export const lessonPagesSchema = z.array(z.object({
   });
 });
 
-export { validDriveLink } from "./drive-link";
+export { validDriveLink } from "./drive-link.ts";
 
 export const activityHeaders = { "Cache-Control": "private, no-store" };
 export const activityTopicSchema = z.string().trim().max(100).transform(value => value.replace(/\\s+/g, " "));
