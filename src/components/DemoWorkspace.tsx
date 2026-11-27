@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, type ReactNode, type CSSProperties } from "react";
 import styles from "./DemoWorkspace.module.css";
 import OverviewDashboard from "./student-portal/OverviewDashboard";
-import { STUDENT_PORTAL_ACCENTS, STUDENT_PORTAL_DEFAULTS, type StudentGradeSummary, type StudentPortalPreferences } from "./student-portal/types";
+import { STUDENT_PORTAL_ACCENTS, STUDENT_PORTAL_DEFAULTS, type StudentGradeSummary, type StudentPortalPreferences, safeStudentBackgroundUrl } from "./student-portal/types";
 
 type DemoRole = "teacher" | "student" | "admin";
 type DemoTab = "overview" | "scorebook" | "attendance" | "publication" | "grades" | "simulator" | "schools";
@@ -178,7 +178,7 @@ export default function DemoWorkspace() {
   const isStudent = role === "student";
   const pageTitle = menus[role || "teacher"].find(item => item.id === tab)?.label || "Overview";
 
-  return <main className={styles.shell} data-student-glass-theme={isStudent ? studentPreferences.theme : undefined} data-student-wallpaper={isStudent ? studentPreferences.wallpaper : undefined} style={{ "--student-accent": isStudent ? STUDENT_PORTAL_ACCENTS[studentPreferences.accent].color : undefined } as CSSProperties}>
+  return <main className={styles.shell} data-student-glass-theme={isStudent ? studentPreferences.theme : undefined} data-student-wallpaper={isStudent ? studentPreferences.wallpaper : undefined} style={{ "--student-accent": isStudent ? STUDENT_PORTAL_ACCENTS[studentPreferences.accent].color : undefined, "--student-wallpaper-image": isStudent && studentPreferences.wallpaper === "custom" && safeStudentBackgroundUrl(studentPreferences.customBackgroundUrl) ? `url("${safeStudentBackgroundUrl(studentPreferences.customBackgroundUrl)}")` : "none" } as CSSProperties}>
     <div className={styles.topbar}>
       <Link className={styles.logo} href="/" aria-label="SAGA Portal home">
         <span className={styles.logoMark}>S</span><span><strong>SAGA</strong><small>PORTAL DEMO</small></span>
