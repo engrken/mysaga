@@ -151,12 +151,10 @@ export async function completeGoogleSignInOAuth(code: string, state: string) {
     throw new GoogleSignInError("SCHOOL_INACTIVE", "This school workspace is inactive or its subscription has expired. Contact SAGA support.");
   }
 
-  let emailVerifiedAt = user.emailVerifiedAt;
-  if (!emailVerifiedAt) {
-    emailVerifiedAt = new Date();
+  if (!user.emailVerifiedAt) {
     await prisma.user.update({
       where: { id: user.id },
-      data: { emailVerifiedAt }
+      data: { emailVerifiedAt: new Date() }
     });
   }
 
