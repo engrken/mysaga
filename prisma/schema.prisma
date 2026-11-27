@@ -413,6 +413,11 @@ model EmailVerificationChallenge {
   @@index([expiresAt])
 }
 
+enum StorageProvider {
+  GOOGLE_DRIVE
+  CLOUDFLARE_R2
+}
+
 enum ClassActivityKind {
   QUIZ
   ASSIGNMENT
@@ -484,6 +489,12 @@ model ActivitySubmission {
   text         String?
   driveUrl     String?
   files        Json?
+  storageProvider StorageProvider?
+  fileKey      String?       @unique
+  fileUrl      String?
+  fileName     String?
+  fileSize     Int?
+  mimeType     String?
   offline      Boolean       @default(false)
   points       Float?
   feedback     String?

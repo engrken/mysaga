@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { upload as uploadPrivateBlob } from "@vercel/blob/client";
+import { StudentR2Uploader } from "@/components/StudentR2Uploader";
+import { TeacherSubmissionViewer } from "@/components/TeacherSubmissionViewer";
 import { ActivityRichEditor } from "@/components/ActivityRichEditor";
 import { activitiesExplorationOnly, activitiesPublishEnabled, activitiesReadOnly, activitiesStudentReadOnly } from "@/lib/activity-feature-flags.client";
 
@@ -13,7 +14,10 @@ type Attachment = { pathname: string; filename: string; contentType: string; siz
 type InlineQuestion = { type: QuestionType; prompt: string; choices: string; answer: string; answerText: string; points: string };
 type Question = { id: string; type: QuestionType; prompt: string; options: string[]; answer?: number; answerText?: string; points: number };
 type BankQuestionItem = Pick<Question, "id" | "prompt" | "type" | "points"> & { topic: string | null };
-type Submission = { text: string | null; driveUrl: string | null; files?: Attachment[]; offline?: boolean;
+type StorageProvider = "GOOGLE_DRIVE" | "CLOUDFLARE_R2";
+type Submission = { text: string | null; driveUrl: string | null; files?: Attachment[];
+  storageProvider?: StorageProvider | null; fileKey?: string | null; fileUrl?: string | null;
+  fileName?: string | null; fileSize?: number | null; mimeType?: string | null; offline?: boolean;
   points: number | null; feedback: string | null; submittedAt: string; graded?: boolean; gradedAt?: string | null;
   answers?: Record<string, string | number> };
 type TeacherSubmission = Submission & { id: string; enrollment: { id: string; studentName: string; studentNumber: string | null } };
@@ -37,7 +41,7 @@ type Activity = {
 };
 const activityLabels = { ASSIGNMENT: "Assignment", QUIZ: "Quiz", RESOURCE: "Resource", LESSON: "Lesson" };
 const activityDescriptions = {
-  ASSIGNMENT: "Collect written work, private uploads, or Google Drive links; grade online and offline work.",
+  ASSIGNMENT: "Collect written work and direct-to-cloud file uploads; grade online and offline work.",
   QUIZ: "Build quizzes from reusable multiple-choice, true/false, short-answer, and essay questions.",
   RESOURCE: "Share instructions, readings, or a Google Drive file.",
   LESSON: "Create rich-content pages with sequential navigation and branching choices."
@@ -438,11 +442,10 @@ export function TeacherActivities({ subjectId, categories, locked, readOnly, ini
         {page.nextPageId && <p className="small text-secondary mb-0">Next: {selected.lessonPages?.find(item => item.id === page.nextPageId)?.title ?? "Unknown page"}</p>}
       </article>)}
       {submissionLoading ? <p role="status">Loading submissions…</p> : !rows.length && selected?.kind !== "LESSON" && <p className="mb-0">No submissions yet.</p>}
+      {rows.length > 0 && <TeacherSubmissionViewer activityId={active} submissions={rows}/>}
       {rows.map(row => <article className="border-top py-3 text-break" key={row.id}>
         <b>{row.enrollment.studentName}</b><p className="small text-secondary mb-1">{formatDate(row.submittedAt)} · {row.gradedAt ? "Graded" : "Submitted"}</p>
         {row.text && <p style={{ whiteSpace: "pre-wrap" }}>{row.text}</p>}
-        {row.driveUrl && <p><a href={row.driveUrl} target="_blank" rel="noreferrer">Open submitted file in Google Drive</a></p>}
-        {row.files?.map(file => <p key={file.pathname}><a href={"/api/activities/files?activityId=" + encodeURIComponent(active) + "&pathname=" + encodeURIComponent(file.pathname)}>{file.filename}</a> <small className="text-secondary">({Math.ceil(file.size / 1024)} KB)</small></p>)}
         {row.offline && <p className="small text-secondary">Offline work recorded by the teacher</p>}
         {selected?.kind === "ASSIGNMENT" ? <form className="d-grid gap-2" key={`${row.id}-${row.gradedAt}`} onSubmit={event => {
           event.preventDefault();
@@ -549,7 +552,6 @@ export function RecentActivitySubmissions({ onOpen }: { onOpen: (subjectId: stri
 
 export function StudentActivities({ readOnly, subjectId, academicYear, term }: { readOnly?: boolean; subjectId?: string; academicYear?: string; term?: string }) {
   const [classes, setClasses] = useState<ClassInfo[]>([]);
-  const [studentId, setStudentId] = useState("");
   const classId = subjectId ?? "";
   const [activities, setActivities] = useState<Activity[]>([]);
   const [active, setActive] = useState<Activity | null>(null);
@@ -581,7 +583,6 @@ export function StudentActivities({ readOnly, subjectId, academicYear, term }: {
     const controller = new AbortController();
     request(studentPath + query, undefined, controller.signal).then(data => {
       setClasses(data.classes);
-      setStudentId(data.studentId);
       setActivities(data.activities);
       setLoadedKey(requestKey);
     }).catch(error => {
@@ -633,52 +634,25 @@ export function StudentActivities({ readOnly, subjectId, academicYear, term }: {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!active || featureReadOnly) return;
+    if (!active || featureReadOnly || active.kind !== "QUIZ") return;
     const fields = new FormData(event.currentTarget);
     setFailure(""); setBusy(true);
     try {
-      if (active.kind === "QUIZ") {
-        if (!quizAttemptId) throw new Error("Start a quiz attempt before submitting.");
-        const answers = Object.fromEntries((active.questions ?? []).map(question => {
-          const value = fields.get(question.id);
-          return [question.id, question.type === "MULTIPLE_CHOICE" || question.type === "TRUE_FALSE"
-            ? (value === null ? -1 : Number(value)) : String(value ?? "")];
-        }));
-        await request(studentPath, { action: "submit-quiz", activityId: active.id, attemptId: quizAttemptId, answers });
-      } else {
-        const driveUrl = String(fields.get("driveUrl") ?? "").trim();
-        const text = String(fields.get("text") ?? "").trim();
-        const selectedFiles = fields.getAll("files").filter((file): file is File => file instanceof File && file.size > 0);
-        if (selectedFiles.length > 10 || selectedFiles.reduce((total, file) => total + file.size, 0) > 30 * 1024 * 1024) {
-          throw new Error("Choose up to 10 files with a combined size of 30 MB or less.");
-        }
-        const files: Attachment[] = [];
-        for (const file of selectedFiles) {
-          const safeName = file.name.normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g, "-").slice(-120) || "attachment";
-          const blob = await uploadPrivateBlob(
-            `activities/${active.id}/${studentId}/${crypto.randomUUID()}-${safeName}`,
-            file,
-            {
-              access: "private",
-              contentType: file.type,
-              handleUploadUrl: `${studentPath}/upload`,
-              clientPayload: active.id
-            }
-          );
-          files.push({ pathname: blob.pathname, filename: safeName, contentType: file.type, size: file.size });
-        }
-        await request(studentPath, { activityId: active.id, text, driveUrl, files });
-      }
+      if (!quizAttemptId) throw new Error("Start a quiz attempt before submitting.");
+      const answers = Object.fromEntries((active.questions ?? []).map(question => {
+        const value = fields.get(question.id);
+        return [question.id, question.type === "MULTIPLE_CHOICE" || question.type === "TRUE_FALSE"
+          ? (value === null ? -1 : Number(value)) : String(value ?? "")];
+      }));
+      await request(studentPath, { action: "submit-quiz", activityId: active.id, attemptId: quizAttemptId, answers });
       setActive(null);
       setQuizAttemptId(null);
       setQuizStartedAt(null);
       setTimeLeft(null);
       setRevision(current => current + 1);
-    } catch (error) { setFailure(error instanceof Error ? error.message : "Could not submit the activity."); }
+    } catch (error) { setFailure(error instanceof Error ? error.message : "Could not submit the quiz."); }
     finally { setBusy(false); }
   }
-
-  const groups = new Map<string, Activity[]>();
   for (const item of activities) {
     const topic = subjectId ? item.topic || "General" : "";
     groups.set(topic, [...(groups.get(topic) ?? []), item]);
@@ -770,17 +744,13 @@ export function StudentActivities({ readOnly, subjectId, academicYear, term }: {
       {active.kind === "ASSIGNMENT" && (active.submission ? <section>
         <p><b>My submission</b> · {formatDate(active.submission.submittedAt)} Manila time {active.submission.offline ? "· Recorded as offline work" : ""}</p>
         {active.submission.text && <p style={{ whiteSpace: "pre-wrap" }}>{active.submission.text}</p>}
-        {active.submission.driveUrl && <p><a href={active.submission.driveUrl} target="_blank" rel="noreferrer">Open my submitted file in Google Drive</a></p>}
+        {active.submission.fileUrl && <p><a href={active.submission.fileUrl} target="_blank" rel="noreferrer">View / download {active.submission.fileName || "submitted file"}</a>{active.submission.fileSize ? <small className="text-secondary"> · {Math.ceil(active.submission.fileSize / 1024)} KB</small> : null}</p>}
+        {active.submission.driveUrl && <p><a href={active.submission.driveUrl} target="_blank" rel="noreferrer">Open legacy Google Drive submission</a></p>}
         {active.submission.files?.map(file => <p key={file.pathname}><a href={"/api/activities/files?activityId=" + encodeURIComponent(active.id) + "&pathname=" + encodeURIComponent(file.pathname)}>{file.filename}</a> <small className="text-secondary">({Math.ceil(file.size / 1024)} KB)</small></p>)}
         {active.submission.points !== null ? <p>Score · <strong>{active.submission.points} / {active.maxScore}</strong></p> : <p>{active.submission.graded ? "Your grade has not been released." : "Waiting for grading."}</p>}
         {active.submission.feedback && <div className="border-start border-3 ps-3"><strong>Teacher feedback</strong><p className="mb-0" style={{ whiteSpace: "pre-wrap" }}>{active.submission.feedback}</p></div>}
-      </section> : canSubmit ? <form key={active.id} onSubmit={submit} className="d-grid gap-3">
-        <label>Text response<textarea name="text" className="form-control" maxLength={12000} rows={4}/></label>
-        <label>Attach files<input name="files" type="file" multiple className="form-control" accept=".pdf,.txt,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"/></label>
-        <p className="small text-secondary mb-0">Up to 10 files, 15 MB each. You may also submit a text response or Google Drive link.</p>
-        <label>Google Drive or Docs link<input type="url" name="driveUrl" className="form-control" maxLength={2048}/><small>Share access with your teacher before submitting.</small></label>
-        <button className="btn btn-primary" disabled={busy || featureReadOnly}>{busy ? "Uploading and submitting…" : "Submit assignment"}</button>
-      </form> : <p className="mb-0">Submissions are closed.</p>)}
+      </section> : canSubmit ? <StudentR2Uploader assignmentId={active.id} disabled={busy || featureReadOnly}
+          onSubmitted={() => setRevision(current => current + 1)}/> : <p className="mb-0">Submissions are closed.</p>)}
     </article>}
 
   </section>;

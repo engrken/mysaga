@@ -41,6 +41,15 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Regenerate npm lockfile for dependency changes
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Upload regenerated npm lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-lockfile-${{ github.sha }}
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 1
       - name: Install dependencies and generate Prisma client
         run: npm ci
       - name: Validate Prisma schema

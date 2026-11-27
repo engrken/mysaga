@@ -95,8 +95,10 @@ export async function GET(request: Request) {
     }
     const rows = await prisma.activitySubmission.findMany({ where: { activityId }, orderBy: { id: "asc" }, take: 31,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      select: { id: true, text: true, driveUrl: true, points: true, feedback: true, submittedAt: true, gradedAt: true,
-        enrollment: { select: { studentName: true } } }
+      select: { id: true, text: true, driveUrl: true, files: true, storageProvider: true, fileUrl: true,
+        fileName: true, fileSize: true, mimeType: true, points: true, feedback: true,
+        submittedAt: true, gradedAt: true,
+        enrollment: { select: { id: true, studentName: true, studentNumber: true } } }
     });
     const [roster, quizAttempts] = await Promise.all([
       prisma.enrollment.findMany({ where: { subjectId }, orderBy: { studentName: "asc" },
