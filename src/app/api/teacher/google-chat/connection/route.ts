@@ -8,7 +8,7 @@ export async function GET() {
   if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const connection = await prisma.googleChatConnection.findUnique({
     where: { schoolId_teacherId: { schoolId: teacher.schoolId, teacherId: teacher.id } },
-    select: { googleEmail: true, scopes: true, createdAt: true, updatedAt: true }
+    select: { googleSubject: true, googleEmail: true, scopes: true, createdAt: true, updatedAt: true }
   });
   if (!connection) {
     return NextResponse.json({ connected: false, connection: null }, {
