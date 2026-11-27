@@ -1,19 +1,33 @@
 [
   {
+    "version": "0.15.0-beta.1",
+    "date": "2026-11-27",
+    "kind": "feature",
+    "changes": [
+      "Expanded class setup with structured program/course, year level, and section details, optional Class IDs, and improved student roster filters.",
+      "Added Google Chat class Spaces with teacher account linking, student invitations, roster synchronization, and class announcements.",
+      "Introduced the Class Workspace Activities beta for teacher-side activity drafting and exploration, with publishing, closing, grading, and student submissions kept disabled while the beta is evaluated.",
+      "Improved assignment submissions with multiple file attachments, direct Cloudflare R2 uploads for files up to 5 MB each, and Google Drive link fallback for larger files.",
+      "Improved the privacy notice and added Google Search Console site verification support."
+    ]
+  },
+  {
     "version": "0.14.0-beta.3",
     "date": "2026-11-26",
     "kind": "improvement",
     "changes": [
       "Added Student Roster filters for program, year level, and section in tenant management."
     ]
-  },{
+  },
+  {
     "version": "0.14.0-beta.2",
     "date": "2026-11-26",
     "kind": "improvement",
     "changes": [
       "Made Class ID optional when creating or editing a class; duplicate checks still apply when an ID is entered."
     ]
-  },{
+  },
+  {
     "version": "0.14.0-beta.1",
     "date": "2026-11-26",
     "kind": "feature",
