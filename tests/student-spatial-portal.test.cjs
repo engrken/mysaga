@@ -21,7 +21,7 @@ test("student theme preferences are account-scoped, validated, and never persist
   assert.match(portal, /saga-student-portal-preferences:v1:\$\{user\.id\}/);
   assert.match(portal, /if \(!studentPortalPreferencesReady \|\| teacher \|\| user\.isDemo\) return/);
   assert.match(portal, /mergeStudentPortalPreferences\(JSON\.parse\(saved\)\)/);
-  assert.match(types, /url\.protocol === "https:" \|\| url\.protocol === "http:"/);
+  assert.match(types, /url\.protocol === "https:"/);
   assert.match(types, /STUDENT_PORTAL_DEFAULTS/);
   assert.match(types, /modules: \{ metrics: true, insights: true, courses: true \}/);
 });
