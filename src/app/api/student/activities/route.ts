@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { assertActivitiesWritable } from "@/lib/activity-feature-flags";
+import { activitiesExplorationOnly, assertActivitiesWritable } from "@/lib/activity-feature-flags";
 import {
   activityEnrollmentIdentity, activityHeaders, gradeQuizAnswers, QuizAnswer,
   quizSnapshotSchema, sanitizeLessonHtml
@@ -115,7 +115,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const student = await requireRole("STUDENT");
   if (!student) return error("Unauthorized.", 401);
-  if (!assertActivitiesWritable("student")) return error("Student activity submissions are disabled while this beta is read-only.", 423);
+  if (activitiesExplorationOnly || !assertActivitiesWritable("student")) {
+    return error("Student activity submissions are disabled during Activities exploration mode.", 423);
+  }
   const parsed = submissionSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return error("Check your submission and try again.");
   const input = parsed.data;

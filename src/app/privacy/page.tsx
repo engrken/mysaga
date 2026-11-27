@@ -124,10 +124,11 @@ export default async function PrivacyPage({ searchParams }: PrivacyPageProps) {
             and maintain the service.
           </li>
           <li>
-            <strong>Optional Google Chat connection details:</strong> when a teacher
-            chooses to connect Google, the service may process the teacher's Google
-            account identifier and email, approved OAuth permissions, and encrypted
-            access/refresh tokens used by the class-chat integration.
+            <strong>Google sign-in and connected services:</strong> if you choose
+            Google as your SAGA sign-in method, the service processes your verified
+            Google account identifier and email. Teachers may also authorize the
+            limited Google Drive and Google Chat permissions needed for class tools;
+            service tokens are encrypted and are not used as SAGA passwords.
           </li>
         </ul>
 
@@ -150,30 +151,50 @@ export default async function PrivacyPage({ searchParams }: PrivacyPageProps) {
           for unrelated processing.
         </p>
 
-        <h2>4. Google sign-in and Google Chat integration</h2>
+        <h2>4. Google sign-in, Drive, and Google Chat</h2>
         <p>
-          Google Chat is an optional teacher-enabled integration; it is not required
-          for ordinary grade-portal use. When a teacher connects a Google account, the
-          Google authorization screen identifies the permissions requested. Depending
-          on the enabled features, those permissions allow SAGA Portal to identify the
-          connected Google account and to read or create Chat spaces, manage
-          memberships in those spaces, and create Chat messages for class workflows.
+          Google Sign-In is an alternative way to authenticate to SAGA Portal. When
+          you choose it, Google verifies your identity and SAGA matches the verified
+          Google email to an existing account in the school you selected. SAGA does
+          not receive your Google password. Google sign-in does not create a new
+          school account or grant access to another school; your existing SAGA role,
+          school membership, and class permissions continue to control what you can
+          see and do.
         </p>
         <p>
-          The service uses the approved Google permissions for the class-chat
-          integration. It does not request Gmail mailbox access or Google Drive file
-          content access through this Chat connection. Google access and refresh
-          tokens stored by the application are encrypted. A teacher can disconnect
-          the integration through the available account controls or revoke the
-          application's access through their Google Account settings.
+          Students use Google sign-in to establish their SAGA identity. Their verified
+          email is used for class identity and Google Chat membership invitations.
+          Students do not receive teacher-only permissions to create class Chat spaces,
+          manage memberships, or send messages through SAGA.
         </p>
         <p>
-          Students may be invited to a connected class Chat space when the teacher
-          enables the integration and the student is enrolled. Google then processes
-          the relevant account and Chat activity under Google's own terms and privacy
-          information.
+          For teachers, the first Google sign-in automatically continues to a Google
+          authorization screen for the additional services when the permissions have
+          not already been granted. These permissions include the limited
+          <code>drive.file</code> scope for files selected through Google Picker and
+          the Google Chat scopes needed to list or create spaces, manage class
+          memberships, and send class messages. This is a separate Google consent
+          step after identity sign-in because SAGA must request only the permissions
+          needed for those services. If a teacher declines it, SAGA sign-in still
+          succeeds, but Drive Picker and Chat management remain unavailable until
+          the services are authorized.
         </p>
-
+        <p>
+          SAGA does not request broad access to all files in Google Drive or Gmail
+          mailbox access. Teachers select the specific Drive files to use as Activity
+          materials. SAGA stores the selected Drive link and encrypted Google service
+          tokens; it does not copy the Drive file contents or change file-sharing
+          permissions. Teachers must give enrolled students the appropriate viewing
+          access in Google Drive. Students opening a Drive link must use the Google
+          account that has been granted access to that file.
+        </p>
+        <p>
+          Google access and refresh tokens are encrypted at rest and used only for
+          the connected SAGA Drive and Chat features. A teacher can reconnect the
+          service from the class Chat controls or revoke the application's access
+          through Google Account settings. Google then processes account and Chat
+          activity under Google's own terms and privacy information.
+        </p>
         <h2>5. Assignments, uploaded files, and Google Drive links</h2>
         <p>
           For assignment submissions, files up to 5 MB per file may be uploaded
