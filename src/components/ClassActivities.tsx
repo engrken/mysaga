@@ -652,6 +652,7 @@ export function StudentActivities({ readOnly, subjectId, academicYear, term }: {
     } catch (error) { setFailure(error instanceof Error ? error.message : "Could not submit the quiz."); }
     finally { setBusy(false); }
   }
+  const groups = new Map<string, Activity[]>();
   for (const item of activities) {
     const topic = subjectId ? item.topic || "General" : "";
     groups.set(topic, [...(groups.get(topic) ?? []), item]);
