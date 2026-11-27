@@ -9,7 +9,8 @@ test("SAGA login exposes a school-scoped Continue with Google option", () => {
   const login = read("src/app/login/page.tsx");
   const route = read("src/app/api/auth/google/route.ts");
   assert.match(login, /Continue with Google/);
-  assert.match(login, /\/api\/auth\/google\?schoolId=/);
+  assert.ok(login.includes('new URL("/api/auth/google", window.location.origin)'));
+  assert.ok(login.includes('searchParams.set("schoolId", schoolId)'));
   assert.match(login, /Use the Google email registered to your selected school/);
   assert.match(route, /schoolId/);
   assert.match(route, /createGoogleSignInOAuthUrl\(schoolId\)/);
