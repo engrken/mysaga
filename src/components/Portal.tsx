@@ -1163,6 +1163,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [studentPortalPreferences, setStudentPortalPreferences] = useState<StudentPortalPreferences>(STUDENT_PORTAL_DEFAULTS);
   const [studentPortalPreferencesReady, setStudentPortalPreferencesReady] = useState(false);
   const [studentCustomizerRequested, setStudentCustomizerRequested] = useState(false);
+  const [studentLayoutResetVersion, setStudentLayoutResetVersion] = useState(0);
   const studentPortalPreferencesKey = `saga-student-portal-preferences:v1:${user.id}`;
   useEffect(() => {
     if (teacher || user.isDemo) {
@@ -1186,6 +1187,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   }, [studentPortalPreferences, studentPortalPreferencesReady, studentPortalPreferencesKey, teacher, user.isDemo]);
   function resetStudentPortalPreferences() {
     setStudentPortalPreferences(STUDENT_PORTAL_DEFAULTS);
+    setStudentCustomizerRequested(false);
+    setStudentLayoutResetVersion(version => version + 1);
     setNotice("Student portal settings restored to the default layout.");
     if (!user.isDemo) {
       try { window.localStorage.removeItem(studentPortalPreferencesKey); }
@@ -2908,6 +2911,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           </div>
         </section>
         <OverviewDashboard
+          key={`student-layout-${studentLayoutResetVersion}`}
           fullName={user.fullName}
           grades={grades}
           attendanceWarnings={studentAttendanceWarnings}
