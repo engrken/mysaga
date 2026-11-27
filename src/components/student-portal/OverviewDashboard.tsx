@@ -101,7 +101,7 @@ export default function OverviewDashboard({
       onPositionChange={position => updateModulePosition("insights", position)}
     >
         <ClassInsightsPanel grades={grades} attendanceRate={metrics.attendanceRate} average={metrics.average}/>
-    </DraggableGlassModule>}}
+    </DraggableGlassModule>}
 
     {preferences.modules.courses && <DraggableGlassModule
       key={`courses-${preferences.modulePositions.courses.x}-${preferences.modulePositions.courses.y}`}
