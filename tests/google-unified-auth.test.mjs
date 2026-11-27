@@ -185,3 +185,10 @@ test("Google login button starts OAuth only on deliberate user activation", () =
   assert.ok(login.includes("window.location.assign"));
   assert.ok(!login.includes('href={schoolId ? `/api/auth/google'));
 });
+
+
+test("Activities exploration mode blocks student submissions even if a write flag is misconfigured", () => {
+  const route = read("src/app/api/student/activities/route.ts");
+  assert.ok(route.includes('activitiesExplorationOnly || !assertActivitiesWritable("student")'));
+  assert.ok(route.includes("Student activity submissions are disabled during Activities exploration mode."));
+});
