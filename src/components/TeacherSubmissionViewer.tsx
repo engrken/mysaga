@@ -4,7 +4,6 @@ type LegacyAttachment = { pathname: string; filename: string; contentType: strin
 type SubmissionAttachment = {
   id: string;
   storageProvider: "GOOGLE_DRIVE" | "CLOUDFLARE_R2";
-  fileKey: string | null;
   fileUrl: string | null;
   fileName: string;
   fileSize: number;
@@ -19,7 +18,6 @@ type SubmissionFileRow = {
   fileName?: string | null;
   fileSize?: number | null;
   mimeType?: string | null;
-  storageProvider?: "GOOGLE_DRIVE" | "CLOUDFLARE_R2" | null;
   attachments?: SubmissionAttachment[];
   driveUrl?: string | null;
   files?: LegacyAttachment[] | null;
