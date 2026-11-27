@@ -170,7 +170,7 @@ test("stored Google OAuth scopes are tokenized on whitespace", () => {
 test("Google teacher service connection requires explicit scope confirmation", () => {
   const chat = read("src/lib/google-chat.ts");
   assert.ok(chat.includes('typeof tokens.scope !== "string" || !tokens.scope.trim()'));
-  assert.ok(chat.includes(String.raw`new Set(tokens.scope.split(/\\s+/))`));
+  assert.ok(chat.includes("new Set(tokens.scope.split(/\\s+/))"));
   assert.ok(chat.includes("scopes: tokens.scope"));
   assert.ok(!chat.includes("tokens.scope ?? GOOGLE_SCOPES"));
 });
