@@ -676,6 +676,12 @@ export function StudentActivities({ readOnly, subjectId, academicYear, term }: {
   const canSubmit = active && active.status === "OPEN" && !deadlinePassed && !featureReadOnly &&
     (active.practice || active.subject?.gradeStatus === "DRAFT") &&
     (active.kind !== "QUIZ" || !!quizAttemptId);
+  const googleDriveItems = active ? [
+    ...(active.materialUrl ? [{ url: active.materialUrl, label: "Open activity material" }] : []),
+    ...(active.submission?.attachments?.filter(file => file.storageProvider === "GOOGLE_DRIVE")
+      .map(file => ({ url: file.fileUrl, label: "Open · " + file.fileName })) ?? []),
+    ...(active.submission?.driveUrl ? [{ url: active.submission.driveUrl, label: "Open legacy Drive submission" }] : [])
+  ] : [];
 
   return <section className="surface mb-3 student-activities-panel" aria-labelledby="student-activities-heading">
     <div className="d-flex flex-wrap justify-content-between gap-2 align-items-center mb-2">
@@ -714,12 +720,12 @@ export function StudentActivities({ readOnly, subjectId, academicYear, term }: {
       <p className="small text-secondary">{active.subject?.code} · {activityLabels[active.kind]}{active.kind !== "RESOURCE" && active.kind !== "LESSON" ? " · " + active.maxScore + " points" + (active.practice ? " · Practice" : "") : ""}</p>
       {active.dueAt && <p className="small text-secondary">Deadline: {formatDate(active.dueAt)} Manila time</p>}
       {active.instructions && <p style={{ whiteSpace: "pre-wrap" }}>{active.instructions}</p>}
-      {active.materialUrl && (activitiesGoogleDriveExploration && active.subject?.id
-        ? <div className="border rounded p-3 d-grid gap-2">
-            <strong>Activity material · Google Drive</strong>
-            <ActivityGoogleDrive subjectId={active.subject.id} mode="open" fileUrl={active.materialUrl}/>
-          </div>
-        : <p><a href={active.materialUrl} target="_blank" rel="noreferrer">Open activity material in Google Drive</a></p>)}
+      {active.materialUrl && !activitiesGoogleDriveExploration && <p><a href={active.materialUrl} target="_blank" rel="noreferrer">Open activity material in Google Drive</a></p>}
+      {activitiesGoogleDriveExploration && googleDriveItems.length > 0 && active.subject?.id && <div className="border rounded p-3 d-grid gap-2">
+        <strong>Google Drive resources</strong>
+        <p className="small text-secondary mb-0">Sign in with the Google account that matches your SAGA Portal email to open these files.</p>
+        <ActivityGoogleDrive subjectId={active.subject.id} mode="open" files={googleDriveItems}/>
+      </div>}
       {featureReadOnly && <p className="alert alert-info" role="status">Beta preview · this activity is read-only. Submitting work and changing answers are disabled.</p>}
       {active.kind === "LESSON" && active.lessonPages?.length ? (() => {
         const page = active.lessonPages.find(item => item.id === lessonPageId) ?? active.lessonPages[0];
@@ -764,24 +770,15 @@ export function StudentActivities({ readOnly, subjectId, academicYear, term }: {
       {active.kind === "ASSIGNMENT" && (active.submission ? <section>
         <p><b>My submission</b> · {formatDate(active.submission.submittedAt)} Manila time {active.submission.offline ? "· Recorded as offline work" : ""}</p>
         {active.submission.text && <p style={{ whiteSpace: "pre-wrap" }}>{active.submission.text}</p>}
-        {active.submission.attachments?.map(file => file.storageProvider === "GOOGLE_DRIVE" && activitiesGoogleDriveExploration && active.subject?.id
-          ? <div key={file.id} className="border rounded p-3 d-grid gap-2">
-              <strong className="text-break">{file.fileName}</strong>
-              <small className="text-secondary">Google Drive attachment · {(file.fileSize / (1024 * 1024)).toFixed(2)} MB</small>
-              <ActivityGoogleDrive subjectId={active.subject.id} mode="open" fileUrl={file.fileUrl}/>
-            </div>
+        {active.submission.attachments?.map(file => file.storageProvider === "GOOGLE_DRIVE" && activitiesGoogleDriveExploration
+          ? null
           : <p key={file.id} className="text-break">
               <a href={file.fileUrl} target="_blank" rel="noreferrer">
                 {file.storageProvider === "GOOGLE_DRIVE" ? "Open Google Drive" : "Download"} · {file.fileName}
               </a> <small className="text-secondary">({(file.fileSize / (1024 * 1024)).toFixed(2)} MB)</small>
             </p>)}
         {active.submission.fileUrl && <p><a href={active.submission.fileUrl} target="_blank" rel="noreferrer">View / download {active.submission.fileName || "submitted file"}</a>{active.submission.fileSize ? <small className="text-secondary"> · {Math.ceil(active.submission.fileSize / 1024)} KB</small> : null}</p>}
-        {active.submission.driveUrl && (activitiesGoogleDriveExploration && active.subject?.id
-          ? <div className="border rounded p-3 d-grid gap-2">
-              <strong>Legacy Google Drive submission</strong>
-              <ActivityGoogleDrive subjectId={active.subject.id} mode="open" fileUrl={active.submission.driveUrl}/>
-            </div>
-          : <p><a href={active.submission.driveUrl} target="_blank" rel="noreferrer">Open legacy Google Drive submission</a></p>)}
+        {active.submission.driveUrl && !activitiesGoogleDriveExploration && <p><a href={active.submission.driveUrl} target="_blank" rel="noreferrer">Open legacy Google Drive submission</a></p>}
         {active.submission.files?.map(file => <p key={file.pathname}><a href={"/api/activities/files?activityId=" + encodeURIComponent(active.id) + "&pathname=" + encodeURIComponent(file.pathname)}>{file.filename}</a> <small className="text-secondary">({Math.ceil(file.size / 1024)} KB)</small></p>)}
         {active.submission.points !== null ? <p>Score · <strong>{active.submission.points} / {active.maxScore}</strong></p> : <p>{active.submission.graded ? "Your grade has not been released." : "Waiting for grading."}</p>}
         {active.submission.feedback && <div className="border-start border-3 ps-3"><strong>Teacher feedback</strong><p className="mb-0" style={{ whiteSpace: "pre-wrap" }}>{active.submission.feedback}</p></div>}
