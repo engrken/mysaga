@@ -116,6 +116,7 @@ export default function OverviewDashboard({
     </section>}
 
     <DraggableGlassWindow
+      key={`${preferences.panelPosition.x}:${preferences.panelPosition.y}`}
       title="Student quick panel"
       minimized={panelMinimized}
       onMinimize={() => setPanelMinimized(true)}
