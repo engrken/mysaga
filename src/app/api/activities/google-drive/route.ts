@@ -19,6 +19,16 @@ const reply = (body: unknown, status = 200) =>
 const error = (message: string, status = 400, code?: string) =>
   reply({ error: message, ...(code ? { code } : {}) }, status);
 
+function isSameOriginRequest(request: Request) {
+  const origin = request.headers.get("origin");
+  if (!origin) return false;
+  try {
+    return new URL(origin).origin === new URL(request.url).origin;
+  } catch {
+    return false;
+  }
+}
+
 type PortalIdentity = {
   id: string;
   schoolId: string;
@@ -77,6 +87,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (!isSameOriginRequest(request)) return error("Google identity verification must be requested from SAGA Portal.", 403);
   const user = await getSession();
   if (!user || !["TEACHER", "STUDENT"].includes(user.role)) return error("Sign in to SAGA first.", 401);
   if (user.isDemo) return error("Google Drive is disabled in the read-only demo.", 403);
