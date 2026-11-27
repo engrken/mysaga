@@ -87,7 +87,8 @@ test("teacher Drive Picker reuses the same saved Google service connection", () 
   assert.match(route, /googleChatAccessToken\(connection\)/);
   assert.match(picker, /action=token/);
   assert.doesNotMatch(picker, /initTokenClient/);
-  assert.doesNotMatch(picker, /renderButton/);
+  assert.match(picker, /if \(mode !== "open" \|\| config\?\.identityVerified/);
+  assert.match(picker, /google\.accounts\.id\.renderButton/);
 });
 
 test("students use their Google SAGA session or verify a matching Google email before opening Drive", () => {
