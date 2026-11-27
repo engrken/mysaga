@@ -84,7 +84,7 @@ export function mergeStudentPortalPreferences(value: unknown): StudentPortalPref
     typeof candidate === "string" && values.includes(candidate as T);
   const modules: Partial<StudentPortalPreferences["modules"]> = input.modules && typeof input.modules === "object" ? input.modules : {};
   const point: Partial<StudentPortalPreferences["panelPosition"]> = input.panelPosition && typeof input.panelPosition === "object" ? input.panelPosition : {};
-  const modulePositions = input.modulePositions && typeof input.modulePositions === "object" ? input.modulePositions : {};
+  const modulePositions: Partial<StudentPortalPreferences["modulePositions"]> = input.modulePositions && typeof input.modulePositions === "object" ? input.modulePositions : {};
   const coordinate = (raw: unknown, fallback: number) =>
     typeof raw === "number" && Number.isFinite(raw) ? Math.max(-1200, Math.min(6000, raw)) : fallback;
   const modulePoint = (name: StudentModuleKey): StudentModulePosition => {
