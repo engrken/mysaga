@@ -29,6 +29,7 @@ test("student theme preferences are account-scoped, validated, and never persist
 test("dashboard includes the requested KPI, insights, schedule, quick panel, and reset controls", () => {
   const dashboard = read("src/components/student-portal/OverviewDashboard.tsx");
   const customizer = read("src/components/student-portal/PortalCustomizer.tsx");
+  const types = read("src/components/student-portal/types.ts");
   const insights = read("src/components/student-portal/ClassInsightsPanel.tsx");
   const window = read("src/components/student-portal/DraggableGlassWindow.tsx");
   assert.match(dashboard, /ACADEMIC AVERAGE/);
@@ -45,11 +46,11 @@ test("dashboard includes the requested KPI, insights, schedule, quick panel, and
   assert.match(customizer, /Blurred Café/);
   assert.match(customizer, /Minimal Silk/);
   assert.match(customizer, /Mesh Gradient/);
-  assert.match(customizer, /Ocean Blue/);
-  assert.match(customizer, /Emerald/);
-  assert.match(customizer, /Violet/);
-  assert.match(customizer, /Amber/);
-  assert.match(customizer, /Rose/);
+  assert.match(types, /Rose/);
+  assert.match(types, /Amber/);
+  assert.match(types, /Violet/);
+  assert.match(types, /Emerald/);
+  assert.match(types, /Ocean Blue/);
   assert.match(customizer, /Reset to Original/);
   assert.match(insights, /Attendance across recorded roll calls/);
   assert.match(insights, /not a registrar GPA/i);
