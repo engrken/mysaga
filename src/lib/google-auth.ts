@@ -174,7 +174,7 @@ export async function completeGoogleSignInOAuth(code: string, state: string) {
       where: { schoolId_teacherId: { schoolId: user.schoolId, teacherId: user.id } },
       select: { googleSubject: true, googleEmail: true, scopes: true }
     });
-    const existingScopes = new Set((connection?.scopes || "").split(/\\s+/).filter(Boolean));
+    const existingScopes = new Set((connection?.scopes || "").split(/\s+/).filter(Boolean));
     const servicesReady = Boolean(
       connection &&
       connection.googleSubject === payload.sub &&
