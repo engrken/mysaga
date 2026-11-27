@@ -2,6 +2,8 @@ export type StudentGlassTheme = "light-glass" | "dark-glass" | "classic";
 export type StudentWallpaper = "sunlit" | "cafe" | "silk" | "mesh" | "none" | "custom";
 export type StudentAccent = "ocean" | "emerald" | "violet" | "amber" | "rose";
 export type StudentLayoutMode = "snapped" | "freeform";
+export type StudentModuleKey = "metrics" | "insights" | "courses";
+export type StudentModulePosition = { x: number; y: number };
 
 export type StudentPortalPreferences = {
   theme: StudentGlassTheme;
@@ -11,6 +13,7 @@ export type StudentPortalPreferences = {
   layout: StudentLayoutMode;
   modules: { metrics: boolean; insights: boolean; courses: boolean };
   panelPosition: { x: number; y: number };
+  modulePositions: Record<StudentModuleKey, StudentModulePosition>;
 };
 
 export const STUDENT_PORTAL_DEFAULTS: StudentPortalPreferences = {
@@ -20,7 +23,8 @@ export const STUDENT_PORTAL_DEFAULTS: StudentPortalPreferences = {
   accent: "ocean",
   layout: "snapped",
   modules: { metrics: true, insights: true, courses: true },
-  panelPosition: { x: 0, y: 116 }
+  panelPosition: { x: 0, y: 116 },
+  modulePositions: { metrics: { x: 0, y: 0 }, insights: { x: 0, y: 0 }, courses: { x: 0, y: 0 } }
 };
 
 export const STUDENT_PORTAL_ACCENTS: Record<StudentAccent, { label: string; color: string }> = {
@@ -80,8 +84,16 @@ export function mergeStudentPortalPreferences(value: unknown): StudentPortalPref
     typeof candidate === "string" && values.includes(candidate as T);
   const modules: Partial<StudentPortalPreferences["modules"]> = input.modules && typeof input.modules === "object" ? input.modules : {};
   const point: Partial<StudentPortalPreferences["panelPosition"]> = input.panelPosition && typeof input.panelPosition === "object" ? input.panelPosition : {};
+  const modulePositions = input.modulePositions && typeof input.modulePositions === "object" ? input.modulePositions : {};
   const coordinate = (raw: unknown, fallback: number) =>
-    typeof raw === "number" && Number.isFinite(raw) ? Math.max(0, Math.min(6000, raw)) : fallback;
+    typeof raw === "number" && Number.isFinite(raw) ? Math.max(-1200, Math.min(6000, raw)) : fallback;
+  const modulePoint = (name: StudentModuleKey): StudentModulePosition => {
+    const raw = modulePositions[name] && typeof modulePositions[name] === "object" ? modulePositions[name] : {};
+    return {
+      x: coordinate((raw as Partial<StudentModulePosition>).x, 0),
+      y: coordinate((raw as Partial<StudentModulePosition>).y, 0)
+    };
+  };
   return {
     theme: isOneOf(input.theme, ["light-glass", "dark-glass", "classic"]) ? input.theme : STUDENT_PORTAL_DEFAULTS.theme,
     wallpaper: isOneOf(input.wallpaper, ["sunlit", "cafe", "silk", "mesh", "none", "custom"]) ? input.wallpaper : STUDENT_PORTAL_DEFAULTS.wallpaper,
@@ -96,6 +108,11 @@ export function mergeStudentPortalPreferences(value: unknown): StudentPortalPref
     panelPosition: {
       x: coordinate(point.x, STUDENT_PORTAL_DEFAULTS.panelPosition.x),
       y: coordinate(point.y, STUDENT_PORTAL_DEFAULTS.panelPosition.y)
+    },
+    modulePositions: {
+      metrics: modulePoint("metrics"),
+      insights: modulePoint("insights"),
+      courses: modulePoint("courses")
     }
   };
 }
