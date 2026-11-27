@@ -25,7 +25,7 @@ export async function POST(request: Request, context: Context) {
   if (!connection || !googleConnectionMatchesSAGAAccount(connection, teacher)) {
     return NextResponse.json({ error: "Connect the Google account that matches your SAGA teacher profile." }, { status: 409 });
   }
-  const grantedScopes = new Set(connection.scopes.split(/\\s+/).filter(Boolean));
+  const grantedScopes = new Set(connection.scopes.split(/\s+/).filter(Boolean));
   if (!grantedScopes.has("https://www.googleapis.com/auth/chat.messages.create")) {
     return NextResponse.json({ error: "Reconnect Google services and approve the Chat message permission." }, { status: 409 });
   }
