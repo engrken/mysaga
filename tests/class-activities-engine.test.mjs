@@ -60,9 +60,18 @@ test("lesson content strips scripts and unsafe link schemes", () => {
   assert.doesNotMatch(safe, /<script|javascript:/i);
 });
 
-test("Drive links are restricted to HTTPS Drive and Docs hosts", () => {
-  assert.equal(validDriveLink("https://drive.google.com/file/d/abc/view"), true);
+test("Drive links accept supported file shares and reject folders or Drive home pages", () => {
+  assert.equal(validDriveLink("https://drive.google.com/file/d/abc/view?usp=sharing"), true);
+  assert.equal(validDriveLink("https://drive.google.com/open?id=abc"), true);
+  assert.equal(validDriveLink("https://drive.google.com/uc?id=abc&export=download"), true);
   assert.equal(validDriveLink("https://docs.google.com/document/d/abc/edit"), true);
+  assert.equal(validDriveLink("https://docs.google.com/spreadsheets/d/abc/edit"), true);
+  assert.equal(validDriveLink("https://docs.google.com/presentation/d/abc/edit"), true);
+  assert.equal(validDriveLink("https://docs.google.com/forms/d/e/abc/viewform"), true);
   assert.equal(validDriveLink("http://drive.google.com/file/d/abc"), false);
+  assert.equal(validDriveLink("https://drive.google.com/drive/my-drive"), false);
+  assert.equal(validDriveLink("https://drive.google.com/drive/folders/abc"), false);
+  assert.equal(validDriveLink("https://docs.google.com/document/"), false);
+  assert.equal(validDriveLink("https://drive.google.com.evil.example/file/d/abc"), false);
   assert.equal(validDriveLink("https://evil.example/drive.google.com"), false);
 });

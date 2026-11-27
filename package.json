@@ -1,6 +1,6 @@
 {
   "name": "fcu-student-portal",
-  "version": "0.14.0-beta.3",
+  "version": "0.15.0-beta.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -30,8 +30,8 @@
     "test:demo": "node --test tests/demo-experience.test.cjs tests/authentic-demo-authorization.test.cjs",
     "test:department-logo": "node --test tests/department-logo-media.test.cjs",
     "test:virtual-assistant": "node --test tests/virtual-assistant.test.cjs",
-    "test:activities": "node --experimental-strip-types --test tests/class-activities-engine.test.mjs",
-    "lint": "eslint --max-warnings=0 src/app/api/activities/files/route.ts src/app/api/student/activities src/app/api/teacher/activities src/components/ClassActivities.tsx src/components/ActivityRichEditor.tsx src/lib/class-activities.ts src/lib/activity-feature-flags.ts src/lib/activity-feature-flags.client.ts src/lib/activity-statistics.ts tests/class-activities-engine.test.mjs"
+    "test:activities": "node --experimental-strip-types --test tests/class-activities-engine.test.mjs tests/submission-download-access.test.mjs",
+    "lint": "eslint --max-warnings=0 src/app/api/activities/files/route.ts src/app/api/student/activities src/app/api/teacher/activities src/components/ClassActivities.tsx src/components/ActivityRichEditor.tsx src/components/StudentR2Uploader.tsx src/app/api/submissions src/lib/submission-download-access.ts tests/submission-download-access.test.mjs src/lib/drive-link.ts src/lib/class-activities.ts src/lib/activity-feature-flags.ts src/lib/activity-feature-flags.client.ts src/lib/activity-statistics.ts tests/class-activities-engine.test.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",

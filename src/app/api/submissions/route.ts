@@ -5,7 +5,7 @@ import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { assertActivitiesWritable } from "@/lib/activity-feature-flags";
 import { activityEnrollmentIdentity, activityHeaders, validDriveLink } from "@/lib/class-activities";
-import { getR2BucketName, getR2Client, getR2PublicUrl } from "@/lib/r2";
+import { getR2BucketName, getR2Client } from "@/lib/r2";
 
 export const runtime = "nodejs";
 
@@ -21,7 +21,6 @@ const attachmentSchema = z.discriminatedUnion("storageProvider", [
   z.object({
     storageProvider: z.literal("CLOUDFLARE_R2"),
     fileKey: z.string().trim().min(1).max(1024),
-    fileUrl: z.string().trim().url().max(2048),
     ...fileBaseSchema,
     fileSize: z.number().int().positive().max(MAX_R2_FILE_SIZE)
   }),
@@ -61,7 +60,7 @@ export async function POST(request: Request) {
   const verifiedAttachments: Array<{
     storageProvider: "CLOUDFLARE_R2" | "GOOGLE_DRIVE";
     fileKey: string | null;
-    fileUrl: string;
+    fileUrl: string | null;
     fileName: string;
     fileSize: number;
     mimeType: string;
@@ -86,9 +85,6 @@ export async function POST(request: Request) {
       return error("One of the uploaded files does not belong to your assignment submission.", 403);
     }
     try {
-      if (attachment.fileUrl !== getR2PublicUrl(attachment.fileKey)) {
-        return error("One of the uploaded file URLs is invalid.", 400);
-      }
       const object = await getR2Client().send(new HeadObjectCommand({
         Bucket: getR2BucketName(), Key: attachment.fileKey
       }));
@@ -103,7 +99,7 @@ export async function POST(request: Request) {
     verifiedAttachments.push({
       storageProvider: "CLOUDFLARE_R2",
       fileKey: attachment.fileKey,
-      fileUrl: attachment.fileUrl,
+      fileUrl: null,
       fileName: attachment.fileName,
       fileSize: attachment.fileSize,
       mimeType: attachment.mimeType

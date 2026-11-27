@@ -39,13 +39,3 @@ export function sanitizeR2FileName(value: string): string {
   return normalized || "attachment";
 }
 
-export function getR2PublicUrl(fileKey: string): string {
-  const base = new URL(requiredValue("R2_PUBLIC_URL"));
-  if (!["https:", "http:"].includes(base.protocol) || base.username || base.password ||
-      base.search || base.hash || (process.env.NODE_ENV === "production" && base.protocol !== "https:")) {
-    throw new Error("R2_PUBLIC_URL must be a valid HTTPS public bucket/custom-domain URL.");
-  }
-  const prefix = base.pathname.replace(/\/+$/, "");
-  const suffix = fileKey.split("/").map(segment => encodeURIComponent(segment)).join("/");
-  return base.origin + prefix + "/" + suffix;
-}
