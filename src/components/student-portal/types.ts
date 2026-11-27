@@ -40,6 +40,10 @@ export type StudentAttendanceSummary = {
   percent: number | null;
   lateAbsences?: number;
 };
+export type StudentAttendanceWarning = Omit<StudentAttendanceSummary, "percent"> & {
+  percent: number;
+  lateAbsences: number;
+};
 
 export type StudentGradeSummary = {
   id: string;
@@ -56,7 +60,7 @@ export type StudentGradeSummary = {
   itemCount?: number;
   recordedCount?: number;
   attendanceSummary?: StudentAttendanceSummary;
-  attendanceWarning?: (StudentAttendanceSummary & { lateAbsences: number }) | null;
+  attendanceWarning?: StudentAttendanceWarning | null;
   droppingWarning?: { days: number; startDate: string; endDate: string; dates: string[] } | null;
 };
 
