@@ -5,23 +5,16 @@ import { prisma } from "@/lib/prisma";
 import { assertActivitiesWritable } from "@/lib/activity-feature-flags";
 import {
   activityEnrollmentIdentity, activityHeaders, gradeQuizAnswers, QuizAnswer,
-  quizSnapshotSchema, validDriveLink, sanitizeLessonHtml
+  quizSnapshotSchema, sanitizeLessonHtml
 } from "@/lib/class-activities";
 
-const fileSchema = z.object({
-  pathname: z.string().min(1).max(512),
-  filename: z.string().min(1).max(180),
-  contentType: z.string().min(1).max(120),
-  size: z.number().int().positive().max(15 * 1024 * 1024)
-});
+
 const submissionSchema = z.object({
   action: z.enum(["start-quiz", "submit-quiz"]).optional(),
   activityId: z.string().min(1).max(128),
   attemptId: z.string().min(1).max(128).optional(),
   answers: z.record(z.string().max(128), z.union([z.number().int(), z.string().max(12000)])).optional(),
   text: z.string().trim().max(12000).optional(),
-  driveUrl: z.string().trim().max(2048).optional(),
-  files: z.array(fileSchema).max(10).optional()
 });
 const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: activityHeaders });
 const error = (message: string, status = 400) => reply({ error: message }, status);
@@ -73,7 +66,8 @@ export async function GET(request: Request) {
       releaseGrade: true, releaseAnswers: true,
       ...(activityId ? { questions: true, instructions: true, materialUrl: true, lessonPages: true } : {}),
       submissions: { where: { enrollmentId: { in: enrollmentIds } },
-        select: { text: true, driveUrl: true, files: true, offline: true, submittedAt: true,
+        select: { text: true, driveUrl: true, files: true, storageProvider: true, fileUrl: true,
+          fileName: true, fileSize: true, mimeType: true, offline: true, submittedAt: true,
           points: true, feedback: true, gradedAt: true } },
       quizAttempts: { where: { enrollmentId: { in: enrollmentIds } },
         orderBy: { attemptNumber: "desc" }, select: { id: true, attemptNumber: true, startedAt: true,
@@ -105,12 +99,14 @@ export async function GET(request: Request) {
       attempts, attemptsRemaining: Math.max(0, row.attemptsAllowed - attempts.length),
       submission: submission ? {
         text: submission.text, driveUrl: submission.driveUrl, files: submission.files, offline: submission.offline,
+        storageProvider: submission.storageProvider, fileUrl: submission.fileUrl, fileName: submission.fileName,
+        fileSize: submission.fileSize, mimeType: submission.mimeType,
         submittedAt: submission.submittedAt, graded: submission.gradedAt !== null,
         points: release ? submission.points : null, feedback: release ? submission.feedback : null
       } : null
     };
   });
-  return reply({ studentId: student.id, activities, classes: [...enrollmentByClass.values()].map(({ subject }) => subject) });
+  return reply({ activities, classes: [...enrollmentByClass.values()].map(({ subject }) => subject) });
 }
 
 export async function POST(request: Request) {
@@ -120,12 +116,9 @@ export async function POST(request: Request) {
   const parsed = submissionSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return error("Check your submission and try again.");
   const input = parsed.data;
-  if (input.driveUrl && !validDriveLink(input.driveUrl)) return error("Use a valid HTTPS Google Drive or Google Docs link.");
-  if (input.files && (input.files.reduce((sum, file) => sum + file.size, 0) > 30 * 1024 * 1024)) {
-    return error("Attachments must total 30 MB or less.");
-  }
+  if (!input.action) return error("Assignment submissions now use the R2 submission endpoint.", 410);
   const target = await prisma.classActivity.findFirst({ where: {
-    id: input.activityId, status: { not: "DRAFT" }, kind: { in: ["QUIZ", "ASSIGNMENT"] },
+    id: input.activityId, status: { not: "DRAFT" }, kind: "QUIZ",
     subject: { schoolId: student.schoolId, enrollments: { some: { OR: activityEnrollmentIdentity(student) } } }
   }, select: { id: true, subjectId: true } });
   if (!target) return error("Activity not found.", 404);
@@ -216,27 +209,5 @@ export async function POST(request: Request) {
       points: updated.gradedAt ? updated.points : null, manualGrading: grade.manualGradingRequired }, 201);
   }
 
-  if (activity.kind !== "ASSIGNMENT") return error("This activity does not accept a submission.");
-  const files = input.files ?? [];
-  const prefix = `activities/${activity.id}/${student.id}/`;
-  if (files.some(file => !file.pathname.startsWith(prefix))) return error("One or more files do not belong to this submission.");
-  if (!input.text && !input.driveUrl && files.length === 0) return error("Add text, an uploaded file, or a Google Drive link.");
-  const inserted = await prisma.$transaction(async tx => {
-    const subject = await tx.$queryRaw<Array<{ gradeStatus: string }>>`
-      SELECT "gradeStatus" FROM "Subject" WHERE id = ${target.subjectId} AND "schoolId" = ${student.schoolId} FOR SHARE`;
-    if (!subject.length) return false;
-    if (!activity.practice && subject[0].gradeStatus !== "DRAFT") return false;
-    const existing = await tx.activitySubmission.findUnique({
-      where: { activityId_enrollmentId: { activityId: activity.id, enrollmentId: enrollment.id } },
-      select: { id: true }
-    });
-    if (existing) return false;
-    const result = await tx.activitySubmission.createMany({ data: [{
-      activityId: activity.id, enrollmentId: enrollment.id, text: input.text || null,
-      driveUrl: input.driveUrl || null, files, submittedAt: now
-    }], skipDuplicates: true });
-    return result.count > 0;
-  });
-  if (!inserted) return error("A submission already exists or the class record is closed.", 409);
-  return reply({ ok: true }, 201);
+  return error("Assignment submissions must use the R2 submission endpoint.", 410);
 }
