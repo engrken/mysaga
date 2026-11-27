@@ -102,7 +102,7 @@ export default function GoogleChatControls({ subjectId }: { subjectId: string })
       </div>
     </div>
     {!connection?.connected ? <div className="d-flex flex-wrap align-items-center gap-2">
-      <button type="button" className="btn btn-outline-primary" onClick={() => window.location.assign("/api/teacher/google-chat/connect")}>Enable Google Drive &amp; Chat</button>
+      <button type="button" className="btn btn-outline-primary" onClick={() => window.location.assign(new URL("/api/teacher/google-chat/connect", window.location.origin).toString())}>Enable Google Drive &amp; Chat</button>
       <span className="muted small">This uses the Google email registered to your SAGA teacher account.</span>
     </div> : <div className="d-flex flex-wrap align-items-center gap-2">
       <span className="small">Google account <b>{connection.connection?.googleEmail}</b></span>
@@ -116,7 +116,7 @@ export default function GoogleChatControls({ subjectId }: { subjectId: string })
         ? <span className="badge text-bg-success">Chat enabled</span>
         : <span className="badge text-bg-warning">Chat permission needed</span>}
       {(!connection.connection?.matchesPortalEmail || !connection.connection?.driveEnabled || !connection.connection?.chatEnabled) &&
-        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => window.location.assign("/api/teacher/google-chat/connect")}>Reconnect Google services</button>}
+        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => window.location.assign(new URL("/api/teacher/google-chat/connect", window.location.origin).toString())}>Reconnect Google services</button>}
       {connection.connection?.matchesPortalEmail && connection.connection?.chatEnabled && (
         !space ? (
           <>
