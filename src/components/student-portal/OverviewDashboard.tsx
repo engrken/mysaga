@@ -43,6 +43,19 @@ export default function OverviewDashboard({
       onCustomizerOpened();
     }
   }, [customizerRequested, onCustomizerOpened]);
+  const isOriginalLayout = preferences.theme === "light-glass"
+    && preferences.wallpaper === "mesh"
+    && preferences.customBackgroundUrl === ""
+    && preferences.accent === "ocean"
+    && preferences.layout === "snapped"
+    && preferences.modules.metrics && preferences.modules.insights && preferences.modules.courses
+    && preferences.panelPosition.x === 0 && preferences.panelPosition.y === 116;
+  useEffect(() => {
+    if (!isOriginalLayout) return;
+    setPanelMinimized(false);
+    setPanelTab("checklist");
+    setPanelFront(false);
+  }, [isOriginalLayout]);
 
   const metrics = useMemo(() => {
     const visiblePercents = grades.map(grade => grade.percent).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
