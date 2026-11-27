@@ -48,3 +48,18 @@ test("teacher gets a class tab and students get one compiled feed", () => {
   assert.match(portal, /<StudentAnnouncements/);
   assert.match(page, /page === "announcements" && user\.role !== "STUDENT"/);
 });
+
+
+test("archived announcements can be edited without being republished", () => {
+  const component = read("src/components/SagaAnnouncements.tsx");
+  assert.match(component, /status: item\.status/);
+  assert.match(component, /<option value="ARCHIVED">Keep archived<\/option>/);
+  assert.match(component, /form\.status === "ARCHIVED"/);
+});
+
+test("student route type accepts the dedicated announcements page", () => {
+  const portal = read("src/components/Portal.tsx");
+  const route = read("src/app/[schoolId]/[page]/page.tsx");
+  assert.match(portal, /initialPage\?: "overview" \| "classes" \| "profile" \| "simulator" \| "chats" \| "announcements"/);
+  assert.match(route, /type PageName = .*"announcements"/);
+});
