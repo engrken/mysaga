@@ -14,6 +14,7 @@ import ClassRosterEnrollmentTools from "./ClassRosterEnrollmentTools";
 import GoogleChatControls from "./GoogleChatControls";
 import { DemoGoogleChatControls } from "./DemoClassChats";
 import StudentClassEnrollment from "./StudentClassEnrollment";
+import StudentSpatialExperience from "./StudentSpatialExperience";
 // These large interactive tools are only downloaded when opened.
 const GradeWhatIfSimulator = dynamic(() => import("./GradeWhatIfSimulator"));
 const HelpCenter = dynamic(() => import("./PortalGuides").then(module => module.HelpCenter));
@@ -2873,6 +2874,16 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
             </div>
           </div>
         </section>
+        <StudentSpatialExperience
+          userId={user.id}
+          fullName={user.fullName}
+          grades={grades}
+          academicYear={academicYear}
+          term={activeTerm}
+          pendingAssessments={studentGradeStats.pendingAssessments}
+          attendanceAlerts={studentAttendanceWarnings.length}
+          isDemo={user.isDemo}
+        />
         <div className="overview-section-heading student-progress-heading"><div><span className="eyebrow">AT A GLANCE</span><h2>Your academic progress</h2><p className="muted">A quick summary of your records for this academic period.</p></div><span>{activeTerm} · {academicYear}</span></div>
         <div className="overview-stat-grid student-overview-stats" aria-label="Your academic record summary">
           <article className="surface overview-stat-card accent-violet"><small>VISIBLE CLASSES</small><strong>{studentGradeStats.visible}</strong><span>Shared by your teachers</span></article>

@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     ] },
     orderBy: { subject: { academicYear: "desc" } }, take: 100,
     select: {
-      id: true, subject: { select: { code: true, title: true, term: true, academicYear: true, isPublished: true } }
+      id: true, subject: { select: { code: true, title: true, term: true, academicYear: true, isPublished: true, schedule: true } }
     }
   });
   return NextResponse.json({ classes: records.map(row => ({ id: row.id, ...row.subject })) },
