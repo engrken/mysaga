@@ -6,6 +6,7 @@ import { createSession, tenantManagerIdentity } from "@/lib/auth";
 import {
   GOOGLE_SERVICE_SCOPES,
   createGoogleOAuthUrl,
+  signGoogleOAuthState,
   verifyGoogleOAuthState
 } from "@/lib/google-chat";
 
@@ -38,10 +39,6 @@ export async function createGoogleSignInOAuthUrl(schoolId: string) {
   const nonce = randomBytes(32).toString("base64url");
   const verifier = randomBytes(32).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
-  const state = await verifyGoogleOAuthState.sign?.({}) ?? null;
-  void state;
-
-  const { signGoogleOAuthState } = await import("@/lib/google-chat");
   const signedState = await signGoogleOAuthState({
     purpose: "google-login",
     schoolId,
