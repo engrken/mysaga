@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { googleChatAccessToken, googleChatRequest } from "@/lib/google-chat";
+import { googleChatAccessToken, googleChatRequest, googleConnectionMatchesSAGAAccount, GOOGLE_CHAT_SCOPES } from "@/lib/google-chat";
 
 export const runtime = "nodejs";
 type Context = { params: Promise<{ subjectId: string }> };
@@ -35,7 +35,13 @@ export async function POST(request: Request, context: Context) {
   const connection = await prisma.googleChatConnection.findUnique({
     where: { schoolId_teacherId: { schoolId: teacher.schoolId, teacherId: teacher.id } }
   });
-  if (!connection) return NextResponse.json({ error: "Connect your Google account first." }, { status: 409 });
+  if (!connection || !googleConnectionMatchesSAGAAccount(connection, teacher)) {
+    return NextResponse.json({ error: "Connect the Google account that matches your SAGA teacher profile." }, { status: 409 });
+  }
+  const grantedScopes = new Set(connection.scopes.split(/\\s+/).filter(Boolean));
+  if (!GOOGLE_CHAT_SCOPES.every(scope => grantedScopes.has(scope))) {
+    return NextResponse.json({ error: "Reconnect Google services and approve the required Chat permissions." }, { status: 409 });
+  }
   try {
     const token = await googleChatAccessToken(connection);
     const defaultName = `${subject.code} — ${subject.title}`.slice(0, 100);
