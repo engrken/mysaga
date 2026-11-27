@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import styles from "./StudentSpatialExperience.module.css";
 
-type StudentSchedule = { id: string; code: string; title: string; term: string; academicYear: string; schedule: string | null };
+type StudentSchedule = { id: string; code: string; title: string; term: string; academicYear: string; schedule: string | null; isPublished: boolean };
 type ScheduleItem = { day?: string; startTime?: string; endTime?: string };
 type StudentGrade = {
   id: string; code: string; title: string; teacher: string;
@@ -164,7 +164,7 @@ export default function StudentSpatialExperience({
 
     {settings.modules.insights && <div className={styles.insights}>
       <section className={styles.glassCard}>
-        <div className={styles.sectionHead}><div><span className={styles.kicker}>CLASS INSIGHTS</span><h3>Course progress</h3></div><span className={styles.liveTag}><i/> LIVE RECORDS</span></div>
+        <div className={styles.sectionHead}><div><span className={styles.kicker}>CLASS INSIGHTS</span><h3>Course progress</h3></div><span className={styles.liveTag}><i/> CURRENT RECORDS</span></div>
         {grades.length ? <div className={styles.courseRows}>{grades.slice(0, 5).map(grade => {
           const total = grade.itemCount ?? 0; const done = Math.min(total, grade.recordedCount ?? 0); const pct = total ? Math.round(done / total * 100) : 0;
           return <article key={grade.id} className={styles.courseRow}><div className={styles.courseMark}>{grade.code.slice(0, 2)}</div><div className={styles.courseInfo}><strong>{grade.code} · {grade.title}</strong><span>{grade.teacher || "Instructor not listed"}</span><div className={styles.progress}><i style={{ width: `${pct}%` }}/></div></div><div className={styles.courseStatus}><b>{pct}%</b><small>{grade.status === "VERIFIED" ? "Graded" : grade.status === "SUBMITTED" ? "Submitted" : "In progress"}</small></div></article>;
@@ -181,8 +181,8 @@ export default function StudentSpatialExperience({
     </div>}
 
     {settings.modules.courses && <section className={styles.glassCard + " " + styles.activeCourses}>
-      <div className={styles.sectionHead}><div><span className={styles.kicker}>YOUR WEEKLY WORKSPACE</span><h3>Weekly class schedule</h3><p>Your enrolled classes and the meeting times published by your instructors.</p></div><span className={styles.chartBadge}>{grades.length} ENROLLED</span></div>
-      <div className={styles.activeCourseGrid}>{schedule.slice(0, 8).map(item => {
+      <div className={styles.sectionHead}><div><span className={styles.kicker}>YOUR WEEKLY WORKSPACE</span><h3>Weekly class schedule</h3><p>Your enrolled classes and the meeting times published by your instructors.</p></div><span className={styles.chartBadge}>{schedule.filter(item => item.isPublished).length} ENROLLED</span></div>
+      <div className={styles.activeCourseGrid}>{schedule.filter(item => item.isPublished).slice(0, 8).map(item => {
         let meetings: ScheduleItem[] = [];
         let legacySchedule = "";
         try {
@@ -194,7 +194,7 @@ export default function StudentSpatialExperience({
           {meetings.length ? meetings.map((meeting, index) => <small key={`${item.id}-${index}`}>{meeting.day || "Schedule"} · {meeting.startTime || "Time TBA"}{meeting.endTime ? `–${meeting.endTime}` : ""}</small>) : <small>{legacySchedule || "Meeting schedule not published"}</small>}
           <b>{item.term} · {item.academicYear}</b></article>;
       })}</div>
-      {!schedule.length && <div className={styles.empty}>No active courses are available for this academic period.</div>}
+      {!schedule.some(item => item.isPublished) && <div className={styles.empty}>No active courses are available for this academic period.</div>}
     </section>}
 
     <aside className={styles.floatingPanel} onMouseDown={() => setZIndex(value => value + 1)} style={{ zIndex, transform: `translate3d(${settings.offset.x}px,${settings.offset.y}px,0)` }} hidden={settings.minimized}>
