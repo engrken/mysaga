@@ -91,6 +91,6 @@ test("privacy notice documents Google account email matching and Drive file hand
   assert.match(privacy, /Activities Google Drive exploration/);
   assert.match(privacy, /must match the email/);
   assert.match(privacy, /contact the subject teacher/);
-  assert.match(privacy, /does not copy the Drive file contents/);
+  assert.match(privacy, /does not copy the\\s+Drive file contents/);
   assert.match(privacy, /drive\.file/);
 });
