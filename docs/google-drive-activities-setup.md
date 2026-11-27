@@ -60,7 +60,8 @@ Use the existing SAGA OAuth values in **Production and Preview**:
 | --- | --- |
 | `GOOGLE_CLIENT_ID` | Existing OAuth Web application client ID |
 | `GOOGLE_CLIENT_SECRET` | Existing server-only OAuth client secret |
-| `GOOGLE_REDIRECT_URI` | Exact existing callback URI ending in `/api/integrations/google/callback` |
+| `GOOGLE_REDIRECT_URI` | Existing legacy Chat callback; keep unchanged |
+| `GOOGLE_SSO_REDIRECT_URI` | Same-origin unified sign-in callback; use the Production or Preview URL listed above |
 | `GOOGLE_TOKEN_ENCRYPTION_KEY` | Existing 32-byte key encoded as 64-character hex or base64; encrypts teacher service tokens |
 | `GOOGLE_DRIVE_API_KEY` | Restricted Google API key for Picker |
 | `GOOGLE_DRIVE_APP_ID` | Numeric Google Cloud project number |
