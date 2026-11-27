@@ -52,12 +52,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_BRANCH: ${{ github.head_ref }}
         run: |
-          current_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/package-lock.json?ref=$PR_BRANCH" --jq .sha)"
-          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/package-lock.json" \
-            -f message="chore: update npm lockfile for Cloudflare R2" \
-            -f content="$(base64 -w0 package-lock.json)" \
-            -f sha="$current_sha" \
-            -f branch="$PR_BRANCH"
+          api_url="https://api.github.com/repos/$GITHUB_REPOSITORY/contents/package-lock.json"
+          current_sha="$(curl --fail-with-body --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$api_url?ref=$PR_BRANCH" | jq -r .sha)"
+          base64 -w0 package-lock.json | jq -Rs --arg message "chore: update npm lockfile for Cloudflare R2" --arg branch "$PR_BRANCH" --arg sha "$current_sha" '{message: $message, content: ., branch: $branch, sha: $sha}' | \
+            curl --fail-with-body --silent --show-error -X PUT "$api_url" -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "Content-Type: application/json" --data-binary @-
       - name: Install dependencies and generate Prisma client
         run: npm ci
       - name: Validate Prisma schema
