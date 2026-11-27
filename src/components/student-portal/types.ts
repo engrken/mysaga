@@ -63,7 +63,7 @@ export type StudentGradeSummary = {
 export function safeStudentBackgroundUrl(value: string) {
   try {
     const url = new URL(value.trim());
-    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "";
+    return url.protocol === "https:" ? url.toString() : "";
   } catch {
     return "";
   }
