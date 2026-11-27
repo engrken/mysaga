@@ -81,7 +81,7 @@ export default function PortalCustomizer({
           <button key={value} type="button" className={preferences.layout === value ? "is-selected" : ""} aria-pressed={preferences.layout === value} onClick={() => update({ layout: value })}>{label}</button>
         )}
       </div>
-      <p className="student-customizer-help">Freeform keeps the quick panel movable. Main sections remain in a readable grid so course information never overlaps.</p>
+      <p className="student-customizer-help">In Freeform mode, drag the small handle above each overview module to reposition it. On smaller screens, modules return to the stacked layout.</p>
     </section>
     <button type="button" className="student-reset-original" onClick={onReset}>↺ Reset to Original</button>
     <p className="student-customizer-help reset-note">Restore the default light-glass theme, wallpaper, ocean accent, visible modules, and panel position.</p>
