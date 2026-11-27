@@ -33,7 +33,7 @@ The grade scale and default weights are examples based on the supplied grade she
 ## Deploying on Vercel + Neon
 
 1. Connect this repository to a Vercel project and provision a Neon PostgreSQL database in a region suitable for the intended users and applicable privacy obligations.
-2. Add `DATABASE_URL` (pooled runtime URL), `DIRECT_URL` (direct migration URL), `AUTH_SECRET`, `TEACHER_INVITE_CODE`, and a random `CRON_SECRET` to Vercel’s environment variables. Set `APP_URL` to the canonical production origin used for invitation links. Add `GMAIL_SMTP_USER` and `GMAIL_SMTP_APP_PASSWORD` to enable verification and billing email. Use separate random secrets for production and preview deployments.
+2. Add `DATABASE_URL` (pooled runtime URL), `DIRECT_URL` (direct migration URL), `AUTH_SECRET`, `TEACHER_INVITE_CODE`, and a random `CRON_SECRET` to Vercel’s environment variables. Set `APP_URL` to the canonical production origin used for invitation links. Add `GMAIL_SMTP_USER` and `GMAIL_SMTP_APP_PASSWORD` to enable verification and billing email. Set `SAGA_PRIVACY_CONTACT_EMAIL` to a monitored privacy-request address; this is displayed on the public `/privacy` page. Use separate random secrets for production and preview deployments.
 3. Apply reviewed Prisma migrations with `npm run db:migrate` using the production schema administrator’s direct connection before deploying. The production build checks migration status. Set `SAGA_TENANT_MANAGER_EMAIL` to the platform manager’s verified teacher email when granting access. Once that manager changes their sign-in email, keep the configured value to retain the link to the same account. Use a separate database for local and preview deployments.
 4. Deploy and confirm database connection, account creation, student/teacher access separation, roster linking, score calculations, and publication behavior with synthetic records before importing real data.
 5. Configure backups, retention, access to deployment logs, incident response, and a way for authorized staff to fulfill privacy requests.
@@ -42,7 +42,7 @@ The daily Vercel Cron job at `/api/cron/tenant-billing-reminders` requires `CRON
 
 ## Before real student records are used
 
-- Complete the `/privacy` notice with the portal operator’s verified contact details, purposes, lawful basis, retention period, hosting/data-processing terms, and rights-request process. Consult the applicable Data Protection Officer or privacy professional. Do not imply school endorsement or approval.
+- Review the public `/privacy` notice and configure `SAGA_PRIVACY_CONTACT_EMAIL` with the service operator’s verified, monitored privacy contact. Each school must also complete its workspace privacy controller, contact email, and policy URL in school settings. Consult the applicable Data Protection Officer or privacy professional; do not imply school endorsement or approval.
 - Configure and verify Gmail SMTP before relying on password recovery or email-change verification in production. Student accounts are matched automatically using the school-verified student number; the teacher still controls when grades become visible by submitting the class record.
 - Set up a controlled process for issuing and rotating the teacher invitation code.
 - Review Vercel and Neon processing terms and the selected hosting/database regions; determine who is responsible for records when other faculty use the portal. Use least-privilege access and restrict production database credentials.

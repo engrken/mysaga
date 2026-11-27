@@ -7,6 +7,9 @@ import ThemeSync from "@/components/ThemeSync";
 export const metadata: Metadata = {
   title: "SAGA Portal | School Assessment, Grading & Analytics",
   description: "A practical grade portal for teachers to manage class records, assessment, attendance, and student grade access.",
+  verification: {
+    google: "ymDU-7edLsOV84bhi4Tiu48QybaO6OrIY_0C2_Mn0Yw"
+  },
   icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" }
 };
 
