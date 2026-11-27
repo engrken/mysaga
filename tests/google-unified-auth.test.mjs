@@ -134,6 +134,10 @@ test("Chat service tokens cannot be used with a different SAGA email or Google s
   assert.match(chat, /user\.authProvider === "GOOGLE" && connection\.googleSubject !== user\.googleSubject/);
   assert.equal((routes.match(/googleConnectionMatchesSAGAAccount\(connection, teacher\)/g) || []).length, 4);
   const reconnect = read("src/app/api/teacher/google-chat/connect/route.ts");
+  const connectionStatus = read("src/app/api/teacher/google-chat/connection/route.ts");
+  assert.match(reconnect, /redirectUri: process\.env\.GOOGLE_SSO_REDIRECT_URI/);
+  assert.match(connectionStatus, /connection\.googleSubject === teacher\.googleSubject/);
+  const reconnect = read("src/app/api/teacher/google-chat/connect/route.ts");
   const status = read("src/app/api/teacher/google-chat/connection/route.ts");
   assert.match(reconnect, /redirectUri: process\.env\.GOOGLE_SSO_REDIRECT_URI/);
   assert.match(status, /connection\.googleSubject === teacher\.googleSubject/);
