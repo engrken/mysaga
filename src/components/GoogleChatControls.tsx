@@ -112,8 +112,10 @@ export default function GoogleChatControls({ subjectId }: { subjectId: string })
         <><span className="badge text-bg-success">Space linked</span><span className="small">{space.displayName}</span>
           <button className="btn btn-outline-primary btn-sm" onClick={() => void syncMembers()} disabled={busy}>Sync class members</button></>}
     </div>}
+    {space && (!connection?.connection?.matchesPortalEmail || !connection.connection.chatEnabled) &&
+      <p className="text-warning small mt-2">Chat actions are paused until the Google account and Chat permissions match your SAGA teacher account. Reconnect Google services to continue.</p>}
     {space && !space.externalUserAllowed && <p className="text-warning small mt-2">This Space does not allow external Google accounts.</p>}
-    {space && <div className="mt-3">
+    {space && connection?.connection?.matchesPortalEmail && connection.connection.chatEnabled && <div className="mt-3">
       <label className="form-label small" htmlFor={`chat-announcement-${subjectId}`}>Send a class announcement</label>
       <textarea id={`chat-announcement-${subjectId}`} className="form-control mb-2" rows={3} maxLength={4000} value={announcement} onChange={event => setAnnouncement(event.target.value)} placeholder="Write an announcement for this class…" />
       <button className="btn btn-outline-primary btn-sm" onClick={() => void sendAnnouncement()} disabled={busy || !announcement.trim()}>Send announcement</button>
