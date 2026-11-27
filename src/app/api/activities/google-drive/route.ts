@@ -85,9 +85,8 @@ export async function POST(request: Request) {
   const parsed = identitySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return error("The Google sign-in response was incomplete.");
   const input = parsed.data;
-  if ((input.mode === "identity" && user.role !== "STUDENT") ||
-      (input.mode === "picker" && user.role !== "TEACHER")) {
-    return error("This Google Drive action is not available for your account.", 403);
+  if (input.mode === "picker" && user.role !== "TEACHER") {
+    return error("Only the assigned subject teacher can select Drive material for this class.", 403);
   }
   if (input.mode === "picker" && !input.accessToken) return error("Google Drive access was not granted.", 400);
   if (!await authorizedSubject(user, input.subjectId)) {
