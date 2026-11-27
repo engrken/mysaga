@@ -69,6 +69,8 @@ test("OAuth callback dispatches Google login and Google service authorization se
   assert.ok(callback.includes("statePayload.redirectUri !== expectedCallback"));
   assert.match(callback, /completeGoogleSignInOAuth/);
   assert.match(callback, /purpose === "google-chat-oauth"/);
+  assert.ok(callback.includes("browserNonce !== statePayload.oauthNonce"));
+  assert.ok(callback.includes("jar.delete(GOOGLE_SERVICES_STATE_COOKIE)"));
   assert.match(callback, /completeGoogleOAuth/);
 });
 
@@ -121,6 +123,8 @@ test("unified sign-in uses its own same-origin callback while legacy Chat keeps 
   assert.match(chat, /redirectUri\?: string/);
   assert.match(chat, /redirectUri,/);
   assert.match(chat, /purpose: "google-chat-oauth"/);
+  assert.ok(chat.includes("GOOGLE_SERVICES_STATE_COOKIE"));
+  assert.ok(chat.includes("cookieStore.set(GOOGLE_SERVICES_STATE_COOKIE, oauthNonce"));
   assert.match(chat, /typeof payload\.redirectUri === "string" \? payload\.redirectUri : requiredEnv\("GOOGLE_REDIRECT_URI"\)/);
   assert.match(env, /GOOGLE_REDIRECT_URI=/);
   assert.match(env, /GOOGLE_SSO_REDIRECT_URI=/);
