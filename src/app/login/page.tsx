@@ -99,20 +99,20 @@ export default function LoginPage() {
           } as Record<string, string>)[googleError] || "Google sign-in could not be completed. Please try again."}</div>}
           <label className="form-label" htmlFor="schoolId">School</label>
           <SchoolSelect id="schoolId" value={schoolId} onChange={next => { setSchoolId(next); setChallengeId(""); setError(""); }}/>
-          <a
-            className={`btn btn-outline-secondary btn-lg w-100 d-flex align-items-center justify-content-center gap-2 ${!schoolId ? "disabled" : ""}`}
-            href={schoolId ? `/api/auth/google?schoolId=${encodeURIComponent(schoolId)}` : "#"}
-            aria-disabled={!schoolId}
-            onClick={event => {
+          <button
+            type="button"
+            className="btn btn-outline-secondary btn-lg w-100 d-flex align-items-center justify-content-center gap-2"
+            onClick={() => {
               if (!schoolId) {
-                event.preventDefault();
                 setGoogleError("school-required");
+                return;
               }
+              window.location.assign(`/api/auth/google?schoolId=${encodeURIComponent(schoolId)}`);
             }}
           >
             <span aria-hidden="true" className="fw-bold">G</span>
             Continue with Google
-          </a>
+          </button>
           <p className="form-text text-center mb-3">Use the Google email registered to your selected school. Teachers can enable Drive and Chat during the first sign-in.</p>
           <div className="text-center small text-secondary mb-3">Or use your SAGA credentials</div>
           <div className="form-label">Sign in using</div>
