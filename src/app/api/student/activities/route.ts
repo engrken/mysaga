@@ -9,6 +9,7 @@ import {
 } from "@/lib/class-activities";
 
 
+const submissionSchema = z.object({
   action: z.enum(["start-quiz", "submit-quiz"]).optional(),
   activityId: z.string().min(1).max(128),
   attemptId: z.string().min(1).max(128).optional(),
