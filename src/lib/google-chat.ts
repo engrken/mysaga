@@ -2,13 +2,20 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
 
-const GOOGLE_SCOPES = [
-  "openid",
-  "https://www.googleapis.com/auth/userinfo.email",
+export const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+
+export const GOOGLE_SERVICE_SCOPES = [
   "https://www.googleapis.com/auth/chat.spaces.readonly",
   "https://www.googleapis.com/auth/chat.spaces.create",
   "https://www.googleapis.com/auth/chat.memberships",
-  "https://www.googleapis.com/auth/chat.messages.create"
+  "https://www.googleapis.com/auth/chat.messages.create",
+  GOOGLE_DRIVE_SCOPE
+];
+
+const GOOGLE_SCOPES = [
+  "openid",
+  "https://www.googleapis.com/auth/userinfo.email",
+  ...GOOGLE_SERVICE_SCOPES
 ];
 
 function requiredEnv(name: string) {
@@ -46,13 +53,33 @@ export function decryptGoogleToken(value: string) {
   return Buffer.concat([decipher.update(Buffer.from(dataText, "base64url")), decipher.final()]).toString("utf8");
 }
 
-export async function createGoogleOAuthUrl(user: { id: string; schoolId: string }) {
+export async function signGoogleOAuthState(payload: Record<string, unknown>) {
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("10m")
+    .setJti(randomBytes(16).toString("hex"))
+    .sign(oauthKey());
+}
+
+export async function verifyGoogleOAuthState(state: string) {
+  return (await jwtVerify(state, oauthKey(), { algorithms: ["HS256"] })).payload;
+}
+
+export async function createGoogleOAuthUrl(
+  user: { id: string; schoolId: string },
+  options: { expectedGoogleSubject?: string; loginHint?: string; returnTo?: string } = {}
+) {
   const clientId = requiredEnv("GOOGLE_CLIENT_ID");
   const redirectUri = requiredEnv("GOOGLE_REDIRECT_URI");
-  const state = await new SignJWT({ uid: user.id, sid: user.schoolId, purpose: "google-chat-oauth" })
-    .setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("10m").setJti(randomBytes(16).toString("hex")).sign(oauthKey());
-  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-  url.search = new URLSearchParams({
+  const state = await signGoogleOAuthState({
+    uid: user.id,
+    sid: user.schoolId,
+    purpose: "google-chat-oauth",
+    ...(options.expectedGoogleSubject ? { expectedGoogleSubject: options.expectedGoogleSubject } : {}),
+    ...(options.returnTo ? { returnTo: options.returnTo } : {})
+  });
+  const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
@@ -61,18 +88,21 @@ export async function createGoogleOAuthUrl(user: { id: string; schoolId: string 
     prompt: "consent",
     include_granted_scopes: "true",
     state
-  }).toString();
+  });
+  if (options.loginHint) params.set("login_hint", options.loginHint);
+  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  url.search = params.toString();
   return url.toString();
 }
 
 export async function completeGoogleOAuth(code: string, state: string) {
-  const { payload } = await jwtVerify(state, oauthKey(), { algorithms: ["HS256"] });
+  const payload = await verifyGoogleOAuthState(state);
   if (payload.purpose !== "google-chat-oauth" || typeof payload.uid !== "string" || typeof payload.sid !== "string") {
     throw new Error("Invalid Google authorization state.");
   }
   const user = await prisma.user.findFirst({
     where: { id: payload.uid, schoolId: payload.sid, role: "TEACHER", emailVerifiedAt: { not: null } },
-    select: { id: true, schoolId: true }
+    select: { id: true, schoolId: true, email: true }
   });
   if (!user) throw new Error("The teacher account is no longer available.");
 
@@ -109,6 +139,12 @@ export async function completeGoogleOAuth(code: string, state: string) {
   if (!identityResponse.ok || !identity?.sub || !identity.email || identity.email_verified !== true) {
     throw new Error("Google did not return a verified email address for this account.");
   }
+  if (typeof payload.expectedGoogleSubject === "string" && payload.expectedGoogleSubject !== identity.sub) {
+    throw new Error("Choose the same Google account that you used to sign in to SAGA Portal.");
+  }
+  if (identity.email.trim().toLowerCase() !== user.email.trim().toLowerCase()) {
+    throw new Error("Use the Google email address registered to your SAGA Portal teacher account.");
+  }
 
   const existingConnection = await prisma.googleChatConnection.findUnique({
     where: { schoolId_teacherId: { schoolId: user.schoolId, teacherId: user.id } },
@@ -143,7 +179,13 @@ export async function completeGoogleOAuth(code: string, state: string) {
       scopes: tokens.scope ?? GOOGLE_SCOPES.join(" ")
     }
   });
-  return { email: identity.email.toLowerCase(), user };
+  return {
+    email: identity.email.toLowerCase(),
+    user,
+    returnTo: typeof payload.returnTo === "string" && payload.returnTo.startsWith("/") && !payload.returnTo.startsWith("//")
+      ? payload.returnTo
+      : "/dashboard"
+  };
 }
 
 export async function googleChatAccessToken(connection: {
