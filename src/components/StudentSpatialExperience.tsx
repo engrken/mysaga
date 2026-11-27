@@ -62,9 +62,9 @@ function clamp(value: number, min: number, max: number) {
 }
 
 export default function StudentSpatialExperience({
-  fullName, grades, verifiedCount, pendingAssessments, attendanceAlerts, isDemo
+  fullName, grades, pendingAssessments, attendanceAlerts, isDemo
 }: {
-  fullName: string; grades: StudentGrade[]; verifiedCount: number;
+  fullName: string; grades: StudentGrade[];
   pendingAssessments: number; attendanceAlerts: number; isDemo?: boolean;
 }) {
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
@@ -168,7 +168,7 @@ export default function StudentSpatialExperience({
       {!grades.length && <div className={styles.empty}>No active courses are available for this academic period.</div>}
     </section>}
 
-    <aside className={styles.floatingPanel} style={{ zIndex, transform: `translate3d(${settings.offset.x}px,${settings.offset.y}px,0)` }} hidden={settings.minimized}>
+    <aside className={styles.floatingPanel} onMouseDown={() => setZIndex(value => value + 1)} style={{ zIndex, transform: `translate3d(${settings.offset.x}px,${settings.offset.y}px,0)` }} hidden={settings.minimized}>
       <div className={styles.panelHandle} onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}>
         <span className={styles.grip}/><span>STUDENT COMPANION</span><button type="button" aria-label="Minimize companion panel" onPointerDown={event => event.stopPropagation()} onClick={() => update("minimized", true)}>−</button>
       </div>
