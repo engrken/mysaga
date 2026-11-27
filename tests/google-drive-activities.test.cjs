@@ -44,6 +44,8 @@ test("Google access is role, tenant, subject and enrollment scoped", () => {
   assert.match(api, /enrollments: \{ some: \{ OR: activityEnrollmentIdentity\(user\) \} \}/);
   assert.match(api, /mode === "open" && user\.role !== "STUDENT"/);
   assert.match(api, /mode === "picker" && user\.role !== "TEACHER"/);
+  assert.match(api, /input\.mode === "picker" && user\.role !== "TEACHER"/);
+  assert.doesNotMatch(api, /input\.mode === "identity" && user\.role !== "STUDENT"/);
   assert.match(api, /user\.isDemo/);
 });
 
