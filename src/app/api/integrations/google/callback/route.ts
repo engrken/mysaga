@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { completeGoogleOAuth, verifyGoogleOAuthState } from "@/lib/google-chat";
+import { cookies } from "next/headers";
+import {
+  completeGoogleOAuth,
+  GOOGLE_SERVICES_STATE_COOKIE,
+  verifyGoogleOAuthState
+} from "@/lib/google-chat";
 import { clearGoogleSignInCookies, completeGoogleSignInOAuth } from "@/lib/google-auth";
 
 export const runtime = "nodejs";
@@ -35,7 +40,23 @@ export async function GET(request: Request) {
     (typeof statePayload.redirectUri === "string" && statePayload.redirectUri !== expectedCallback)
   ) {
     await clearGoogleSignInCookies();
+    const jar = await cookies();
+    jar.delete(GOOGLE_SERVICES_STATE_COOKIE);
     return NextResponse.redirect(new URL("/login?googleError=invalid-state", url.origin));
+  }
+
+  if (statePayload.purpose === "google-chat-oauth") {
+    const jar = await cookies();
+    const browserNonce = jar.get(GOOGLE_SERVICES_STATE_COOKIE)?.value;
+    jar.delete(GOOGLE_SERVICES_STATE_COOKIE);
+    if (!browserNonce || typeof statePayload.oauthNonce !== "string" || browserNonce !== statePayload.oauthNonce) {
+      return NextResponse.redirect(withQuery(
+        typeof statePayload.returnTo === "string" ? statePayload.returnTo : "/dashboard",
+        url.origin,
+        "googleServices",
+        "invalid-state"
+      ));
+    }
   }
 
   if (providerError || !code) {
