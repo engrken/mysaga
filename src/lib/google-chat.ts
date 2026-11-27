@@ -1,8 +1,10 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 
 export const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+export const GOOGLE_SERVICES_STATE_COOKIE = "saga_google_services_state";
 
 export const GOOGLE_CHAT_SCOPES = [
   "https://www.googleapis.com/auth/chat.spaces.readonly",
@@ -73,9 +75,11 @@ export async function createGoogleOAuthUrl(
 ) {
   const clientId = requiredEnv("GOOGLE_CLIENT_ID");
   const redirectUri = options.redirectUri || requiredEnv("GOOGLE_REDIRECT_URI");
+  const oauthNonce = randomBytes(32).toString("base64url");
   const state = await signGoogleOAuthState({
     uid: user.id,
     redirectUri,
+    oauthNonce,
     sid: user.schoolId,
     purpose: "google-chat-oauth",
     ...(options.expectedGoogleSubject ? { expectedGoogleSubject: options.expectedGoogleSubject } : {}),
@@ -92,6 +96,14 @@ export async function createGoogleOAuthUrl(
     state
   });
   if (options.loginHint) params.set("login_hint", options.loginHint);
+  const cookieStore = await cookies();
+  cookieStore.set(GOOGLE_SERVICES_STATE_COOKIE, oauthNonce, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/api/integrations/google/callback",
+    maxAge: 10 * 60
+  });
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.search = params.toString();
   return url.toString();
