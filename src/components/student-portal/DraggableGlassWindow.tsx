@@ -66,7 +66,7 @@ export default function DraggableGlassWindow({
   }, [position.x, position.y]);
 
   const startDrag = (event: PointerEvent<HTMLButtonElement>) => {
-    if (minimized || window.matchMedia("(max-width: 767px)").matches) return;
+    if (minimized || window.matchMedia("(max-width: 1180px)").matches) return;
     if ((event.target as HTMLElement).closest("button[data-window-action]")) return;
     const rawX = currentPositionRef.current.x || (inPortal && window.innerWidth >= 1181 ? getDefaultPanelX() : Math.max(12, window.innerWidth - 356));
     const inPortal = Boolean(document.querySelector(".portal-layout"));
