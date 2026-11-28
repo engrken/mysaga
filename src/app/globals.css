@@ -2973,3 +2973,14 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
   .portal-layout .student-floating-window,
   .portal-layout .student-floating-window-backdrop{transition:none!important;animation:none!important}
 }
+
+
+.portal-layout[data-student-glass-theme="dark-glass"] .student-floating-window-head{
+  background:rgba(27,44,66,.97);
+  border-bottom-color:rgba(240,247,255,.18);
+}
+.portal-layout[data-student-glass-theme="dark-glass"] .student-window-minimize{
+  background:rgba(255,255,255,.12);
+  border-color:rgba(255,255,255,.2);
+  color:#eef4fc;
+}
