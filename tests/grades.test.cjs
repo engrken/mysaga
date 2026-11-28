@@ -29,9 +29,10 @@ test("class remarks use one unique canonical dictionary and normalize legacy val
     { label: "PASSED", value: "PASSED" },
     { label: "FAILED", value: "FAILED" },
     { label: "INCOMPLETE", value: "INC" },
-    { label: "NO PRIVILEGE (NP)", value: "NP" },
+    { label: "NO EXAMINATION PERMIT (NP)", value: "NP" },
     { label: "DROPPED (DRP)", value: "DROPPED" }
   ]);
+  assert.equal(CLASS_REMARK_OPTIONS.find(option => option.value === "NP")?.label, "NO EXAMINATION PERMIT (NP)");
   assert.equal(new Set(CLASS_REMARK_OPTIONS.map(option => option.value)).size, CLASS_REMARK_OPTIONS.length);
   assert.equal(normalizeRemark("INCOMPLETE"), "INC");
   assert.equal(normalizeRemark(" incomplete "), "INC");

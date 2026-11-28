@@ -3161,7 +3161,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
                   {activeGradeSheetComponents.map(component=><Fragment key={component.name}><col className="w-[95px]" /><col className="w-[105px]" /></Fragment>)}
                   <col className="w-[100px]" />
                   <col className="w-[100px]" />
-                  <col className="w-[100px]" />
+                  <col className="w-[150px]" />
                   {detail.gradeStatus === "VERIFIED" && <col className="w-[140px]" />}
                 </colgroup>
                 <thead>
@@ -3186,7 +3186,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
                       <div className="w-[100px] mx-auto whitespace-normal break-words leading-tight uppercase">FINAL GRADE</div>
                     </th>
                     <th scope="col" className="align-top py-2 px-1 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">
-                      <div className="w-[100px] mx-auto whitespace-normal break-words leading-tight uppercase">REMARKS</div>
+                      <div className="w-[140px] mx-auto whitespace-normal break-words leading-tight uppercase">REMARKS</div>
                     </th>
                     {detail.gradeStatus === "VERIFIED" && <th scope="col" className="align-top py-2 px-1 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">
                       <div className="w-[140px] mx-auto whitespace-normal break-words leading-tight uppercase">GRADE HISTORY</div>
@@ -3219,7 +3219,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
                         {!isDroppedStatus && en.finalGradeOverride && <span className="block mt-0.5 text-[10px] font-sans text-blue-600">Manually changed</span>}
                       </td>
                       <td className="px-1.5 py-2 text-center text-xs align-middle border-b border-gray-100">
-                        <select className="score-sheet-remark-select w-full max-w-[92px] text-[10px] text-center" aria-label={en.studentName + " final status"} value={selection} onChange={event=>saveRemark(en.id,event.target.value==="__AUTO__"?"":event.target.value)} disabled={busy||detail.gradeStatus==="VERIFIED"}>
+                        <select className="score-sheet-remark-select w-full min-w-[130px] max-w-[140px] text-[10px] text-center" aria-label={en.studentName + " final status"} title="NP means No Examination Permit (No Permit)." value={selection} onChange={event=>saveRemark(en.id,event.target.value==="__AUTO__"?"":event.target.value)} disabled={busy||detail.gradeStatus==="VERIFIED"}>
                           <option value="__AUTO__">{currentRemark || "Not yet graded"}</option>
                           {CLASS_REMARK_OPTIONS.map(option=> <option key={option.value} value={option.value}>{option.label}</option>)}
                         </select>
