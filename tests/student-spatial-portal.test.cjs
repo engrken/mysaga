@@ -118,21 +118,28 @@ test("demo sign-in always returns safe JSON and the browser handles empty or mal
   assert.ok(entry.includes('data.redirect.startsWith("//")'));
 });
 
-test("student page headers, quick panel, and secondary-page appearance controls share the portal layout", () => {
+test("Announcements and Class Chats reuse the same draggable floating appearance window as Overview", () => {
   const portal = read("src/components/Portal.tsx");
-  const pageCustomizer = read("src/components/student-portal/StudentPageCustomizer.tsx");
+  const appearance = read("src/components/student-portal/StudentAppearanceWindow.tsx");
   const window = read("src/components/student-portal/DraggableGlassWindow.tsx");
   const types = read("src/components/student-portal/types.ts");
   const css = read("src/app/globals.css");
   assert.match(portal, /student-portal-topbar-inner/);
-  assert.match(portal, /student-theme-page/);
-  assert.ok(portal.includes("<StudentPageCustomizer"));
-  assert.ok(portal.includes("requested={studentCustomizerRequested}"));
-  assert.match(pageCustomizer, /These appearance choices carry across Overview, Announcements, and Class Chats/);
-  assert.match(pageCustomizer, /<PortalCustomizer/);
-  assert.match(window, /student-panel-default-top/);
+  assert.match(portal, /<StudentAppearanceWindow[\\s\\S]*?requested=\\{studentCustomizerRequested\\}/);
+  assert.equal((portal.match(/<StudentAppearanceWindow/g) || []).length, 2);
+  assert.match(portal, /aria-controls="student-appearance-window-host"/);
+  assert.match(appearance, /<DraggableGlassWindow/);
+  assert.match(appearance, /title="Customize appearance"/);
+  assert.match(appearance, /minimizedLabel="Customize appearance"/);
+  assert.match(appearance, /<PortalCustomizer/);
+  assert.match(appearance, /preferences\\.panelPosition/);
+  assert.match(appearance, /onPositionChange=\\{updatePosition\\}/);
+  assert.match(window, /minimizedLabel\\?: string/);
+  assert.match(window, /student-glass-dock-pill/);
   assert.ok(types.includes("panelPosition: { x: 0, y: 0 }"));
-  assert.ok(css.includes('data-student-demo="true"]{--student-panel-default-top:362px}'));
-  assert.ok(css.includes("rgba(55,77,101,.76)"));
-  assert.match(css, /student-page-customizer-panel/);
+  assert.match(css, /:has\\(\\.student-floating-window\\) \\.student-portal-topbar-inner/);
+  assert.match(css, /:has\\(\\.student-floating-window:not\\(\\.is-minimized\\)\\)/);
+  assert.match(css, /max-width:1180px/);
+  assert.match(css, /@media\\(max-width:767px\\)/);
+  assert.doesNotMatch(css, /student-page-customizer-panel|student-page-customizer-trigger/);
 });
