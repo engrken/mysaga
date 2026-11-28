@@ -55,15 +55,10 @@ export default function DraggableGlassWindow({
   children: ReactNode;
 }) {
   const [dragging, setDragging] = useState(false);
-  const [currentPosition, setCurrentPosition] = useState(position);
-  const currentPositionRef = useRef(position);
+  const [dragPosition, setDragPosition] = useState<Position | null>(null);
+  const dragPositionRef = useRef<Position | null>(null);
   const dragOffset = useRef({ x: 0, y: 0 });
   const dragPointer = useRef<number | null>(null);
-
-  useEffect(() => {
-    currentPositionRef.current = position;
-    setCurrentPosition(position);
-  }, [position.x, position.y]);
 
   useEffect(() => {
     if (minimized || typeof window === "undefined") return;
@@ -131,20 +126,20 @@ export default function DraggableGlassWindow({
     if (minimized || event.pointerType !== "mouse" || window.matchMedia("(max-width: 1180px), (pointer: coarse)").matches) return;
     if ((event.target as HTMLElement).closest("button[data-window-action]")) return;
     const inPortal = Boolean(document.querySelector(".portal-layout"));
-    const rawX = currentPositionRef.current.x || (inPortal && window.innerWidth >= 1181 ? getDefaultPanelX() : Math.max(12, window.innerWidth - 356));
+    const rawX = position.x || (inPortal && window.innerWidth >= 1181 ? getDefaultPanelX() : Math.max(12, window.innerWidth - 356));
     const layoutRoot = document.querySelector(".portal-layout");
     const configuredTop = layoutRoot
       ? Number.parseFloat(getComputedStyle(layoutRoot).getPropertyValue("--student-panel-default-top"))
       : Number.NaN;
-    const rawY = currentPositionRef.current.y || (Number.isFinite(configuredTop) ? configuredTop : 116);
+    const rawY = position.y || (Number.isFinite(configuredTop) ? configuredTop : 116);
     const currentX = clampPanelX(rawX);
     const currentY = clampPanelY(rawY, inPortal);
     dragOffset.current = { x: event.clientX - currentX, y: event.clientY - currentY };
     dragPointer.current = event.pointerId;
     event.currentTarget.setPointerCapture(event.pointerId);
     const startPosition = { x: currentX, y: currentY };
-    currentPositionRef.current = startPosition;
-    setCurrentPosition(startPosition);
+    dragPositionRef.current = startPosition;
+    setDragPosition(startPosition);
     setDragging(true);
   };
 
@@ -155,15 +150,18 @@ export default function DraggableGlassWindow({
       x: clampPanelX(event.clientX - dragOffset.current.x),
       y: clampPanelY(event.clientY - dragOffset.current.y, inPortal)
     };
-    currentPositionRef.current = nextPosition;
-    setCurrentPosition(nextPosition);
+    dragPositionRef.current = nextPosition;
+    setDragPosition(nextPosition);
   };
 
   const endDrag = (event: PointerEvent<HTMLButtonElement>) => {
     if (dragPointer.current !== event.pointerId) return;
     dragPointer.current = null;
+    const finalPosition = dragPositionRef.current ?? position;
+    dragPositionRef.current = null;
+    setDragPosition(null);
     setDragging(false);
-    onPositionChange(currentPositionRef.current);
+    onPositionChange(finalPosition);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
@@ -176,11 +174,12 @@ export default function DraggableGlassWindow({
   }
 
   const inPortal = typeof document !== "undefined" && Boolean(document.querySelector(".portal-layout"));
-  const visiblePosition = typeof window === "undefined" ? currentPosition : {
-    x: currentPosition.x > 0
-      ? clampPanelX(currentPosition.x)
+  const activePosition = dragging && dragPosition ? dragPosition : position;
+  const visiblePosition = typeof window === "undefined" ? activePosition : {
+    x: activePosition.x > 0
+      ? clampPanelX(activePosition.x)
       : inPortal && window.innerWidth >= 1181 ? getDefaultPanelX() : 0,
-    y: currentPosition.y > 0 ? clampPanelY(currentPosition.y, inPortal) : 0
+    y: activePosition.y > 0 ? clampPanelY(activePosition.y, inPortal) : 0
   };
 
   return <>
