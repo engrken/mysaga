@@ -1,8 +1,14 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./globals.css";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import SiteFooter from "@/components/SiteFooter";
 import ThemeSync from "@/components/ThemeSync";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover"
+};
 
 export const metadata: Metadata = {
   title: "SAGA Portal | School Assessment, Grading & Analytics",

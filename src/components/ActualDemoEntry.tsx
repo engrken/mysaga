@@ -5,6 +5,11 @@ import { useState } from "react";
 import styles from "./DemoWorkspace.module.css";
 
 type Role = "TEACHER" | "STUDENT";
+type DemoSessionResponse = {
+  ok?: boolean;
+  redirect?: string;
+  error?: string;
+};
 const roles = [
   {
     key: "TEACHER" as Role, icon: "▤", title: "Teacher",
@@ -31,9 +36,22 @@ export default function ActualDemoEntry() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role })
       });
-      const data = await response.json();
-      if (!response.ok || !data.ok || typeof data.redirect !== "string") {
-        throw new Error(data.error || "Unable to open the demonstration portal.");
+      const responseText = await response.text();
+      let data: DemoSessionResponse | null = null;
+      if (responseText.trim()) {
+        try {
+          data = JSON.parse(responseText) as DemoSessionResponse;
+        } catch {
+          data = null;
+        }
+      }
+      if (!response.ok || !data?.ok ||
+        typeof data.redirect !== "string" ||
+        !data.redirect.startsWith("/") || data.redirect.startsWith("//")) {
+        const message = data?.error || (responseText.trim()
+          ? "The demo service returned an unexpected response. Please try again."
+          : `The demo service returned an empty response (HTTP ${response.status}). Please try again.`);
+        throw new Error(message);
       }
       window.location.assign(data.redirect);
     } catch (cause) {

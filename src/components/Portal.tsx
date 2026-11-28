@@ -14,6 +14,9 @@ import ClassRosterEnrollmentTools from "./ClassRosterEnrollmentTools";
 import GoogleChatControls from "./GoogleChatControls";
 import { DemoGoogleChatControls } from "./DemoClassChats";
 import StudentClassEnrollment from "./StudentClassEnrollment";
+import OverviewDashboard from "./student-portal/OverviewDashboard";
+import StudentAppearanceWindow from "./student-portal/StudentAppearanceWindow";
+import { STUDENT_PORTAL_ACCENTS, STUDENT_PORTAL_DEFAULTS, mergeStudentPortalPreferences, safeStudentBackgroundUrl, type StudentPortalPreferences, type StudentAttendanceSummary, type StudentAttendanceWarning } from "./student-portal/types";
 // These large interactive tools are only downloaded when opened.
 const GradeWhatIfSimulator = dynamic(() => import("./GradeWhatIfSimulator"));
 const HelpCenter = dynamic(() => import("./PortalGuides").then(module => module.HelpCenter));
@@ -77,7 +80,7 @@ function readIsoHeaderConfig(schoolName: string, schoolSlug: string, stored: str
   } catch { return { ...defaults }; }
 }
 type Detail = Subject & { categories: Category[]; gradeBands: GradeBand[]; assessments: Assessment[]; enrollments: Enrollment[] };
-type Grade = { id: string; classId?: string | null; droppingWarning?: AbsenceStreak | null; attendanceWarning?: { absent: number; late: number; lateAbsences: number; counted: number; percent: number } | null; itemCount?: number; recordedCount?: number; code: string; title: string; term: string; academicYear: string; teacher: string; status: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; percent: number | null; finalGrade: string | null; remarks: string; gradeBands: Array<{ minPercent: number; finalGrade: string; remarks: string }>; categories: Array<{ id: string; name: string; weight: number; conversionBase: number; assessments: Array<{id:string;title:string;points:number|null;remark:string|null;maxScore:number;weight:number|null;lateAsAbsent?:boolean;dueDate?:string|null}> }> };
+type Grade = { id: string; classId?: string | null; schedule?: string | null; droppingWarning?: AbsenceStreak | null; attendanceSummary?: StudentAttendanceSummary; attendanceWarning?: StudentAttendanceWarning | null; itemCount?: number; recordedCount?: number; code: string; title: string; term: string; academicYear: string; teacher: string; status: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; percent: number | null; finalGrade: string | null; remarks: string; gradeBands: Array<{ minPercent: number; finalGrade: string; remarks: string }>; categories: Array<{ id: string; name: string; weight: number; conversionBase: number; assessments: Array<{id:string;title:string;points:number|null;remark:string|null;maxScore:number;weight:number|null;lateAsAbsent?:boolean;dueDate?:string|null}> }> };
 type StudentSearchMatch = { enrollmentId: string; studentName: string; studentRemark: string | null; class: { id: string; classId: string | null; code: string; title: string; term: string; academicYear: string; status: "DRAFT" | "SUBMITTED" | "VERIFIED" }; finalPercent: number | null; finalGrade: string | null; finalRemark: string; records: Array<{id:string;title:string;category:string;points:number|null;remark:string|null;maxScore:number;dueDate:string|null}> };
 type ScheduleRow = { label: string; day: string; startTime: string; endTime: string };
 type OverviewItem = { id: string; title: string; date: string | null; subjectId: string; code: string; subjectTitle: string; attendanceType?: "FACE_TO_FACE" | "ONLINE" | null; scheduleOverrideReason?: string | null; markedCount?: number; studentCount?: number };
@@ -1157,7 +1160,58 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>([]); const [copyFromId, setCopyFromId] = useState(""); const [rosterText, setRosterText] = useState(""); const [rosterFileName, setRosterFileName] = useState(""); const [categoryName, setCategoryName] = useState(""); const [categoryParent, setCategoryParent] = useState(""); const [categoryWeight, setCategoryWeight] = useState("50"); const [categoryOpen, setCategoryOpen] = useState(false);
   const [lectureCourseWeight, setLectureCourseWeight] = useState("60"); const [laboratoryCourseWeight, setLaboratoryCourseWeight] = useState("40");
   const [gradingSetupType, setGradingSetupType] = useState<"SINGLE" | "COMBINED">("SINGLE"); const [singleGroupType, setSingleGroupType] = useState<"LECTURE" | "LABORATORY">("LECTURE");
-  const [theme, setTheme] = useState<"light" | "dark">("light"); const [academicYear, setAcademicYear] = useState("2026-2027"); const [calendarSystem, setCalendarSystem] = useState<"SEMESTER" | "TRIMESTER">("SEMESTER"); const [activeTerm, setActiveTerm] = useState("1st Semester"); const [academicPeriodReady, setAcademicPeriodReady] = useState(false); const academicYears = [...Array.from({length: 10}, (_, index) => 2016 + index), ...Array.from({length: 10}, (_, index) => 2026 + index)].map(start => `${start}-${start + 1}`).sort((a,b) => b.localeCompare(a)); const [classDirectoryQuery, setClassDirectoryQuery] = useState(""); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | "iso-grades" | null>(null); const [notedByName, setNotedByName] = useState(user.notedByName || ""); const [teacherPosition, setTeacherPosition] = useState(user.positionTitle || ""); const [notedByPosition, setNotedByPosition] = useState(user.notedByPosition || ""); const [gradeExcelExporting, setGradeExcelExporting] = useState<"generic" | "iso" | null>(null);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [studentPortalPreferences, setStudentPortalPreferences] = useState<StudentPortalPreferences>(STUDENT_PORTAL_DEFAULTS);
+  const [studentPortalPreferencesReady, setStudentPortalPreferencesReady] = useState(false);
+  const [isCompactOrTouchViewport, setIsCompactOrTouchViewport] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 767px), (pointer: coarse)");
+    const syncViewport = () => setIsCompactOrTouchViewport(query.matches);
+    syncViewport();
+    if (typeof query.addEventListener === "function") {
+      query.addEventListener("change", syncViewport);
+      return () => query.removeEventListener("change", syncViewport);
+    }
+    query.addListener(syncViewport);
+    return () => query.removeListener(syncViewport);
+  }, []);
+  const [studentCustomizerRequestedRoute, setStudentCustomizerRequestedRoute] = useState<string | null>(null);
+  const studentCustomizerRequested = studentCustomizerRequestedRoute === tab;
+  const [studentLayoutResetVersion, setStudentLayoutResetVersion] = useState(0);
+  const studentPortalPreferencesKey = `saga-student-portal-preferences:v1:${user.id}`;
+  useEffect(() => {
+    if (teacher || user.isDemo) {
+      setStudentPortalPreferences(STUDENT_PORTAL_DEFAULTS);
+      setStudentPortalPreferencesReady(true);
+      return;
+    }
+    try {
+      const saved = window.localStorage.getItem(studentPortalPreferencesKey);
+      setStudentPortalPreferences(saved ? mergeStudentPortalPreferences(JSON.parse(saved)) : STUDENT_PORTAL_DEFAULTS);
+    } catch {
+      setStudentPortalPreferences(STUDENT_PORTAL_DEFAULTS);
+    } finally {
+      setStudentPortalPreferencesReady(true);
+    }
+  }, [studentPortalPreferencesKey, teacher, user.isDemo]);
+  useEffect(() => {
+    if (!studentPortalPreferencesReady || teacher || user.isDemo) return;
+    try { window.localStorage.setItem(studentPortalPreferencesKey, JSON.stringify(studentPortalPreferences)); }
+    catch { /* Private browsing or storage limits must not block portal use. */ }
+  }, [studentPortalPreferences, studentPortalPreferencesReady, studentPortalPreferencesKey, teacher, user.isDemo]);
+  function resetStudentPortalPreferences(preserveOverviewLayout = false) {
+    const resetPreferences = preserveOverviewLayout
+      ? { ...STUDENT_PORTAL_DEFAULTS, layout: studentPortalPreferences.layout }
+      : STUDENT_PORTAL_DEFAULTS;
+    setStudentPortalPreferences(resetPreferences);
+    setStudentCustomizerRequestedRoute(null);
+    setStudentLayoutResetVersion(version => version + 1);
+    setNotice("Student portal settings restored to the default layout.");
+    if (!user.isDemo) {
+      try { window.localStorage.removeItem(studentPortalPreferencesKey); }
+      catch { /* The in-memory reset still applies if storage is unavailable. */ }
+    }
+  } const [academicYear, setAcademicYear] = useState("2026-2027"); const [calendarSystem, setCalendarSystem] = useState<"SEMESTER" | "TRIMESTER">("SEMESTER"); const [activeTerm, setActiveTerm] = useState("1st Semester"); const [academicPeriodReady, setAcademicPeriodReady] = useState(false); const academicYears = [...Array.from({length: 10}, (_, index) => 2016 + index), ...Array.from({length: 10}, (_, index) => 2026 + index)].map(start => `${start}-${start + 1}`).sort((a,b) => b.localeCompare(a)); const [classDirectoryQuery, setClassDirectoryQuery] = useState(""); const [rosterEdit, setRosterEdit] = useState<{ id: string; studentName: string; studentNumber: string } | null>(null); const [printMode, setPrintMode] = useState<"roster" | "grades" | "iso-grades" | null>(null); const [notedByName, setNotedByName] = useState(user.notedByName || ""); const [teacherPosition, setTeacherPosition] = useState(user.positionTitle || ""); const [notedByPosition, setNotedByPosition] = useState(user.notedByPosition || ""); const [gradeExcelExporting, setGradeExcelExporting] = useState<"generic" | "iso" | null>(null);
   const [schoolAddress, setSchoolAddress] = useState(user.school.address || "");
   const [departmentName, setDepartmentName] = useState(user.school.departmentName || "");
   const [isoHeaderConfig, setIsoHeaderConfig] = useState<IsoHeaderConfig>(() => readIsoHeaderConfig(user.school.name, user.school.slug, user.school.isoHeaderConfig));
@@ -1264,6 +1318,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   function navigatePage(page: "overview" | "classes" | "profile" | "simulator" | "chats" | "announcements") {
     if (page === "simulator" && teacher) return;
     if (page === "announcements" && teacher) return;
+    setStudentCustomizerRequestedRoute(null);
     if (page === "classes") {
       if (!teacher) return;
       // The Classes entry opens the directory first; a teacher explicitly
@@ -1309,7 +1364,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     if (activeId) window.history.replaceState(null, "",
       classWorkspaceHref(user.school.slug, activeId, section, classStudentFilter ? { student: classStudentFilter } : undefined, subjects));
   }
-  useEffect(() => { setTab(initialPage); }, [initialPage]);
+  useEffect(() => { setStudentCustomizerRequestedRoute(null); setTab(initialPage); }, [initialPage]);
   useEffect(() => {
     if (!teacher || initialPage !== "classes") return;
     setActiveId(initialClassId);
@@ -1321,6 +1376,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   // a fast client-side class shortcut. Deep links remain checked on the server.
   useEffect(() => {
     const syncFromHistory = () => {
+      setStudentCustomizerRequestedRoute(null);
       const root = `/${encodeURIComponent(user.school.slug)}`;
       const pathname = window.location.pathname;
       if (pathname === `${root}/overview`) { setTab("overview"); return; }
@@ -2557,7 +2613,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     </div>;
   };
 
-  return <div className="portal-layout" data-bs-theme={theme} data-saga-role={teacher ? "teacher" : "student"} style={{"--school-primary": user.school.primaryColor} as import("react").CSSProperties}><main className="main-area"><header className="portal-top-nav"><div className="portal-top-nav-inner"><a className="portal-top-brand" href={`/${encodeURIComponent(user.school.slug)}/overview`} aria-label={`${user.school.shortName} SAGA Portal overview`}><img className="sidebar-app-mark" src="/favicon.svg" alt="" width="38" height="38"/><span><strong>{user.school.shortName}</strong><small>SAGA PORTAL</small></span></a><nav className="portal-top-links" aria-label="Primary navigation"><button type="button" className={`portal-top-link ${tab === "overview" ? "selected" : ""}`} aria-current={tab === "overview" ? "page" : undefined} onClick={() => { setClassesMenuOpen(false); navigatePage("overview"); }}><span aria-hidden="true">▦</span>Overview</button>{teacher && tab === "classes" && activeId && <a className="portal-top-link" href={`/${encodeURIComponent(user.school.slug)}/academic-assistant?class=${encodeURIComponent(activeId)}`}><span aria-hidden="true">✦</span>Virtual Assistant</a>}{teacher && <a className="portal-top-link" href={`/${encodeURIComponent(user.school.slug)}/teacher-summary`}><span aria-hidden="true">▤</span>Teacher Summary</a>}{!teacher && <button type="button" className={`portal-top-link ${tab === "announcements" ? "selected" : ""}`} aria-current={tab === "announcements" ? "page" : undefined} onClick={() => { setClassesMenuOpen(false); navigatePage("announcements"); }}><span aria-hidden="true">▤</span>Announcements</button>}<button type="button" className={`portal-top-link ${tab === "chats" ? "selected" : ""}`} aria-current={tab === "chats" ? "page" : undefined} onClick={() => { setClassesMenuOpen(false); navigatePage("chats"); }}><span aria-hidden="true">▣</span>Class chats</button>{teacher && <div className={`portal-nav-class-menu ${classesMenuOpen ? "is-open" : ""}`}><button type="button" className={`portal-top-link portal-top-class-toggle ${tab === "classes" ? "selected" : ""}`} aria-haspopup="true" aria-expanded={classesMenuOpen} aria-controls="portal-active-classes" onClick={() => setClassesMenuOpen(open => !open)}><span aria-hidden="true">▤</span>My classes<span className="portal-top-caret" aria-hidden="true">⌄</span></button><div className="sidebar-class-list portal-top-class-list" id="portal-active-classes" role="group" aria-label={`Classes for ${activeTerm}, ${academicYear}`}><div className="sidebar-class-period"><span>ACTIVE PERIOD</span><strong>{activeTerm} · {academicYear}</strong></div>{subjects.length ? subjects.map(subject => <button key={subject.id} type="button" className={`sidebar-class-link ${activeId === subject.id ? "selected" : ""}`} onClick={() => { setClassesMenuOpen(false); openClass(subject.id); }} aria-current={activeId === subject.id ? "page" : undefined}><span className="sidebar-class-link-copy"><b>{subject.code}</b><small>{subject.title}</small></span><em>{subject.classId || subject.courseYear || "Open class"}</em></button>) : <div className="sidebar-class-empty">No classes for this active period.</div>}</div></div>}{teacher && (user.isTenantManager || user.isSchoolAdmin) && <a className="portal-top-link" href="/manage"><span aria-hidden="true">⚙</span>{user.isTenantManager ? "Tenant management" : "School administration"}</a>}{!teacher && <button type="button" className={`portal-top-link ${tab === "simulator" ? "selected" : ""}`} aria-current={tab === "simulator" ? "page" : undefined} onClick={() => { setClassesMenuOpen(false); navigatePage("simulator"); }}><span aria-hidden="true">▤</span>Grade Simulator</button>}<button type="button" className="portal-top-link" title="FAQs, onboarding tour, and manuals" onClick={() => { setClassesMenuOpen(false); openHelp("quick"); }}><span aria-hidden="true">?</span>Help &amp; guides</button></nav><div className="portal-top-actions"><AccountMenu fullName={user.fullName} email={user.email} role={teacher ? "Teacher" : "Student"} profileImagePath={profileImagePath} theme={theme} onThemeChange={setAppearance} onEditProfile={() => navigatePage("profile")} onLogout={logout} onHelp={() => openHelp("quick")} onTenantDashboard={teacher && (user.isTenantManager || user.isSchoolAdmin) ? () => router.push("/manage") : undefined}/></div></div></header>{user.isDemo && <RealDemoBanner />}<header className="topbar"><div><div className="crumb">{teacher ? "TEACHER SPACE" : "STUDENT SPACE"}<span>/</span>{tab === "profile" ? "PROFILE" : tab === "classes" ? selectedTitle.toUpperCase() : tab === "simulator" ? "GRADE SIMULATOR" : tab === "chats" ? "CLASS CHATS" : tab === "announcements" ? "ANNOUNCEMENTS" : "OVERVIEW"}</div><h1>{tab === "profile" ? "Account settings" : tab === "classes" && teacher ? selectedTitle : tab === "simulator" ? "Grade Simulator" : tab === "chats" ? "Class Chats" : tab === "announcements" ? "Announcements" : teacher ? "Teaching overview" : "Academic overview"}</h1></div><div className="topbar-right"><span className="term-pill">Academic records <i>·</i> Private</span></div></header>
+  return <div className="portal-layout" data-bs-theme={theme} data-saga-role={teacher ? "teacher" : "student"} data-student-glass-theme={!teacher ? studentPortalPreferences.theme : undefined} data-student-wallpaper={!teacher ? studentPortalPreferences.wallpaper : undefined} data-student-layout={!teacher ? (isCompactOrTouchViewport || tab !== "overview" ? "snapped" : studentPortalPreferences.layout) : undefined} data-student-page={!teacher ? tab : undefined} data-student-demo={!teacher && user.isDemo ? "true" : undefined} style={{"--school-primary": user.school.primaryColor, "--student-accent": !teacher ? STUDENT_PORTAL_ACCENTS[studentPortalPreferences.accent].color : undefined, "--student-wallpaper-image": !teacher && studentPortalPreferences.wallpaper === "custom" && safeStudentBackgroundUrl(studentPortalPreferences.customBackgroundUrl) ? `url("${safeStudentBackgroundUrl(studentPortalPreferences.customBackgroundUrl)}")` : "none"} as import("react").CSSProperties}><main className="main-area"><header className="portal-top-nav"><div className="portal-top-nav-inner"><a className="portal-top-brand" href={`/${encodeURIComponent(user.school.slug)}/overview`} aria-label={`${user.school.shortName} SAGA Portal overview`}><img className="sidebar-app-mark" src="/favicon.svg" alt="" width="38" height="38"/><span><strong>{user.school.shortName}</strong><small>SAGA PORTAL</small></span></a><nav className="portal-top-links" aria-label="Primary navigation"><button type="button" className={`portal-top-link ${tab === "overview" ? "selected" : ""}`} aria-current={tab === "overview" ? "page" : undefined} onClick={() => { setClassesMenuOpen(false); navigatePage("overview"); }}><span aria-hidden="true">▦</span>Overview</button>{teacher && tab === "classes" && activeId && <a className="portal-top-link" href={`/${encodeURIComponent(user.school.slug)}/academic-assistant?class=${encodeURIComponent(activeId)}`}><span aria-hidden="true">✦</span>Virtual Assistant</a>}{teacher && <a className="portal-top-link" href={`/${encodeURIComponent(user.school.slug)}/teacher-summary`}><span aria-hidden="true">▤</span>Teacher Summary</a>}{!teacher && <button type="button" className={`portal-top-link ${tab === "announcements" ? "selected" : ""}`} aria-current={tab === "announcements" ? "page" : undefined} onClick={() => { setClassesMenuOpen(false); navigatePage("announcements"); }}><span aria-hidden="true">▤</span>Announcements</button>}<button type="button" className={`portal-top-link ${tab === "chats" ? "selected" : ""}`} aria-current={tab === "chats" ? "page" : undefined} onClick={() => { setClassesMenuOpen(false); navigatePage("chats"); }}><span aria-hidden="true">▣</span>Class chats</button>{teacher && <div className={`portal-nav-class-menu ${classesMenuOpen ? "is-open" : ""}`}><button type="button" className={`portal-top-link portal-top-class-toggle ${tab === "classes" ? "selected" : ""}`} aria-haspopup="true" aria-expanded={classesMenuOpen} aria-controls="portal-active-classes" onClick={() => setClassesMenuOpen(open => !open)}><span aria-hidden="true">▤</span>My classes<span className="portal-top-caret" aria-hidden="true">⌄</span></button><div className="sidebar-class-list portal-top-class-list" id="portal-active-classes" role="group" aria-label={`Classes for ${activeTerm}, ${academicYear}`}><div className="sidebar-class-period"><span>ACTIVE PERIOD</span><strong>{activeTerm} · {academicYear}</strong></div>{subjects.length ? subjects.map(subject => <button key={subject.id} type="button" className={`sidebar-class-link ${activeId === subject.id ? "selected" : ""}`} onClick={() => { setClassesMenuOpen(false); openClass(subject.id); }} aria-current={activeId === subject.id ? "page" : undefined}><span className="sidebar-class-link-copy"><b>{subject.code}</b><small>{subject.title}</small></span><em>{subject.classId || subject.courseYear || "Open class"}</em></button>) : <div className="sidebar-class-empty">No classes for this active period.</div>}</div></div>}{teacher && (user.isTenantManager || user.isSchoolAdmin) && <a className="portal-top-link" href="/manage"><span aria-hidden="true">⚙</span>{user.isTenantManager ? "Tenant management" : "School administration"}</a>}{!teacher && <button type="button" className={`portal-top-link ${tab === "simulator" ? "selected" : ""}`} aria-current={tab === "simulator" ? "page" : undefined} onClick={() => { setClassesMenuOpen(false); navigatePage("simulator"); }}><span aria-hidden="true">▤</span>Grade Simulator</button>}<button type="button" className="portal-top-link" title="FAQs, onboarding tour, and manuals" onClick={() => { setClassesMenuOpen(false); openHelp("quick"); }}><span aria-hidden="true">?</span>Help &amp; guides</button>{!teacher && <button type="button" className={`portal-top-link student-customize-trigger ${studentCustomizerRequested ? "selected" : ""}`} aria-expanded={studentCustomizerRequested} aria-controls="student-appearance-window-host" onClick={() => { setClassesMenuOpen(false); const targetPage = tab === "overview" || tab === "chats" || tab === "announcements" ? tab : "overview"; if (targetPage !== tab) navigatePage(targetPage); setStudentCustomizerRequestedRoute(targetPage); }}><span aria-hidden="true">✧</span>Customize</button>}</nav><div className="portal-top-actions"><AccountMenu fullName={user.fullName} email={user.email} role={teacher ? "Teacher" : "Student"} profileImagePath={profileImagePath} theme={theme} onThemeChange={setAppearance} onEditProfile={() => navigatePage("profile")} onLogout={logout} onHelp={() => openHelp("quick")} onTenantDashboard={teacher && (user.isTenantManager || user.isSchoolAdmin) ? () => router.push("/manage") : undefined}/></div></div></header>{user.isDemo && <RealDemoBanner />}<header className={`topbar${!teacher ? " student-portal-topbar" : ""}`}><div className={!teacher ? "student-portal-topbar-inner" : undefined}><div><div className="crumb">{teacher ? "TEACHER SPACE" : "STUDENT SPACE"}<span>/</span>{tab === "profile" ? "PROFILE" : tab === "classes" ? selectedTitle.toUpperCase() : tab === "simulator" ? "GRADE SIMULATOR" : tab === "chats" ? "CLASS CHATS" : tab === "announcements" ? "ANNOUNCEMENTS" : "OVERVIEW"}</div><h1>{tab === "profile" ? "Account settings" : tab === "classes" && teacher ? selectedTitle : tab === "simulator" ? "Grade Simulator" : tab === "chats" ? "Class Chats" : tab === "announcements" ? "Announcements" : teacher ? "Teaching overview" : "Academic overview"}</h1></div><div className="topbar-right"><span className="term-pill">Academic records <i>·</i> Private</span></div></div></header>
       <div className="content-wrap">{(err||notice)&&!(teacher && tab === "classes" && classSection === "record" && detail)&&<div className="portal-toast-stack" aria-live="polite" aria-atomic="false">{err&&<div className="portal-toast error" role="alert"><div><b>Needs attention</b><p>{err}</p>{notificationTarget(err)&&<button className="toast-location" onClick={goToNotificationTarget}>Check {notificationTarget(err)?.label} ↗</button>}</div><button className="toast-dismiss" aria-label="Dismiss error" onClick={()=>setErr("")}>×</button></div>}{notice&&<div className="portal-toast success" role="status"><div><b>Saved</b><p>{notice}</p></div><button className="toast-dismiss" aria-label="Dismiss notification" onClick={()=>setNotice("")}>×</button></div>}</div>}
       {tab === "profile" ? <section className="surface profile-surface"><div className="section-heading"><div><span className="eyebrow">PERSONAL DETAILS</span><h2>Profile information</h2><p className="muted">Manage your personal details and the school letterhead used on grading sheets.</p></div><span className="profile-avatar">{profileImagePath ? <img src={`/api/media?pathname=${encodeURIComponent(profileImagePath)}`} alt="Profile"/> : initials(user.fullName)}</span></div><div className="profile-media-grid"><div className="profile-media-card"><label className="form-label">Profile picture</label><p className="muted small">Private to your account. JPG, PNG, or WebP up to 3 MB.</p><input className="form-control" type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>{void uploadProfileImage("profile",e.currentTarget.files?.[0]);e.currentTarget.value=""}}/></div>{teacher && <div className="profile-media-card"><label className="form-label">School / Institution logo</label><p className="muted small">Official institution mark, displayed at the left of the portrait grading-sheet header.</p>{schoolLogoPath && <img className="school-logo-preview" src={`/api/media?pathname=${encodeURIComponent(schoolLogoPath)}`} alt="Current school logo"/>}<input className="form-control mb-3" type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>{void uploadProfileImage("school-logo",e.currentTarget.files?.[0]);e.currentTarget.value=""}}/><label className="form-label">College / Department logo</label><p className="muted small">Separate college or department mark, displayed at the right of the institution header.</p>{departmentLogoPath && <img className="school-logo-preview" src={`/api/media?pathname=${encodeURIComponent(departmentLogoPath)}`} alt="Current college or department logo"/>}<input className="form-control" type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>{void uploadProfileImage("department-logo",e.currentTarget.files?.[0]);e.currentTarget.value=""}}/></div>}</div><form className="profile-form mt-4" onSubmit={saveProfile}><label className="form-label">Full name</label><input className="form-control" value={profileName} onChange={e => setProfileName(e.target.value)} required maxLength={120}/><label className="form-label mt-3">Sign-in email</label><input className="form-control" value={user.email} readOnly/><label className="form-label mt-3">Role</label><input className="form-control" readOnly value={teacher ? "Teacher" : "Student"}/>
         {teacher && <>
@@ -2873,13 +2929,19 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
             </div>
           </div>
         </section>
-        <div className="overview-section-heading student-progress-heading"><div><span className="eyebrow">AT A GLANCE</span><h2>Your academic progress</h2><p className="muted">A quick summary of your records for this academic period.</p></div><span>{activeTerm} · {academicYear}</span></div>
-        <div className="overview-stat-grid student-overview-stats" aria-label="Your academic record summary">
-          <article className="surface overview-stat-card accent-violet"><small>VISIBLE CLASSES</small><strong>{studentGradeStats.visible}</strong><span>Shared by your teachers</span></article>
-          <article className="surface overview-stat-card accent-cyan"><small>TEACHER-VERIFIED</small><strong>{studentGradeStats.verified}</strong><span>Records marked verified to Registrar</span></article>
-          <article className="surface overview-stat-card accent-blue"><small>IN PROGRESS</small><strong>{studentGradeStats.inProgress}</strong><span>Draft or provisional records</span></article>
-          <article className="surface overview-stat-card accent-violet"><small>UNRECORDED ITEMS</small><strong>{studentGradeStats.pendingAssessments}</strong><span>Across your visible classes</span></article>
-        </div>
+        <OverviewDashboard
+          key={`student-layout-${studentLayoutResetVersion}`}
+          fullName={user.fullName}
+          grades={grades}
+          attendanceWarnings={studentAttendanceWarnings}
+          preferences={studentPortalPreferences}
+          onPreferencesChange={setStudentPortalPreferences}
+          onReset={resetStudentPortalPreferences}
+          storageReady={studentPortalPreferencesReady}
+          customizerRequested={studentCustomizerRequested}
+          onCustomizerOpened={() => setStudentCustomizerRequestedRoute(null)}
+          demoMode={user.isDemo}
+        />
         <StudentActivities readOnly={user.isDemo} academicYear={academicYear} term={activeTerm}/>
         {studentAttendanceWarnings.length > 0 && (
           <section className="student-attendance-watch surface" aria-labelledby="student-attendance-warning-heading" aria-live="polite">
@@ -2926,7 +2988,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
               const total = g.itemCount ?? 0;
               const recorded = Math.min(total, g.recordedCount ?? 0);
               const completion = total ? Math.round(recorded / total * 100) : 0;
-              return <article className="student-grade-card student-grade-card-expanded student-grade-card-modern" key={g.id}>
+              return <article id={`student-grade-${g.id}`} className="student-grade-card student-grade-card-expanded student-grade-card-modern" key={g.id}>
                 <div className="grade-course-icon" aria-hidden="true">{g.code.slice(0, 2)}</div>
                 <div className="grade-course-details"><small>{g.code} <span>·</span> {g.term} {g.academicYear}</small>
                   <h3>{g.title}</h3><p>Instructor: {g.teacher}</p>
@@ -2976,8 +3038,16 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           </>}
         </section>
       </>}</>}
-      {tab === "chats" && <ClassChatsHub role={teacher ? "TEACHER" : "STUDENT"} isDemo={user.isDemo} academicYear={academicYear} term={activeTerm} periodReady={academicPeriodReady} />}
-      {tab === "announcements" && !teacher && <StudentAnnouncements readOnly={user.isDemo} />}
+      {tab === "chats" && (teacher
+        ? <ClassChatsHub role="TEACHER" isDemo={user.isDemo} academicYear={academicYear} term={activeTerm} periodReady={academicPeriodReady} />
+        : <div className="student-theme-page">
+            <StudentAppearanceWindow preferences={studentPortalPreferences} onChange={setStudentPortalPreferences} onReset={() => resetStudentPortalPreferences(true)} requested={studentCustomizerRequested} onRequestHandled={() => setStudentCustomizerRequestedRoute(null)} demoMode={user.isDemo}/>
+            <ClassChatsHub role="STUDENT" isDemo={user.isDemo} academicYear={academicYear} term={activeTerm} periodReady={academicPeriodReady}/>
+          </div>)}
+      {tab === "announcements" && !teacher && <div className="student-theme-page">
+        <StudentAppearanceWindow preferences={studentPortalPreferences} onChange={setStudentPortalPreferences} onReset={() => resetStudentPortalPreferences(true)} requested={studentCustomizerRequested} onRequestHandled={() => setStudentCustomizerRequestedRoute(null)} demoMode={user.isDemo}/>
+        <StudentAnnouncements readOnly={user.isDemo}/>
+      </div>}
       {tab === "simulator" && <section className="section-block student-simulator-page">
         <div className="student-simulator-intro">
           <span className="eyebrow">PRACTICE · PRIVATE TO YOUR ACCOUNT</span>
