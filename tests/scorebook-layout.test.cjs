@@ -91,8 +91,8 @@ test("Show all layout keeps a floating horizontal scrollbar synchronized with th
 
 test("Record Scores reserves root-domain total and weighted columns before the course total", () => {
   const portal = fs.readFileSync(path.join(__dirname, "../src/components/Portal.tsx"), "utf8");
-  assert.match(portal, /\{ kind: "domain-total", category: group\.parent \}/);
-  assert.match(portal, /\{ kind: "domain-weighted", category: group\.parent \}/);
+  assert.match(portal, /\{ kind: "domain-total" as const, category: group\.parent \}/);
+  assert.match(portal, /\{ kind: "domain-weighted" as const, category: group\.parent \}/);
   assert.match(portal, /depth === 0 \? 2 : 0/);
   assert.match(portal, /domain\?\.rawEquivalentPercent/);
   assert.match(portal, /domain\?\.parentWeightedScore/);
