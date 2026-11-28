@@ -126,12 +126,13 @@ test("student page headers, quick panel, and secondary-page appearance controls 
   const css = read("src/app/globals.css");
   assert.match(portal, /student-portal-topbar-inner/);
   assert.match(portal, /student-theme-page/);
-  assert.match(portal, /<StudentPageCustomizer[\\s\\S]*?requested=\\{studentCustomizerRequested\\}/);
+  assert.ok(portal.includes("<StudentPageCustomizer"));
+  assert.ok(portal.includes("requested={studentCustomizerRequested}"));
   assert.match(pageCustomizer, /These appearance choices carry across Overview, Announcements, and Class Chats/);
   assert.match(pageCustomizer, /<PortalCustomizer/);
   assert.match(window, /student-panel-default-top/);
-  assert.match(types, /panelPosition: \\{ x: 0, y: 0 \\}/);
-  assert.match(css, /data-student-demo="true"\\]\\{--student-panel-default-top:362px\\}/);
-  assert.match(css, /Soft Midnight/);
+  assert.ok(types.includes("panelPosition: { x: 0, y: 0 }"));
+  assert.ok(css.includes('data-student-demo="true"]{--student-panel-default-top:362px}'));
+  assert.ok(css.includes("rgba(55,77,101,.76)"));
   assert.match(css, /student-page-customizer-panel/);
 });
