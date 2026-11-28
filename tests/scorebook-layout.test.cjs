@@ -93,7 +93,7 @@ test("Record Scores reserves root-domain total and weighted columns before the c
   const portal = fs.readFileSync(path.join(__dirname, "../src/components/Portal.tsx"), "utf8");
   assert.match(portal, /\{ kind: "domain-total" as const, category: group\.parent \}/);
   assert.match(portal, /\{ kind: "domain-weighted" as const, category: group\.parent \}/);
-  assert.match(portal, /depth === 0 \? 2 : 0/);
+  assert.match(portal, /buildScorebookHeaderLayout\(/);
   assert.match(portal, /domain\?\.rawEquivalentPercent/);
   assert.match(portal, /domain\?\.parentWeightedScore/);
   assert.match(portal, /<f>.*?<\/f><v>/);
@@ -119,4 +119,103 @@ test("primary-domain summary columns are budgeted once per root on every auto-fi
         `width ${width} page ${page.label} exceeds budget by ${segmentWidth + summaries - limit}px`);
     }
   }
+});
+
+
+test("Record Scores header matrix accounts for each root summary column and unequal category depths", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../src/lib/scorebook-layout.ts"), "utf8");
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+  }).outputText;
+  const module = { exports: {} };
+  new Function("exports", "module", compiled)(module.exports, module);
+  const { buildScorebookHeaderLayout } = module.exports;
+
+  const categories = [
+    { id: "lecture", parentId: null, sortOrder: 0 },
+    { id: "major", parentId: "lecture", sortOrder: 0 },
+    { id: "prelim", parentId: "major", sortOrder: 0 },
+    { id: "midterm", parentId: "major", sortOrder: 1 },
+    { id: "finals", parentId: "major", sortOrder: 2 },
+    { id: "self", parentId: "lecture", sortOrder: 1 },
+    { id: "quizzes", parentId: "lecture", sortOrder: 2 },
+    { id: "lab", parentId: null, sortOrder: 1 },
+    { id: "lab-exam", parentId: "lab", sortOrder: 0 },
+    { id: "lab-exercises", parentId: "lab", sortOrder: 1 },
+    { id: "lab-output", parentId: "lab-exercises", sortOrder: 0 },
+    { id: "lab-activity", parentId: "lab-exercises", sortOrder: 1 }
+  ];
+  const columns = [
+    ...["prelim", "midterm", "finals", "self", "quizzes"].flatMap(id => [
+      { categoryId: id, kind: "assessment" },
+      { categoryId: id, kind: "equivalent" }
+    ]),
+    { categoryId: "lecture", kind: "domain-total" },
+    { categoryId: "lecture", kind: "domain-weighted" },
+    ...["lab-exam", "lab-output", "lab-activity"].flatMap(id => [
+      { categoryId: id, kind: "assessment" },
+      { categoryId: id, kind: "equivalent" }
+    ]),
+    { categoryId: "lab", kind: "domain-total" },
+    { categoryId: "lab", kind: "domain-weighted" }
+  ];
+  const layout = buildScorebookHeaderLayout(categories, ["lecture", "lab"], columns);
+  assert.equal(layout.columnCount, columns.length);
+  assert.equal(layout.rowSpan, layout.maxDepth + 2);
+  assert.equal(layout.rows[0].reduce((sum, cell) => sum + cell.colSpan, 0), columns.length);
+
+  const lectureSpan = layout.rows[0].find(cell => cell.kind === "category" && cell.categoryId === "lecture").colSpan;
+  const labSpan = layout.rows[0].find(cell => cell.kind === "category" && cell.categoryId === "lab").colSpan;
+  assert.equal(lectureSpan, 12);
+  assert.equal(labSpan, 8);
+  assert.deepEqual(
+    layout.rows[1].map(cell => cell.kind === "category" ? cell.categoryId : cell.kind),
+    ["major", "self", "quizzes", "domain-total", "domain-weighted", "lab-exam", "lab-exercises", "domain-total", "domain-weighted"]
+  );
+  assert.deepEqual(
+    layout.bottomColumnIndexes.map(index => columns[index].kind).filter(kind => kind.startsWith("domain-")),
+    []
+  );
+
+  const grid = Array.from({ length: layout.rowSpan }, () => Array(layout.columnCount).fill(false));
+  layout.rows.forEach((row, rowIndex) => {
+    let cursor = 0;
+    for (const cell of row) {
+      while (cursor < layout.columnCount && grid[rowIndex][cursor]) cursor += 1;
+      for (let rowOffset = 0; rowOffset < cell.rowSpan; rowOffset += 1) {
+        for (let colOffset = 0; colOffset < cell.colSpan; colOffset += 1) {
+          const targetRow = rowIndex + rowOffset;
+          const targetColumn = cursor + colOffset;
+          assert.ok(targetRow < layout.rowSpan && targetColumn < layout.columnCount);
+          assert.equal(grid[targetRow][targetColumn], false);
+          grid[targetRow][targetColumn] = true;
+        }
+      }
+      cursor += cell.colSpan;
+    }
+  });
+
+  const bottomRow = layout.rowSpan - 1;
+  let cursor = 0;
+  for (const columnIndex of layout.bottomColumnIndexes) {
+    while (cursor < layout.columnCount && grid[bottomRow][cursor]) cursor += 1;
+    assert.equal(cursor, columnIndex, "bottom-level item heading aligns with its body column");
+    grid[bottomRow][cursor] = true;
+    cursor += 1;
+  }
+  assert.ok(grid.every(row => row.every(Boolean)), "every header tier covers the full leaf-column grid");
+});
+
+test("Record Scores header uses explicit summary subheaders and the same body leaf-column count", () => {
+  const portal = fs.readFileSync(path.join(__dirname, "../src/components/Portal.tsx"), "utf8");
+  assert.match(portal, /scorebookHeaderRows\.bottomColumnIndexes\.map/);
+  assert.match(portal, /scorebookBodyColumnCount = scorebookDisplayColumns\.length \+ 5/);
+  assert.match(portal, /colSpan=\{scorebookBodyColumnCount\}/);
+  const tick = String.fromCharCode(96);
+  const interpolation = "$" + "{scorebookTableMinWidth}px";
+  assert.ok(portal.includes("width: " + tick + interpolation + tick));
+  assert.match(portal, /score-sheet-domain-summary-head/);
+  assert.match(portal, /score-sheet-subcategory-placeholder/);
+  assert.match(portal, /scope="colgroup"/);
+  assert.match(portal, /scope="col"/);
 });
