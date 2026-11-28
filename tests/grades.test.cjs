@@ -16,7 +16,7 @@ function loadCalculator(name, imports = {}) {
 }
 const attendance = loadCalculator("attendance");
 const calculatorExports = loadCalculator("grades", { "./attendance": attendance });
-const { calculateCategoryPercent, calculateGradeBreakdown, calculateFinal, convertRawPercent, expectedChildAllocation, remainingChildAllocation, firstOverallocatedCategoryGroup, normalizeRemark, isClassRemark, CLASS_REMARK_OPTIONS } = calculatorExports;
+const { calculateCategoryPercent, calculateGradeBreakdown, calculateFinal, convertRawPercent, expectedChildAllocation, remainingChildAllocation, firstOverallocatedCategoryGroup, normalizeRemark, gradeRemarkExportCode, isClassRemark, CLASS_REMARK_OPTIONS } = calculatorExports;
 const scored = (points, maxScore = 100, title = "Exam", remark = null, weight = null) =>
   ({ title, maxScore, weight, scores: [{ points, remark }] });
 const pending = (maxScore = 100, title = "Exam", weight = null) =>
@@ -37,6 +37,14 @@ test("class remarks use one unique canonical dictionary and normalize legacy val
   assert.equal(normalizeRemark("INCOMPLETE"), "INC");
   assert.equal(normalizeRemark(" incomplete "), "INC");
   assert.equal(normalizeRemark("inc"), "INC");
+  assert.equal(normalizeRemark("NO EXAMINATION PERMIT"), "NP");
+  assert.equal(normalizeRemark("NO EXAMINATION PERMIT (NP)"), "NP");
+  assert.equal(normalizeRemark("NO PRIVILEGE"), "NP");
+  assert.equal(normalizeRemark("NO PERMIT"), "NP");
+  assert.equal(gradeRemarkExportCode("NO EXAMINATION PERMIT"), "NP");
+  assert.equal(gradeRemarkExportCode("INCOMPLETE"), "INC");
+  assert.equal(gradeRemarkExportCode("DROPPED"), "DRP");
+  assert.equal(gradeRemarkExportCode("DRP"), "DRP");
   assert.equal(normalizeRemark("DRP"), "DROPPED");
   assert.equal(normalizeRemark("PASS"), "PASSED");
   assert.equal(normalizeRemark("Failed"), "FAILED");
