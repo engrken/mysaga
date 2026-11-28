@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { calculateGradeBreakdown, normalizeRemark } from "@/lib/grades";
+import { calculateCategoryPercent, calculateGradeBreakdown, normalizeRemark } from "@/lib/grades";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -18,7 +18,11 @@ type CategoryLike = {
 };
 
 const requestSchema = z.object({
-  logoPngBase64: z.string().min(8).max(500_000)
+  logoPngBase64: z.string().min(8).max(500_000),
+  components: z.array(z.object({
+    name: z.string().trim().min(1).max(160),
+    percentage: z.number().min(0).max(100)
+  })).max(30).optional().default([])
 });
 
 const FCU_DEFAULTS = {
@@ -31,7 +35,8 @@ const FCU_DEFAULTS = {
   eomsTitle: "EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM",
   isoStandard: "ISO 21001:2025",
   affiliationLine1: "Member: Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)",
-  affiliationLine2: "Member: Association of Christian Schools, Colleges in Asia (ACUCA)"
+  affiliationLine2: "Member: Association of Christian Schools, Colleges in Asia (ACUCA)",
+  pageNo: "1"
 };
 
 function cleanComponentName(name: string) {
@@ -77,13 +82,7 @@ function readHeaderConfig(teacher: any) {
   if (!String(teacher.fullName ?? "").trim() || !teacherPosition || !notedByName || !notedByPosition) {
     return { error: "Complete all signatory details in your Profile Information before exporting." } as const;
   }
-  const isFcu = /filamer christian university/i.test(teacher.school.name) ||
-    teacher.school.slug.toLocaleLowerCase() === "fcu";
-  const defaults = isFcu ? FCU_DEFAULTS : {
-    organizationAddress: "", formName: "", formNo: "", effectivity: "",
-    issuingOffice: "", revisionNo: "", eomsTitle: "", isoStandard: "",
-    affiliationLine1: "", affiliationLine2: ""
-  };
+  const defaults = FCU_DEFAULTS;
   let saved: Record<string, unknown> = {};
   try {
     const value = JSON.parse(teacher.school.isoHeaderConfig || "{}");
@@ -94,24 +93,29 @@ function readHeaderConfig(teacher: any) {
   const config = Object.fromEntries(
     Object.keys(defaults).map(key => [
       key,
-      typeof saved[key] === "string" ? saved[key] : defaults[key as keyof typeof defaults]
+      typeof saved[key] === "string" && saved[key].trim()
+        ? saved[key]
+        : defaults[key as keyof typeof defaults]
     ])
   ) as typeof defaults;
-  if (Object.values(config).some(value => !value.trim())) {
-    return { error: "Complete all ISO document-control fields in Profile information before exporting." } as const;
-  }
+  const affiliations = Array.isArray(saved.accreditationAffiliations)
+    ? saved.accreditationAffiliations.filter((value): value is string => typeof value === "string").map(value => value.trim()).filter(Boolean).slice(0, 10)
+    : [saved.affiliationLine1, saved.affiliationLine2].filter((value): value is string => typeof value === "string" && Boolean(value.trim()));
+  const normalizedAffiliations = affiliations.length ? affiliations : [defaults.affiliationLine1, defaults.affiliationLine2];
   return {
     header: {
       organizationName: teacher.school.name.toLocaleUpperCase(),
-      organizationAddress: teacher.school.address?.trim() || config.organizationAddress,
+      organizationAddress: config.organizationAddress || teacher.school.address?.trim() || FCU_DEFAULTS.organizationAddress,
       formName: config.formName,
       formNo: config.formNo,
       effectivity: config.effectivity,
       issuingOffice: config.issuingOffice.replace(/[‘’]/g, "'"),
       revisionNo: config.revisionNo,
       eomsTitle: config.eomsTitle + "\n" + config.isoStandard,
-      affiliationLine1: config.affiliationLine1,
-      affiliationLine2: config.affiliationLine2,
+      affiliationLine1: normalizedAffiliations[0] || "",
+      affiliationLine2: normalizedAffiliations[1] || "",
+      accreditationAffiliations: normalizedAffiliations,
+      pageNo: config.pageNo,
       submittedBy: normalizeSignatureName(teacher.fullName),
       teacherPosition,
       notedByName,
@@ -156,22 +160,45 @@ export async function POST(request: Request, context: Context) {
 
   const rootDomains = subject.categories.filter(category => !category.parentId)
     .slice().sort((a, b) => a.sortOrder - b.sortOrder);
+  const selectedComponents = parsed.data.components.filter(component =>
+    !parsed.data.components.some(other => other.name.toLocaleLowerCase() === component.name.toLocaleLowerCase() && other !== component)
+  ).map(component => {
+    const category = subject.categories.find(item =>
+      categoryPath(item, subject.categories).trim().toLocaleLowerCase() === component.name.trim().toLocaleLowerCase()
+    );
+    return category?.parentId ? { ...component, category } : null;
+  }).filter((item): item is NonNullable<typeof item> => item !== null);
+  if (selectedComponents.length !== parsed.data.components.length) {
+    return NextResponse.json({ error: "One or more selected export components are no longer available in this class." }, { status: 400 });
+  }
+  const componentValues = selectedComponents.map(component => ({
+    ...component,
+    title: cleanComponentName(component.name)
+  }));
+  const pairedColumnCount = rootDomains.length + componentValues.length;
+  const totalColumn = 3 + pairedColumnCount * 2;
   const headers = [
     "NO.",
     "NAME OF STUDENTS",
     ...rootDomains.flatMap(domain => ["EQ", domainWeightLabel(domain.weight)]),
-    "TG",
-    "FG",
-    "REMARKS"
+    ...componentValues.flatMap(component => ["EQ", domainWeightLabel(component.percentage)]),
+    "TG", "FG", "REMARKS"
   ];
-  const headerGroups = rootDomains.map((domain, index) => ({
-    startColumn: 3 + index * 2,
-    endColumn: 4 + index * 2,
-    title: domainHeaderName(domain.name) + " " + domainWeightLabel(domain.weight)
-  }));
-  const rowSpanColumns = [1, 2, 3 + rootDomains.length * 2, 4 + rootDomains.length * 2, 5 + rootDomains.length * 2];
-  const numericColumns = rootDomains.flatMap((_, index) => [3 + index * 2, 4 + index * 2])
-    .concat([3 + rootDomains.length * 2]);
+  const headerGroups = [
+    ...rootDomains.map((domain, index) => ({
+      startColumn: 3 + index * 2,
+      endColumn: 4 + index * 2,
+      title: domainHeaderName(domain.name) + " " + domainWeightLabel(domain.weight)
+    })),
+    ...componentValues.map((component, index) => ({
+      startColumn: 3 + (rootDomains.length + index) * 2,
+      endColumn: 4 + (rootDomains.length + index) * 2,
+      title: component.title + " " + domainWeightLabel(component.percentage)
+    }))
+  ];
+  const rowSpanColumns = [1, 2, totalColumn, totalColumn + 1, totalColumn + 2];
+  const numericColumns = Array.from({ length: pairedColumnCount * 2 }, (_, index) => 3 + index)
+    .concat([totalColumn]);
 
   const groupedAssessments = new Map<string, typeof subject.assessments>();
   for (const assessment of subject.assessments) {
@@ -180,6 +207,55 @@ export async function POST(request: Request, context: Context) {
     groupedAssessments.set(assessment.categoryId, items);
   }
   const gradeBands = subject.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent);
+  const effectiveWeight = (category: CategoryLike) => {
+    let root = category;
+    const visited = new Set([category.id]);
+    while (root.parentId) {
+      if (visited.has(root.parentId)) return 0;
+      visited.add(root.parentId);
+      const parent = subject.categories.find(item => item.id === root.parentId);
+      if (!parent) return 0;
+      root = parent;
+    }
+    return category.id === root.id ? root.weight : root.weight * category.weight / 100;
+  };
+  const componentPercent = (category: CategoryLike, enrollment: typeof subject.enrollments[number]) => {
+    const descendantLeaves = subject.categories.filter(candidate => {
+      let current: CategoryLike | undefined = candidate;
+      const visited = new Set<string>();
+      while (current && current.id !== category.id && current.parentId && !visited.has(current.id)) {
+        visited.add(current.id);
+        current = subject.categories.find(item => item.id === current?.parentId);
+      }
+      return current?.id === category.id && !subject.categories.some(item => item.parentId === candidate.id);
+    });
+    const attendance = category.name.toLocaleLowerCase().includes("attendance");
+    let weighted = 0;
+    let totalWeight = 0;
+    for (const leaf of descendantLeaves) {
+      const items = subject.assessments.filter(item =>
+        item.categoryId === leaf.id && (attendance
+          ? item.title.toLocaleLowerCase().startsWith("attendance ·")
+          : !item.title.toLocaleLowerCase().startsWith("attendance ·"))
+      );
+      const percent = calculateCategoryPercent({
+        conversionBase: attendance ? 100 : category.conversionBase,
+        assessments: items.map(item => ({
+          title: item.title,
+          dueDate: item.dueDate,
+          maxScore: item.maxScore,
+          weight: item.weight,
+          scores: [enrollment.scores.find(score => score.assessmentId === item.id) ?? { points: null, remark: null }]
+        }))
+      });
+      const weight = effectiveWeight(leaf);
+      if (percent !== null && weight > 0) {
+        weighted += percent * weight;
+        totalWeight += weight;
+      }
+    }
+    return totalWeight > 0 ? Number((weighted / totalWeight).toFixed(2)) : null;
+  };
   const rows: unknown[][] = subject.enrollments.map((enrollment, index) => {
     const breakdown = calculateGradeBreakdown(subject.categories.map(category => ({
       id: category.id,
@@ -198,11 +274,16 @@ export async function POST(request: Request, context: Context) {
       })
     })));
     const domainById = new Map(breakdown.domains.map(item => [item.categoryId, item]));
-    const domainValues = rootDomains.flatMap(domain => {
+    const rootValues = rootDomains.flatMap(domain => {
       const summary = domainById.get(domain.id);
-      return [summary?.rawEquivalentPercent ?? "", summary?.parentWeightedScore ?? ""];
+      return [summary?.rawEquivalentPercent ?? null, summary?.parentWeightedScore ?? null];
     });
-    const shares = domainValues.filter((_, columnIndex) => columnIndex % 2 === 1)
+    const extraValues = componentValues.flatMap(component => {
+      const percent = componentPercent(component.category, enrollment);
+      return [percent, percent === null ? null : Number((percent * component.percentage / 100).toFixed(2))];
+    });
+    const domainValues = [...rootValues, ...extraValues];
+    const shares = rootValues.filter((_, columnIndex) => columnIndex % 2 === 1)
       .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
     const total = shares.length ? Number(shares.reduce((sum, value) => sum + value, 0).toFixed(2)) : null;
     const band = gradeBands.find(item => total !== null && total >= item.minPercent);
@@ -211,7 +292,7 @@ export async function POST(request: Request, context: Context) {
     return [
       index + 1,
       enrollment.studentName || "",
-      ...domainValues,
+      ...domainValues.map(value => dropped || value === null ? "" : value),
       dropped || total === null ? "" : total,
       dropped ? "" : enrollment.finalGradeOverride ?? band?.finalGrade ?? "",
       remark
@@ -245,6 +326,7 @@ export async function POST(request: Request, context: Context) {
     headerGroups,
     rowSpanColumns,
     numericColumns,
+    pageNo: configuredHeader.header.pageNo,
     logoPngBase64: parsed.data.logoPngBase64
   };
   const body = JSON.stringify(payload);
