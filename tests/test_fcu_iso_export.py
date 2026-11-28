@@ -294,7 +294,7 @@ class FcuIsoExportTests(unittest.TestCase):
         ]
         payload["rows"] = [
             [1, "Permit Student", 0.5, 0.2, 0.7, "1.00", "NO EXAMINATION PERMIT"],
-            [2, "Privilege Student", 0.5, 0.2, 0.7, "1.00", "NO PRIVILEGE"],
+            [2, "No Permit Alias Student", 0.5, 0.2, 0.7, "1.00", "NO PERMIT"],
             [3, "Incomplete Student", 0.5, 0.2, 0.7, "INC", "INCOMPLETE"],
             [4, "Dropped Student", 0.5, 0.2, 0.7, "DRP", "DROPPED"],
         ]
