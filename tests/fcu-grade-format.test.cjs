@@ -167,7 +167,7 @@ test("OOXML ZIP writer encodes XML as UTF-8 and writes valid uncompressed ZIP re
   assert.match(entries.get("xl/worksheets/sheet1.xml"), /REGISTRAR’S OFFICE · ACUCA/);
 });
 
-test("FCU final-grade export uses the exact configured components and their weights", async () => {
+test("FCU final-grade export shows each saved component as raw and weighted columns", async () => {
   const components = [
     { name: "EXAM", percentage: 50 },
     { name: "ACT", percentage: 40 },
@@ -180,26 +180,32 @@ test("FCU final-grade export uses the exact configured components and their weig
   ], components);
   const sheet = files["xl/worksheets/sheet1.xml"];
   const styles = files["xl/styles.xml"];
-  assert.match(sheet, /<mergeCell ref="A1:H9"/);
+  assert.match(sheet, /<mergeCell ref="A1:K9"/);
   assert.match(sheet, /<pageSetup paperSize="14" orientation="portrait" fitToWidth="1"/);
   assert.match(sheet, /showGridLines="0" zoomScale="90"/);
   assert.match(sheet, /<selection pane="bottomLeft" activeCell="A17"/);
   assert.match(sheet, /<c r="A15"[^>]*><is><t xml:space="preserve"><\/t><\/is><\/c>/);
   assert.match(sheet, /<c r="B15"[^>]*>.*?NAME OF STUDENTS/s);
-  assert.match(sheet, /<c r="C15"[^>]*>.*?EXAM\. 50%/s);
-  assert.match(sheet, /<c r="D15"[^>]*>.*?ACT\. 40%/s);
-  assert.match(sheet, /<c r="E15"[^>]*>.*?ARP\. 10%/s);
-  assert.match(sheet, /<c r="F15"[^>]*>.*?TOTAL GRADE/s);
-  assert.match(sheet, /<c r="G15"[^>]*>.*?FINAL GRADE/s);
-  assert.match(sheet, /<c r="H15"[^>]*>.*?REMARKS/s);
+  assert.match(sheet, /<c r="C15"[^>]*>.*?EXAM · TOTAL \(RAW %\)/s);
+  assert.match(sheet, /<c r="D15"[^>]*>.*?EXAM · WEIGHTED \(50\.00%\)/s);
+  assert.match(sheet, /<c r="E15"[^>]*>.*?ACT · TOTAL \(RAW %\)/s);
+  assert.match(sheet, /<c r="F15"[^>]*>.*?ACT · WEIGHTED \(40\.00%\)/s);
+  assert.match(sheet, /<c r="G15"[^>]*>.*?ARP · TOTAL \(RAW %\)/s);
+  assert.match(sheet, /<c r="H15"[^>]*>.*?ARP · WEIGHTED \(10\.00%\)/s);
+  assert.match(sheet, /<c r="I15"[^>]*>.*?TOTAL GRADE/s);
+  assert.match(sheet, /<c r="J15"[^>]*>.*?FINAL GRADE/s);
+  assert.match(sheet, /<c r="K15"[^>]*>.*?REMARKS/s);
   assert.match(sheet, /<c r="A17"[^>]*>.*?1\./s);
   assert.match(sheet, /<c r="B17"[^>]*>.*?EXAMPLE STUDENT/s);
-  assert.match(sheet, /<c r="C17"[^>]*><v>40<\/v>/);
-  assert.match(sheet, /<c r="D17"[^>]*><v>36<\/v>/);
-  assert.match(sheet, /<c r="E17"[^>]*><v>10<\/v>/);
-  assert.match(sheet, /<c r="F17"[^>]*><v>86<\/v>/);
-  assert.match(sheet, /<c r="G17"[^>]*>.*?2\.00/s);
-  assert.match(sheet, /<c r="H18"[^>]*>.*?INC/s);
+  assert.match(sheet, /<c r="C17"[^>]*><v>80<\/v>/);
+  assert.match(sheet, /<c r="D17"[^>]*><v>40<\/v>/);
+  assert.match(sheet, /<c r="E17"[^>]*><v>90<\/v>/);
+  assert.match(sheet, /<c r="F17"[^>]*><v>36<\/v>/);
+  assert.match(sheet, /<c r="G17"[^>]*><v>100<\/v>/);
+  assert.match(sheet, /<c r="H17"[^>]*><v>10<\/v>/);
+  assert.match(sheet, /<c r="I17"[^>]*><v>86<\/v>/);
+  assert.match(sheet, /<c r="J17"[^>]*>.*?2\.00/s);
+  assert.match(sheet, /<c r="K18"[^>]*>.*?INC/s);
   assert.doesNotMatch(sheet, /<c r="C18"[^>]*><v>/);
   assert.match(styles, /numFmtId="164"/);
   assert.match(styles, /<sz val="9"\/>/);
@@ -214,7 +220,6 @@ test("FCU final-grade export uses the exact configured components and their weig
   assert.match(sheet, /<col min="10" max="10" width="11"/);
   assert.match(sheet, /<col min="11" max="11" width="18"/);
 });
-
 test("Generic PDF export is offered only once inside the export dropdown", () => {
   assert.match(source, /<strong>Save \/ Print Generic PDF<\/strong>/, "the Generic dropdown retains its PDF option");
   assert.match(source, /"Download Generic Excel Sheet"/, "the Generic dropdown retains its idle Excel option label");
