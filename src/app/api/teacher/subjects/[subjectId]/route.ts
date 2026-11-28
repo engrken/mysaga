@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { calculateCategoryPercent, calculateFinal, equivalentFromBands, LECTURE_LAB_GRADING_TEMPLATE, LECTURE_ONLY_GRADING_TEMPLATE, LABORATORY_ONLY_GRADING_TEMPLATE, expectedChildAllocation, remainingChildAllocation, firstOverallocatedCategoryGroup } from "@/lib/grades";
+import { calculateCategoryPercent, calculateFinal, equivalentFromBands, LECTURE_LAB_GRADING_TEMPLATE, LECTURE_ONLY_GRADING_TEMPLATE, LABORATORY_ONLY_GRADING_TEMPLATE, expectedChildAllocation, remainingChildAllocation, firstOverallocatedCategoryGroup, CLASS_REMARK_OPTIONS, normalizeRemark, isClassRemark } from "@/lib/grades";
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
 
 type Context = { params: Promise<{ subjectId: string }> };
@@ -69,7 +69,7 @@ function mixesAssessmentWeights(items: ReadonlyArray<{ weight?: number | null }>
 
 const assessmentSchema = z.object({ categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable().optional(), dueDate: assessmentDateSchema.optional(), scheduleOverrideReason: z.string().trim().max(120).optional(), attendanceType: z.enum(["FACE_TO_FACE", "ONLINE"]).nullable().optional() });
 const assessmentUpdatesSchema = z.object({ assessmentItems: z.array(z.object({ id: z.string(), categoryId: z.string(), title: z.string().trim().min(1).max(120), maxScore: z.number().positive().max(100000), weight: z.number().min(0).max(100).nullable(), dueDate: assessmentDateSchema.nullable().optional(), scheduleOverrideReason: z.string().trim().max(120).nullable().optional(), attendanceType: z.enum(["FACE_TO_FACE", "ONLINE"]).nullable().optional(), sortOrder: z.number().int().min(0).max(1000).optional() })).min(1).max(200) });
-const remarkSchema = z.object({ enrollmentId: z.string(), remark: z.enum(["INC", "NP", "DROPPED"]).nullable() });
+const remarkSchema = z.object({ enrollmentId: z.string(), remark: z.string().trim().max(40).nullable() });
 const gradeChangeSchema = z.object({ gradeChange: z.object({ enrollmentId: z.string(), finalGrade: z.string().trim().min(1).max(12), remarks: z.string().trim().max(40), reason: z.string().trim().min(10).max(500) }) });
 const copyGradingSchema = z.object({ copyGradingFromSubjectId: z.string() });
 const bandsSchema = z.object({ gradeBands: z.array(z.object({ id: z.string().optional(), minPercent: z.number().min(0).max(100), finalGrade: z.string().trim().min(1).max(12), remarks: z.string().trim().min(1).max(40) })).min(2).max(30) });
@@ -107,14 +107,31 @@ export async function PATCH(request: Request, context: Context) {
       saveGradeSheetComponents: z.array(z.object({
         name: z.string().trim().min(1).max(40),
         percentage: z.number().min(0).max(100)
-      })).min(1).max(30)
+      })).min(1).max(30),
+      saveAsDefault: z.boolean().optional().default(false)
     }).safeParse(input);
     if (!parsed.success) return NextResponse.json({ error: "Select between 1 and 30 valid grading components." }, { status: 400 });
     const components = parsed.data.saveGradeSheetComponents;
     if (new Set(components.map(item => item.name.toLocaleLowerCase())).size !== components.length) return NextResponse.json({ error: "Component categories must be unique." }, { status: 400 });
-    await prisma.subject.update({ where: { id: subjectId }, data: { gradeSheetComponents: JSON.stringify(components) } });
-    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: "updated grading sheet display components", entity: "subject", entityId: subjectId } });
-    return NextResponse.json({ ok: true, gradeSheetComponents: components });
+    await prisma.$transaction(async tx => {
+      await tx.subject.update({ where: { id: subjectId }, data: { gradeSheetComponents: JSON.stringify(components) } });
+      if (parsed.data.saveAsDefault) {
+        await tx.user.update({ where: { id: teacher.id }, data: { defaultGradeSheetComponents: JSON.stringify(components) } });
+      }
+      await tx.auditEvent.create({
+        data: {
+          actorId: teacher.id,
+          action: parsed.data.saveAsDefault ? "saved class grading-sheet components as the teacher default" : "updated grading sheet display components",
+          entity: "subject",
+          entityId: subjectId
+        }
+      });
+    });
+    return NextResponse.json({
+      ok: true,
+      gradeSheetComponents: components,
+      ...(parsed.data.saveAsDefault ? { defaultGradeSheetComponents: components } : {})
+    }, { headers: { "Cache-Control": "no-store" } });
   }
   if ("setStudentVisibility" in input) {
     const parsed = z.object({ setStudentVisibility: z.boolean() }).safeParse(input);
@@ -136,16 +153,17 @@ export async function PATCH(request: Request, context: Context) {
     const enrollment = subject.enrollments.find(item => item.id === change.enrollmentId);
     if (!enrollment) return NextResponse.json({ error: "Student roster record not found in this class." }, { status: 404 });
     const allowedGrades = new Set(["AUTO", ...subject.gradeBands.map(band => band.finalGrade)]);
-    const allowedRemarks = new Set(["AUTO", "Passed", "Failed", "INC", "NP", "DROPPED"]);
-    if (!allowedGrades.has(change.finalGrade) || !allowedRemarks.has(change.remarks)) return NextResponse.json({ error: "Choose a grade and remark from this class's grading scale." }, { status: 400 });
+    const normalizedChangeRemark = change.remarks === "AUTO" ? "AUTO" : normalizeRemark(change.remarks);
+    const allowedRemarks = new Set(["AUTO", ...CLASS_REMARK_OPTIONS.map(option => option.value)]);
+    if (!allowedGrades.has(change.finalGrade) || !allowedRemarks.has(normalizedChangeRemark)) return NextResponse.json({ error: "Choose a grade and remark from this class's grading scale." }, { status: 400 });
     const calculatedPercent = calculateFinal(subject.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: subject.assessments.filter(item => item.categoryId === category.id).map(item => ({ title: item.title, dueDate: item.dueDate, maxScore: item.maxScore, weight: item.weight, scores: enrollment.scores.filter(score => score.assessmentId === item.id) })) })));
     const automatic = equivalentFromBands(calculatedPercent, subject.gradeBands);
     const previousFinalGrade = enrollment.finalGradeOverride ?? automatic.finalGrade;
-    const previousRemarks = enrollment.remarks ?? automatic.remarks;
+    const previousRemarks = normalizeRemark(enrollment.remarks ?? automatic.remarks);
     const finalGradeOverride = change.finalGrade === "AUTO" ? null : change.finalGrade;
-    const remarks = change.remarks === "AUTO" ? null : change.remarks;
+    const remarks = normalizedChangeRemark === "AUTO" ? null : normalizedChangeRemark;
     const nextFinalGrade = finalGradeOverride ?? automatic.finalGrade;
-    const nextRemarks = remarks ?? automatic.remarks;
+    const nextRemarks = remarks ?? normalizeRemark(automatic.remarks);
     if (previousFinalGrade === nextFinalGrade && previousRemarks === nextRemarks) return NextResponse.json({ error: "The selected grade and remark match the current record." }, { status: 400 });
     await prisma.$transaction(async tx => {
       await tx.enrollment.update({ where: { id: enrollment.id }, data: { finalGradeOverride, remarks } });
@@ -334,10 +352,12 @@ export async function PATCH(request: Request, context: Context) {
   }
   if ("remark" in input) {
     const parsed = remarkSchema.safeParse(input); if (!parsed.success) return NextResponse.json({ error: "Choose a valid class remark." }, { status: 400 });
+    const normalizedRemark = parsed.data.remark === null ? null : normalizeRemark(parsed.data.remark);
+    if (normalizedRemark !== null && !isClassRemark(normalizedRemark)) return NextResponse.json({ error: "Choose a valid class remark." }, { status: 400 });
     const enrollment = await prisma.enrollment.findFirst({ where: { id: parsed.data.enrollmentId, subjectId } });
     if (!enrollment) return NextResponse.json({ error: "Student roster record not found." }, { status: 404 });
-    await prisma.enrollment.update({ where: { id: enrollment.id }, data: { remarks: parsed.data.remark } });
-    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: parsed.data.remark ? `set student remark ${parsed.data.remark}` : "cleared student remark", entity: "enrollment", entityId: enrollment.id } });
+    await prisma.enrollment.update({ where: { id: enrollment.id }, data: { remarks: normalizedRemark } });
+    await prisma.auditEvent.create({ data: { actorId: teacher.id, action: normalizedRemark ? `set student remark ${normalizedRemark}` : "cleared student remark", entity: "enrollment", entityId: enrollment.id } });
     return NextResponse.json({ ok: true });
   }
   if ("deleteCategoryId" in input) {

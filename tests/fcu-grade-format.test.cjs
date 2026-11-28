@@ -5,6 +5,7 @@ const vm = require("node:vm");
 const ts = require("typescript");
 
 const source = fs.readFileSync("src/components/Portal.tsx", "utf8");
+const gradeSource = fs.readFileSync("src/lib/grades.ts", "utf8");
 const start = source.indexOf("async function downloadFcuGradeXlsx(");
 const end = source.indexOf("function categoryPercent(", start);
 assert.ok(start > 0 && end > start, "FCU exporter is present");
@@ -276,8 +277,14 @@ test("grade remarks normalize status shorthands and masking stays scoped to drop
   const compiledHelpers = ts.transpileModule(source.slice(helperStart, helperEnd), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText;
+  const statusStart = gradeSource.indexOf("export const CLASS_REMARK_OPTIONS = [");
+  const statusEnd = gradeSource.indexOf("\n\n/** Category weights", statusStart);
+  assert.ok(statusStart >= 0 && statusEnd > statusStart, "canonical class-remark helpers are present");
+  const compiledStatusHelpers = ts.transpileModule(gradeSource.slice(statusStart, statusEnd).replace(/^export /gm, ""), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
   const context = {};
-  vm.runInNewContext(compiledHelpers + "\nthis.helpers = { normalizeGradeRemark, resolvedGradeRemark, isPassedGradeRemark, gradeRemarkIndicator, gradeRemarkSelectionValue };", context);
+  vm.runInNewContext(compiledStatusHelpers + "\n" + compiledHelpers + "\nthis.helpers = { normalizeGradeRemark, resolvedGradeRemark, isPassedGradeRemark, gradeRemarkIndicator, gradeRemarkSelectionValue };", context);
   const h = context.helpers;
   assert.equal(h.normalizeGradeRemark("DRP"), "DROPPED");
   assert.equal(h.normalizeGradeRemark("INCOMPLETE"), "INC");
@@ -294,6 +301,8 @@ test("grade remarks normalize status shorthands and masking stays scoped to drop
   assert.equal(h.gradeRemarkIndicator("FAILED"), "FAIL");
   assert.equal(h.gradeRemarkSelectionValue("DRP"), "DROPPED");
   assert.equal(h.gradeRemarkSelectionValue("INCOMPLETE"), "INC");
+  assert.equal(h.gradeRemarkSelectionValue("PASSED"), "PASSED");
+  assert.equal(h.gradeRemarkSelectionValue("FAILED"), "FAILED");
 
   const recordStart = source.indexOf('{classSection === "record" && <section id="class-section-record"');
   const recordEnd = source.indexOf('{classSection === "analytics" && <section className="class-analytics"', recordStart);
@@ -321,7 +330,8 @@ test("grade remarks normalize status shorthands and masking stays scoped to drop
   assert.match(finalSection, /<div className="w-\[105px\] mx-auto whitespace-normal break-words leading-tight uppercase">/);
   assert.match(finalSection, /className="block text-\[10px\] text-gray-500 font-normal leading-snug mt-0\.5"/);
   assert.match(finalSection, /font-mono tabular-nums align-middle/);
-  assert.match(finalSection, /score-sheet-remark-select w-full max-w-\[92px\]/);
+  assert.match(finalSection, /score-sheet-remark-select w-full min-w-\[130px\] max-w-\[140px\]/);
+  assert.match(finalSection, /title="NP means No Examination Permit \(No Permit\)\."/);
   assert.ok(recordSection.includes("<PendingGradeDash />"), "unentered calculated values render as centered gray dashes");
   assert.doesNotMatch(recordSection, /isDroppedStatus|hasSpecialRemark|mobile-score-status-only/, "Record Scores is not masked by Final Grades status rules");
 });
@@ -387,7 +397,7 @@ test("Generic PDF export is offered only once inside the export dropdown", () =>
   assert.doesNotMatch(source, /<button className="btn btn-outline-primary" onClick=\{\(\) => printFinalGradesPdf\("generic"\)\}>Save \/ Print Generic PDF<\/button>/, "the duplicate standalone PDF button is removed");
   assert.match(source, /gradeSheetPrimaryDomains\.map/);
   assert.match(source, /gradeSheetAdditionalComponents\.map/);
-  assert.match(source, /gradeSheetComponents\.map\(component=>\{/);
+  assert.match(source, /activeGradeSheetComponents\.map\(component=>\{/);
 });
 
 test("ISO Excel export uses dynamic class metadata and omits student-number columns", () => {
@@ -423,7 +433,7 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.doesNotMatch(source.slice(source.indexOf("async function renderIsoExcelSealPng"), source.indexOf("async function exportIsoGradesExcel")), /departmentLogoPath/);
   assert.match(source, /ctx\.drawImage\(schoolLogo, sourceX, sourceY, cropSize, cropSize, 4, 4, 152, 152\)/);
   assert.doesNotMatch(source.slice(source.indexOf("async function renderIsoExcelSealPng"), source.indexOf("async function exportIsoGradesExcel")), /fillText\(/);
-  assert.match(source, /componentNames: gradeSheetComponents\.map/);
+  assert.match(source, /componentNames: activeGradeSheetComponents\.map/);
   assert.match(source, /\/iso-export/);
   assert.match(source, /window\.btoa\(binary\)/);
   assert.match(source, /response\.blob\(\)/);

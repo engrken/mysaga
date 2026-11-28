@@ -2,6 +2,31 @@ import { attendanceDays, consecutiveLateAbsences } from "./attendance";
 
 export type GradeCategoryInput = { name: string; weight: number; conversionBase: number };
 
+export const CLASS_REMARK_OPTIONS = [
+  { label: "PASSED", value: "PASSED" },
+  { label: "FAILED", value: "FAILED" },
+  { label: "INCOMPLETE", value: "INC" },
+  { label: "NO EXAMINATION PERMIT (NP)", value: "NP" },
+  { label: "DROPPED (DRP)", value: "DROPPED" }
+] as const;
+
+export type ClassRemark = typeof CLASS_REMARK_OPTIONS[number]["value"];
+const CLASS_REMARK_CODES: ReadonlySet<string> = new Set(CLASS_REMARK_OPTIONS.map(option => option.value));
+
+/** Normalize legacy class-remark labels and abbreviations to one stored code. */
+export function normalizeRemark(remark: string | null | undefined): string {
+  const value = String(remark ?? "").trim().toUpperCase();
+  if (value === "INCOMPLETE") return "INC";
+  if (value === "DRP" || value === "DROP") return "DROPPED";
+  if (value === "PASS") return "PASSED";
+  if (value === "FAIL" || value === "NOT PASSED") return "FAILED";
+  return value;
+}
+
+export function isClassRemark(remark: string | null | undefined): boolean {
+  return CLASS_REMARK_CODES.has(normalizeRemark(remark));
+}
+
 /** Category weights below the course roots are percentage points within the
  * root group. Grandchildren divide their direct parent's allocation. */
 export type GradeAllocationCategory = { id: string; parentId?: string | null; weight: number };

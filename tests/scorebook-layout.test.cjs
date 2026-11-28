@@ -239,8 +239,46 @@ test("Record Scores never masks score cells for class remarks; only DROPPED is m
   assert.match(finalSection, /isDroppedStatus=isFinalGradesTab && resolvedGradeRemark\(en\.remarks,band\?\.remarks\)==="DROPPED"/);
   assert.doesNotMatch(finalSection, /!passed|passed\?/);
   assert.match(finalSection, /isDroppedStatus[\s\S]*?<span className="score-sheet-status-indicator"[^>]*>DRP<\/span>/);
-  assert.match(portal, /if \(value === "DRP" \|\| value === "DROP"\) return "DROPPED"/);
+  const grades = fs.readFileSync(path.join(__dirname, "../src/lib/grades.ts"), "utf8");
+  assert.match(grades, /if \(value === "DRP" \|\| value === "DROP"\) return "DROPPED"/);
 
   const contribution = fs.readFileSync(path.join(__dirname, "../src/components/GradeContributionPanel.tsx"), "utf8");
   assert.doesNotMatch(contribution, /Not displayed for|\["INC", "NP", "DROPPED"\]/);
+});
+
+
+test("class remark selectors share the unique canonical status list", () => {
+  const portal = fs.readFileSync(path.join(__dirname, "../src/components/Portal.tsx"), "utf8");
+  const grades = fs.readFileSync(path.join(__dirname, "../src/lib/grades.ts"), "utf8");
+  const subjectRoute = fs.readFileSync(path.join(__dirname, "../src/app/api/teacher/subjects/[subjectId]/route.ts"), "utf8");
+  assert.match(grades, /value: "INC"/);
+  assert.match(grades, /label: "INCOMPLETE"/);
+  assert.match(grades, /export function normalizeRemark\(/);
+  assert.match(grades, /if \(value === "INCOMPLETE"\) return "INC"/);
+  assert.match(portal, /CLASS_REMARK_OPTIONS\.map\(option=> <option key=\{option\.value\} value=\{option\.value\}>\{option\.label\}<\/option>\)/);
+  assert.doesNotMatch(portal, /<option value="INCOMPLETE"/);
+  assert.match(portal, /function gradeRemarkSelectionValue[\s\S]*CLASS_REMARK_OPTIONS\.some/);
+  assert.match(portal, /const value = remark \? normalizeGradeRemark\(remark\) : null/);
+  assert.match(subjectRoute, /normalizeRemark\(parsed\.data\.remark\)/);
+  assert.match(subjectRoute, /isClassRemark\(normalizedRemark\)/);
+});
+
+test("Edit Components saves update the active class and optionally the teacher default atomically", () => {
+  const portal = fs.readFileSync(path.join(__dirname, "../src/components/Portal.tsx"), "utf8");
+  const subjectRoute = fs.readFileSync(path.join(__dirname, "../src/app/api/teacher/subjects/[subjectId]/route.ts"), "utf8");
+  const profileRoute = fs.readFileSync(path.join(__dirname, "../src/app/api/profile/route.ts"), "utf8");
+  assert.match(portal, /componentSelectionByClassRef\.current\.get\(detail\.id\)/);
+  assert.match(portal, /const activeGradeSheetComponents = gradeSheetComponents\.length \? gradeSheetComponents : defaultGradeSheetComponents/);
+  assert.match(portal, /saveGradeSheetComponents: selectedComponents, saveAsDefault: true/);
+  assert.match(portal, /setDefaultGradeSheetComponentsOverride\(savedComponents\)/);
+  assert.match(portal, /setGradeSheetComponents\(savedComponents\)/);
+  assert.match(portal, /router\.refresh\(\)/);
+  assert.match(portal, /componentSaving==="default"/);
+  assert.match(portal, /componentSaving==="class"/);
+  assert.match(subjectRoute, /saveAsDefault: z\.boolean\(\)\.optional\(\)\.default\(false\)/);
+  assert.match(subjectRoute, /await prisma\.\$transaction\(async tx =>/);
+  assert.match(subjectRoute, /if \(parsed\.data\.saveAsDefault\)[\s\S]*tx\.user\.update/);
+  assert.match(subjectRoute, /tx\.subject\.update[\s\S]*tx\.auditEvent\.create/);
+  assert.match(profileRoute, /displayed weights do not need to total 100%/);
+  assert.doesNotMatch(profileRoute, /percentages must total 100%/);
 });
