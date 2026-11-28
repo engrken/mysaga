@@ -39,7 +39,8 @@ test("class remarks use one unique canonical dictionary and normalize legacy val
   assert.equal(normalizeRemark("inc"), "INC");
   assert.equal(normalizeRemark("NO EXAMINATION PERMIT"), "NP");
   assert.equal(normalizeRemark("NO EXAMINATION PERMIT (NP)"), "NP");
-  assert.equal(normalizeRemark("NO PRIVILEGE"), "NP");
+  assert.equal(normalizeRemark("NO PRIVILEGE"), "NO PRIVILEGE", "unsupported labels must not be silently reclassified");
+  assert.equal(gradeRemarkExportCode("NO PRIVILEGE"), "NO PRIVILEGE");
   assert.equal(normalizeRemark("NO PERMIT"), "NP");
   assert.equal(gradeRemarkExportCode("NO EXAMINATION PERMIT"), "NP");
   assert.equal(gradeRemarkExportCode("INCOMPLETE"), "INC");
