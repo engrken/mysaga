@@ -59,6 +59,8 @@ type IsoHeaderConfig = {
   isoStandard: string;
   affiliationLine1: string;
   affiliationLine2: string;
+  accreditationAffiliations: string[];
+  pageNo: string;
 };
 const FCU_ISO_HEADER_DEFAULTS: IsoHeaderConfig = {
   organizationAddress: "Roxas Avenue, Roxas City, Capiz, Philippines",
@@ -70,18 +72,39 @@ const FCU_ISO_HEADER_DEFAULTS: IsoHeaderConfig = {
   eomsTitle: "EDUCATIONAL ORGANIZATION MANAGEMENT SYSTEM",
   isoStandard: "ISO 21001:2025",
   affiliationLine1: "Member: Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)",
-  affiliationLine2: "Member: Association of Christian Schools, Colleges in Asia (ACUCA)"
+  affiliationLine2: "Member: Association of Christian Schools, Colleges in Asia (ACUCA)",
+  accreditationAffiliations: [
+    "Member: Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)",
+    "Member: Association of Christian Schools, Colleges in Asia (ACUCA)"
+  ],
+  pageNo: "1"
 };
 function emptyIsoHeaderConfig(): IsoHeaderConfig {
-  return { organizationAddress: "", formName: "", formNo: "", effectivity: "", issuingOffice: "", revisionNo: "", eomsTitle: "", isoStandard: "", affiliationLine1: "", affiliationLine2: "" };
+  return { ...FCU_ISO_HEADER_DEFAULTS, accreditationAffiliations: [...FCU_ISO_HEADER_DEFAULTS.accreditationAffiliations] };
 }
-function readIsoHeaderConfig(schoolName: string, schoolSlug: string, stored: string | null): IsoHeaderConfig {
-  const defaults = /filamer christian university/i.test(schoolName) || schoolSlug.toLocaleLowerCase() === "fcu" ? FCU_ISO_HEADER_DEFAULTS : emptyIsoHeaderConfig();
-  if (!stored) return { ...defaults };
+function readIsoHeaderConfig(_schoolName: string, _schoolSlug: string, stored: string | null): IsoHeaderConfig {
+  const defaults = FCU_ISO_HEADER_DEFAULTS;
+  if (!stored) return emptyIsoHeaderConfig();
   try {
     const parsed = JSON.parse(stored) as Partial<IsoHeaderConfig>;
-    return Object.fromEntries(Object.keys(defaults).map(key => [key, typeof parsed[key as keyof IsoHeaderConfig] === "string" ? parsed[key as keyof IsoHeaderConfig] : defaults[key as keyof IsoHeaderConfig]])) as IsoHeaderConfig;
-  } catch { return { ...defaults }; }
+    const affiliations = Array.isArray(parsed.accreditationAffiliations)
+      ? parsed.accreditationAffiliations.filter((value): value is string => typeof value === "string").map(value => value.trim()).filter(Boolean).slice(0, 10)
+      : [parsed.affiliationLine1, parsed.affiliationLine2].filter((value): value is string => typeof value === "string" && Boolean(value.trim()));
+    return {
+      organizationAddress: typeof parsed.organizationAddress === "string" && parsed.organizationAddress.trim() ? parsed.organizationAddress : defaults.organizationAddress,
+      formName: typeof parsed.formName === "string" && parsed.formName.trim() ? parsed.formName : defaults.formName,
+      formNo: typeof parsed.formNo === "string" && parsed.formNo.trim() ? parsed.formNo : defaults.formNo,
+      effectivity: typeof parsed.effectivity === "string" && parsed.effectivity.trim() ? parsed.effectivity : defaults.effectivity,
+      issuingOffice: typeof parsed.issuingOffice === "string" && parsed.issuingOffice.trim() ? parsed.issuingOffice : defaults.issuingOffice,
+      revisionNo: typeof parsed.revisionNo === "string" && parsed.revisionNo.trim() ? parsed.revisionNo : defaults.revisionNo,
+      eomsTitle: typeof parsed.eomsTitle === "string" && parsed.eomsTitle.trim() ? parsed.eomsTitle : defaults.eomsTitle,
+      isoStandard: typeof parsed.isoStandard === "string" && parsed.isoStandard.trim() ? parsed.isoStandard : defaults.isoStandard,
+      pageNo: typeof parsed.pageNo === "string" && parsed.pageNo.trim() ? parsed.pageNo : defaults.pageNo,
+      accreditationAffiliations: affiliations.length ? affiliations : [...defaults.accreditationAffiliations],
+      affiliationLine1: affiliations[0] || defaults.affiliationLine1,
+      affiliationLine2: affiliations[1] || ""
+    };
+  } catch { return emptyIsoHeaderConfig(); }
 }
 type Detail = Subject & { categories: Category[]; gradeBands: GradeBand[]; assessments: Assessment[]; enrollments: Enrollment[] };
 type Grade = { id: string; classId?: string | null; schedule?: string | null; droppingWarning?: AbsenceStreak | null; attendanceSummary?: StudentAttendanceSummary; attendanceWarning?: StudentAttendanceWarning | null; itemCount?: number; recordedCount?: number; code: string; title: string; term: string; academicYear: string; teacher: string; status: "DRAFT" | "SUBMITTED" | "VERIFIED"; submittedAt: string | null; verifiedAt: string | null; percent: number | null; finalGrade: string | null; remarks: string; gradeBands: Array<{ minPercent: number; finalGrade: string; remarks: string }>; categories: Array<{ id: string; name: string; weight: number; conversionBase: number; assessments: Array<{id:string;title:string;points:number|null;remark:string|null;maxScore:number;weight:number|null;lateAsAbsent?:boolean;dueDate?:string|null}> }> };
@@ -2368,9 +2391,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     ctx.fillText("Page No.", (x[3] + x[4] - 70) / 2, rowY[3] + 39, x[4] - x[3] - 86);
     ctx.font = "bold 18px Arial";
     ctx.fillText(isoHeaderConfig.pageNo || "1", x[4] - 35, rowY[3] + 39, 55);
-    ctx.font = "bold 17px Arial";
-    ctx.fillText(isoHeaderConfig.affiliationLine1, 800, 333, 1560);
-    ctx.fillText(isoHeaderConfig.affiliationLine2, 800, 371, 1560);
+    ctx.font = "bold 15px Arial";
+    isoHeaderConfig.accreditationAffiliations.slice(0, 2).forEach((affiliation, index) => ctx.fillText(affiliation, 800, 333 + index * 38, 1560));
     return gradeHeaderCanvasBytes(canvas);
   }
   async function renderIsoExcelSealPng(): Promise<Uint8Array> {
@@ -2415,7 +2437,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       const response = await fetch("/api/teacher/subjects/" + encodeURIComponent(detail.id) + "/iso-export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoPngBase64 })
+        body: JSON.stringify({ logoPngBase64, components: activeGradeSheetComponents })
       });
       if (!response.ok) {
         const message = await response.text();
@@ -2859,7 +2881,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <label className="form-label mt-3" htmlFor="profileNotedByPosition">Noted by position / title</label>
           <input className="form-control" id="profileNotedByPosition" value={notedByPosition} onChange={event => setNotedByPosition(event.target.value)} maxLength={120} placeholder="Dean or VP Academic Affairs" required/>
           <h3 className="mt-4">ISO document header</h3>
-          <p className="muted small">These ISO document-control details are shared by this school only. FCU is prefilled with its supplied form details; other schools can enter their own header information here.</p>
+          <p className="muted small">These document-control details are saved with the school profile and used by both ISO exports. FCU defaults are supplied initially; update them here when your institution uses a different form, address, standard, page number, or accreditation affiliation.</p>
           <div className="row g-3">
             <div className="col-md-6"><label className="form-label" htmlFor="isoOrganizationAddress">Organization address</label><input className="form-control" id="isoOrganizationAddress" value={isoHeaderConfig.organizationAddress} onChange={event => setIsoHeaderConfig(current => ({...current, organizationAddress:event.target.value}))} maxLength={300}/></div>
             <div className="col-md-6"><label className="form-label" htmlFor="isoFormName">Form name</label><input className="form-control" id="isoFormName" value={isoHeaderConfig.formName} onChange={event => setIsoHeaderConfig(current => ({...current, formName:event.target.value}))} maxLength={120}/></div>
@@ -2867,10 +2889,10 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
             <div className="col-md-6"><label className="form-label" htmlFor="isoEffectivity">Effectivity date</label><input className="form-control" id="isoEffectivity" value={isoHeaderConfig.effectivity} onChange={event => setIsoHeaderConfig(current => ({...current, effectivity:event.target.value}))} maxLength={80}/></div>
             <div className="col-md-6"><label className="form-label" htmlFor="isoIssuingOffice">Issuing office</label><input className="form-control" id="isoIssuingOffice" value={isoHeaderConfig.issuingOffice} onChange={event => setIsoHeaderConfig(current => ({...current, issuingOffice:event.target.value}))} maxLength={120}/></div>
             <div className="col-md-6"><label className="form-label" htmlFor="isoRevisionNo">Revision number</label><input className="form-control" id="isoRevisionNo" value={isoHeaderConfig.revisionNo} onChange={event => setIsoHeaderConfig(current => ({...current, revisionNo:event.target.value}))} maxLength={40}/></div>
+             <div className="col-md-6"><label className="form-label" htmlFor="isoPageNo">Page number</label><input className="form-control" id="isoPageNo" value={isoHeaderConfig.pageNo} onChange={event => setIsoHeaderConfig(current => ({...current, pageNo:event.target.value}))} maxLength={20}/></div>
             <div className="col-md-6"><label className="form-label" htmlFor="isoEomsTitle">Management system title</label><input className="form-control" id="isoEomsTitle" value={isoHeaderConfig.eomsTitle} onChange={event => setIsoHeaderConfig(current => ({...current, eomsTitle:event.target.value}))} maxLength={160}/></div>
             <div className="col-md-6"><label className="form-label" htmlFor="isoStandard">ISO standard</label><input className="form-control" id="isoStandard" value={isoHeaderConfig.isoStandard} onChange={event => setIsoHeaderConfig(current => ({...current, isoStandard:event.target.value}))} maxLength={80}/></div>
-            <div className="col-12"><label className="form-label" htmlFor="isoAffiliation1">Affiliation line 1</label><input className="form-control" id="isoAffiliation1" value={isoHeaderConfig.affiliationLine1} onChange={event => setIsoHeaderConfig(current => ({...current, affiliationLine1:event.target.value}))} maxLength={240}/></div>
-            <div className="col-12"><label className="form-label" htmlFor="isoAffiliation2">Affiliation line 2</label><input className="form-control" id="isoAffiliation2" value={isoHeaderConfig.affiliationLine2} onChange={event => setIsoHeaderConfig(current => ({...current, affiliationLine2:event.target.value}))} maxLength={240}/></div>
+            <div className="col-12"><label className="form-label" htmlFor="isoAffiliations">Accreditation / affiliation lines <span className="muted small">(one affiliation per line, up to 10)</span></label><textarea className="form-control" id="isoAffiliations" rows={3} value={isoHeaderConfig.accreditationAffiliations.join("\n")} onChange={event => setIsoHeaderConfig(current => { const affiliations = event.target.value.split(/\r?\n/).map(value => value.trim()).filter(Boolean).slice(0, 10); return {...current, accreditationAffiliations: affiliations, affiliationLine1: affiliations[0] || "", affiliationLine2: affiliations[1] || ""}; })} maxLength={2400}/></div>
           </div>
         </>}{!teacher && <>{user.courseProgram && <><label className="form-label mt-3">Course / Program</label><input className="form-control" readOnly value={user.courseProgram}/></>}{user.yearLevel && <><label className="form-label mt-3">Year level</label><input className="form-control" readOnly value={user.yearLevel}/></>}</>}<button className="btn btn-primary mt-4" disabled={busy}>Save profile</button></form><ChangeEmailForm schoolId={user.school.id} emailDeliveryEnabled={user.emailDeliveryEnabled}/><div className="account-security-section"><h3>Change password</h3><p className="muted">Use at least 12 characters. A verification code will be sent to your current sign-in email. Changing your password signs out existing sessions.</p><form className="profile-form" onSubmit={changePassword}><label className="form-label">Current password</label><input className="form-control" type="password" autoComplete="current-password" value={passwordCurrent} onChange={e=>setPasswordCurrent(e.target.value)} required maxLength={100}/><label className="form-label mt-3">New password</label><input className="form-control" type="password" autoComplete="new-password" value={passwordNew} onChange={e=>setPasswordNew(e.target.value)} required minLength={12} maxLength={100}/><label className="form-label mt-3">Confirm new password</label><input className="form-control" type="password" autoComplete="new-password" value={passwordConfirm} onChange={e=>setPasswordConfirm(e.target.value)} required minLength={12} maxLength={100}/>{passwordOtpSent && <><label className="form-label mt-3">Six-digit code</label><input className="form-control" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" value={passwordOtp} onChange={e=>setPasswordOtp(e.target.value.replace(/\D/g, "").slice(0,6))} required/></>}<button type={passwordOtpSent ? "submit" : "button"} className="btn btn-primary mt-3" disabled={busy} onClick={!passwordOtpSent ? ()=>void requestPasswordOtp() : undefined}>{passwordOtpSent ? "Verify code and update password" : "Send verification code"}</button></form></div></section> : teacher ? <>{tab === "overview" && <><section className="overview-hero" aria-label="Teacher dashboard">
   <div className="overview-hero-main">
