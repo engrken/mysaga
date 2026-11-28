@@ -310,7 +310,7 @@ test("Generic Excel emits the merged Lecture/Lab summary with numeric cells", as
   assert.match(printHeader, /<th rowSpan=\{2\}>TG<\/th>/);
   assert.match(printHeader, /<th rowSpan=\{2\}>FG<\/th>/);
   assert.match(printHeader, /<th rowSpan=\{2\}>REMARKS<\/th>/);
-  assert.match(source, /@page \{ size: 13in 8\.5in landscape;/);
+  assert.match(source, /@page \{ size: 13in 8\.5in;/);
   assert.match(source, /Edit Record Scores Columns/);
 });test("assessment quick-select codes update local grade state immediately and map to canonical remarks", () => {
   assert.match(source, /function scoreQuickCode\(remark: string \| null \| undefined\): ScoreQuickCode/);
@@ -388,7 +388,7 @@ test("Generic Excel masks only dropped TG/FG and keeps other status grades visib
   assert.match(source, /<th rowSpan=\{2\}>NO\.<\/th>/);
   assert.match(source, /<th colSpan=\{2\}>/);
   assert.match(source, /<th rowSpan=\{2\}>REMARKS<\/th>/);
-  assert.match(source, /@page \{ size: 13in 8\.5in landscape;/);
+  assert.match(source, /@page \{ size: 13in 8\.5in;/);
 });test("ISO export API uses the top-level domain summary and omits student numbers", () => {
   const route = fs.readFileSync("src/app/api/teacher/subjects/[subjectId]/iso-export/route.ts", "utf8");
   assert.match(route, /const headers = \[/);

@@ -3156,7 +3156,12 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
                   {filteredEnrollments.map((en, studentIndex) => {
                     const breakdown = gradeSheetEnrollmentBreakdown(detail, en);
                     const domainById = new Map(breakdown.domains.map(item => [item.categoryId, item]));
-                    const total = breakdown.totalPercent;
+                    const domainShares = gradeSheetPrimaryDomains
+                      .map(domain => domainById.get(domain.id)?.parentWeightedScore)
+                      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+                    const total = domainShares.length
+                      ? Number(domainShares.reduce((sum, value) => sum + value, 0).toFixed(2))
+                      : null;
                     const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent)
                       .find(item => total !== null && total >= item.minPercent);
                     const currentRemark = resolvedGradeRemark(en.remarks, band?.remarks);
@@ -3351,7 +3356,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         </>}
       </section>}
       </div></main>
-          {(printMode === "grades" || printMode === "iso-grades") && <style media="print">{`@page { size: 13in 8.5in landscape; margin: .35in; }
+          {(printMode === "grades" || printMode === "iso-grades") && <style media="print">{`@page { size: 13in 8.5in; margin: .35in; }
         @media print {
           .generic-print-sheet { display:block!important; width:100%!important; color:#000!important; background:#fff!important; font-family:Arial,Helvetica,sans-serif!important; }
           .generic-print-sheet { font-size:9pt; }
@@ -3477,7 +3482,12 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           <tbody>{detail.enrollments.map((enrollment, index) => {
             const breakdown = gradeSheetEnrollmentBreakdown(detail, enrollment);
             const domainById = new Map(breakdown.domains.map(item => [item.categoryId, item]));
-            const total = breakdown.totalPercent;
+            const domainShares = gradeSheetPrimaryDomains
+                      .map(domain => domainById.get(domain.id)?.parentWeightedScore)
+                      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+                    const total = domainShares.length
+                      ? Number(domainShares.reduce((sum, value) => sum + value, 0).toFixed(2))
+                      : null;
             const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent)
               .find(item => total !== null && total >= item.minPercent);
             const status = resolvedGradeRemark(enrollment.remarks, band?.remarks);
