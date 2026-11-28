@@ -6,6 +6,7 @@ type Position = { x: number; y: number };
 
 export default function DraggableGlassWindow({
   title,
+  minimizedLabel = "Quick panel",
   minimized,
   onMinimize,
   onExpand,
@@ -15,6 +16,7 @@ export default function DraggableGlassWindow({
   children
 }: {
   title: string;
+  minimizedLabel?: string;
   minimized: boolean;
   onMinimize: () => void;
   onExpand: () => void;
@@ -65,9 +67,9 @@ export default function DraggableGlassWindow({
   };
 
   if (minimized) {
-    return <button type="button" className="student-glass-dock-pill" onClick={onExpand} aria-label="Expand student quick panel">
+    return <button type="button" className="student-glass-dock-pill" onClick={onExpand} aria-label={`Expand ${minimizedLabel.toLowerCase()}`}>
       <span className="student-glass-dock-icon" aria-hidden="true">✦</span>
-      <span>Quick panel</span>
+      <span>{minimizedLabel}</span>
       <span className="student-glass-dock-chevron" aria-hidden="true">↗</span>
     </button>;
   }
@@ -86,14 +88,14 @@ export default function DraggableGlassWindow({
         onPointerMove={moveDrag}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
-        aria-label="Drag quick panel"
+        aria-label={`Drag ${title.toLowerCase()}`}
         title="Drag to move"
       >
         <span className="student-window-grip" aria-hidden="true">⠿</span>
         <span>{title}</span>
         <span className="student-window-drag-hint">MOVE</span>
       </button>
-      <button type="button" className="student-window-minimize" data-window-action="minimize" onClick={onMinimize} aria-label="Minimize quick panel">−</button>
+      <button type="button" className="student-window-minimize" data-window-action="minimize" onClick={onMinimize} aria-label={`Minimize ${title.toLowerCase()}`}>−</button>
     </header>
     <div className="student-floating-window-body">{children}</div>
   </section>;
