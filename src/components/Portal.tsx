@@ -767,7 +767,7 @@ function downloadGradeSheetXlsx(
         values.push({ col: 3 + columnIndex, value, style: 7 });
       } else if (column.kind === "equivalent") {
         const contribution = contributionByCategory.get(column.category.id);
-        const value = specialRemark || contribution?.earnedWithinRoot == null ? "—" : contribution.earnedWithinRoot.toFixed(2) + "%";
+        const value = specialRemark || contribution?.earnedWithinRoot == null ? "—" : contribution.earnedWithinRoot;
         values.push({ col: 3 + columnIndex, value, style: 7 });
       } else {
         const domain = domainSummaryByCategory.get(column.category.id);
