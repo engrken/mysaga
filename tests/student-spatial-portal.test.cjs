@@ -278,3 +278,13 @@ test("student app and Practice Demo use dynamic viewport sizing and touch-safe s
   assert.match(demoCss, /min-height:100dvh/);
   assert.match(demoCss, /overflow-x:auto/);
 });
+
+
+test("Practice Demo bottom-sheet selectors target shared global components in CSS Modules", () => {
+  const demoCss = read("src/components/DemoWorkspace.module.css");
+  assert.match(demoCss, /:global\(\.student-floating-window-backdrop\)/);
+  assert.match(demoCss, /:global\(\.student-floating-window\)/);
+  assert.match(demoCss, /:global\(\.student-floating-window-head\)/);
+  assert.match(demoCss, /:global\(\.student-floating-window-body\)/);
+  assert.match(demoCss, /@supports not \(height:100dvh\)/);
+});
