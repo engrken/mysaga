@@ -143,7 +143,7 @@ class FcuIsoExportTests(unittest.TestCase):
 
         self.assertTrue(sheet.sheet_view.showGridLines)
         self.assertEqual(sheet.page_setup.orientation, "portrait")
-        self.assertEqual(sheet.page_setup.paperSize, "14")
+        self.assertEqual(sheet.page_setup.paperSize, 14)
         self.assertEqual(sheet.page_setup.fitToWidth, 1)
         self.assertEqual(sheet.page_setup.fitToHeight, 0)
         self.assertTrue(sheet.sheet_properties.pageSetUpPr.fitToPage)
