@@ -54,21 +54,21 @@ Google recommends incremental authorization so applications request additional A
 
 ## Vercel environment variables
 
-Use the existing SAGA OAuth values in **Production and Preview**:
+Use the existing SAGA OAuth values in **Production** for this release. Preview values remain isolated and must be configured specifically for `qa-preview` before that environment is used:
 
 | Variable | Purpose |
 | --- | --- |
 | `GOOGLE_CLIENT_ID` | Existing OAuth Web application client ID |
 | `GOOGLE_CLIENT_SECRET` | Existing server-only OAuth client secret |
-| `GOOGLE_REDIRECT_URI` | Existing legacy Chat callback; keep unchanged |
-| `GOOGLE_SSO_REDIRECT_URI` | Same-origin unified sign-in callback; use the Production or Preview URL listed above |
+| `GOOGLE_REDIRECT_URI` | Existing legacy callback; keep unchanged and keep its exact URI authorized in Google Cloud |
+| `GOOGLE_SSO_REDIRECT_URI` | Primary unified sign-in callback; Production uses `https://my.sagaportal.online/api/integrations/google/callback` |
 | `GOOGLE_TOKEN_ENCRYPTION_KEY` | Existing 32-byte key encoded as 64-character hex or base64; encrypts teacher service tokens |
 | `GOOGLE_DRIVE_API_KEY` | Restricted Google API key for Picker |
 | `GOOGLE_DRIVE_APP_ID` | Numeric Google Cloud project number |
 
 Keep the OAuth client secret and token encryption key server-only. Never use a `NEXT_PUBLIC_` prefix for them.
 
-The following flags control only the optional Activities Drive controls. They do not control the availability of Google Sign-In on the SAGA login page:
+The following flags control only the optional Activities Drive controls. They do not control the availability of Google Sign-In on the SAGA login page. Keep these at the currently configured Production exploration values; do not enable publishing or student submissions in this release:
 
 | Variable | Value / purpose |
 | --- | --- |
@@ -88,7 +88,7 @@ Do not switch on publishing, grading, student submissions, or general Activity w
 
 ## Suggested verification sequence
 
-1. Open the SAGA Preview branch alias and confirm the school list loads.
+1. For this release, wait until the single Production deployment is Ready, then open the canonical SAGA site at `https://my.sagaportal.online`.
 2. On the login page, select a school and click **Continue with Google**.
 3. Test a Google email that already belongs to a teacher account at that school. Confirm the first screen signs in and the second consent step requests the Drive and Chat permissions.
 4. Complete authorization and verify the teacher connection status reports the same email as the SAGA profile, with Drive and Chat enabled.
