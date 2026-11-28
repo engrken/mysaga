@@ -45,7 +45,6 @@ export default function StudentAppearanceWindow({
     style={{ "--student-panel-z": front ? 48 : 42 } as CSSProperties}
   >
     <DraggableGlassWindow
-      key={`appearance-${preferences.panelPosition.x}:${preferences.panelPosition.y}`}
       title="Customize appearance"
       minimizedLabel="Customize appearance"
       minimized={minimized && !requested}
