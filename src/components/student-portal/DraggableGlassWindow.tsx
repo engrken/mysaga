@@ -3,6 +3,22 @@
 import { useRef, useState, type PointerEvent, type ReactNode } from "react";
 
 type Position = { x: number; y: number };
+const WINDOW_WIDTH = 320;
+
+function clampPanelX(value: number) {
+  const minX = window.innerWidth >= 1181
+    ? Math.max(12, window.innerWidth - WINDOW_WIDTH - 380)
+    : 12;
+  const maxX = Math.max(minX, window.innerWidth - WINDOW_WIDTH - 12);
+  return Math.max(minX, Math.min(maxX, value));
+}
+
+function clampPanelY(value: number, inPortal: boolean) {
+  const minY = inPortal ? 176 : 82;
+  const estimatedHeight = Math.min(window.innerHeight - 24, 620);
+  const maxY = Math.max(minY, window.innerHeight - estimatedHeight - 12);
+  return Math.max(minY, Math.min(maxY, value));
+}
 
 export default function DraggableGlassWindow({
   title,
@@ -34,10 +50,15 @@ export default function DraggableGlassWindow({
   const startDrag = (event: PointerEvent<HTMLButtonElement>) => {
     if (minimized || window.matchMedia("(max-width: 767px)").matches) return;
     if ((event.target as HTMLElement).closest("button[data-window-action]")) return;
-    const currentX = currentPositionRef.current.x || Math.max(12, window.innerWidth - 356);
+    const rawX = currentPositionRef.current.x || Math.max(12, window.innerWidth - 356);
+    const inPortal = Boolean(document.querySelector(".portal-layout"));
     const layoutRoot = document.querySelector(".portal-layout");
-    const configuredTop = layoutRoot ? Number.parseFloat(getComputedStyle(layoutRoot).getPropertyValue("--student-panel-default-top")) : Number.NaN;
-    const currentY = currentPositionRef.current.y || (Number.isFinite(configuredTop) ? configuredTop : 116);
+    const configuredTop = layoutRoot
+      ? Number.parseFloat(getComputedStyle(layoutRoot).getPropertyValue("--student-panel-default-top"))
+      : Number.NaN;
+    const rawY = currentPositionRef.current.y || (Number.isFinite(configuredTop) ? configuredTop : 116);
+    const currentX = clampPanelX(rawX);
+    const currentY = clampPanelY(rawY, inPortal);
     dragOffset.current = { x: event.clientX - currentX, y: event.clientY - currentY };
     dragPointer.current = event.pointerId;
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -49,11 +70,11 @@ export default function DraggableGlassWindow({
 
   const moveDrag = (event: PointerEvent<HTMLButtonElement>) => {
     if (dragPointer.current !== event.pointerId || minimized) return;
-    const width = 320;
-    const estimatedHeight = Math.min(window.innerHeight - 24, 620);
-    const x = Math.max(12, Math.min(window.innerWidth - width - 12, event.clientX - dragOffset.current.x));
-    const y = Math.max(82, Math.min(window.innerHeight - estimatedHeight, event.clientY - dragOffset.current.y));
-    const nextPosition = { x, y };
+    const inPortal = Boolean(document.querySelector(".portal-layout"));
+    const nextPosition = {
+      x: clampPanelX(event.clientX - dragOffset.current.x),
+      y: clampPanelY(event.clientY - dragOffset.current.y, inPortal)
+    };
     currentPositionRef.current = nextPosition;
     setCurrentPosition(nextPosition);
   };
@@ -74,29 +95,47 @@ export default function DraggableGlassWindow({
     </button>;
   }
 
-  return <section
-    className={`student-floating-window${dragging ? " is-dragging" : ""}`}
-    style={{ left: currentPosition.x > 0 ? currentPosition.x : "auto", right: currentPosition.x > 0 ? "auto" : 18, top: currentPosition.y > 0 ? currentPosition.y : "var(--student-panel-default-top, 116px)" }}
-    aria-label={title}
-    onPointerDownCapture={onActivate}
-  >
-    <header className="student-floating-window-head">
-      <button
-        type="button"
-        className="student-window-drag-handle"
-        onPointerDown={startDrag}
-        onPointerMove={moveDrag}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        aria-label={`Drag ${title.toLowerCase()}`}
-        title="Drag to move"
-      >
-        <span className="student-window-grip" aria-hidden="true">⠿</span>
-        <span>{title}</span>
-        <span className="student-window-drag-hint">MOVE</span>
-      </button>
-      <button type="button" className="student-window-minimize" data-window-action="minimize" onClick={onMinimize} aria-label={`Minimize ${title.toLowerCase()}`}>−</button>
-    </header>
-    <div className="student-floating-window-body">{children}</div>
-  </section>;
+  const inPortal = typeof document !== "undefined" && Boolean(document.querySelector(".portal-layout"));
+  const visiblePosition = typeof window === "undefined" ? currentPosition : {
+    x: currentPosition.x > 0 ? clampPanelX(currentPosition.x) : 0,
+    y: currentPosition.y > 0 ? clampPanelY(currentPosition.y, inPortal) : 0
+  };
+
+  return <>
+    <button
+      type="button"
+      className="student-floating-window-backdrop"
+      aria-label={`Close ${title.toLowerCase()}`}
+      onClick={onMinimize}
+    />
+    <section
+      className={`student-floating-window${dragging ? " is-dragging" : ""}`}
+      style={{
+        left: visiblePosition.x > 0 ? visiblePosition.x : "auto",
+        right: visiblePosition.x > 0 ? "auto" : 18,
+        top: visiblePosition.y > 0 ? visiblePosition.y : "var(--student-panel-default-top, 116px)"
+      }}
+      aria-label={title}
+      onPointerDownCapture={onActivate}
+    >
+      <header className="student-floating-window-head">
+        <button
+          type="button"
+          className="student-window-drag-handle"
+          onPointerDown={startDrag}
+          onPointerMove={moveDrag}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          aria-label={`Drag ${title.toLowerCase()}`}
+          title="Drag to move"
+        >
+          <span className="student-window-grip" aria-hidden="true">⠿</span>
+          <span>{title}</span>
+          <span className="student-window-drag-hint">MOVE</span>
+        </button>
+        <button type="button" className="student-window-minimize" data-window-action="minimize" onClick={onMinimize} aria-label={`Minimize ${title.toLowerCase()}`}>−</button>
+      </header>
+      <div className="student-floating-window-body">{children}</div>
+    </section>
+  </>;
 }
