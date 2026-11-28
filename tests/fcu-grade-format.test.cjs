@@ -57,6 +57,18 @@ async function generate(categories, enrollments, components) {
           : Math.round(rawEquivalentPercent * component.percentage) / 100
       };
     }
+  ,
+    isPassedGradeRemark: (remark, fallback) => {
+      const value = String(remark || fallback || "").trim().toUpperCase();
+      return (value === "PASS" ? "PASSED" : value) === "PASSED";
+    },
+    gradeRemarkIndicator: (remark, fallback) => {
+      const value = String(remark || fallback || "").trim().toUpperCase();
+      const normalized = value === "DRP" || value === "DROP" ? "DROPPED"
+        : value === "INCOMPLETE" ? "INC" : value === "PASS" ? "PASSED" : value;
+      return normalized === "DROPPED" ? "DRP" : normalized === "INC" ? "INC"
+        : normalized === "NP" ? "NP" : ["FAILED", "FAIL", "NOT PASSED"].includes(normalized) ? "FAIL" : normalized || "—";
+    },
   };
   vm.runInNewContext(compiled + "\nthis.generateGradeFile = downloadFcuGradeXlsx;", context);
   const detail = {
@@ -257,6 +269,59 @@ test("Generic Excel keeps primary domains before additional saved subcomponents"
   assert.match(sheet, /<c r="I17"[^>]*><v>78\.63<\/v>/);
 });
 
+test("non-passing grade remarks hide numerical rows and resolve the correct shorthand", () => {
+  const helperStart = source.indexOf("function normalizeGradeRemark(");
+  const helperEnd = source.indexOf("\nfunction gradeSheetRootDomainSummary(", helperStart);
+  assert.ok(helperStart >= 0 && helperEnd > helperStart, "shared status helpers are defined");
+  const compiledHelpers = ts.transpileModule(source.slice(helperStart, helperEnd), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
+  const context = {};
+  vm.runInNewContext(compiledHelpers + "\nthis.helpers = { normalizeGradeRemark, resolvedGradeRemark, isPassedGradeRemark, gradeRemarkIndicator, gradeRemarkSelectionValue };", context);
+  const h = context.helpers;
+  assert.equal(h.normalizeGradeRemark("DRP"), "DROPPED");
+  assert.equal(h.normalizeGradeRemark("INCOMPLETE"), "INC");
+  assert.equal(h.isPassedGradeRemark("PASSED"), true);
+  assert.equal(h.isPassedGradeRemark("Passed"), true);
+  assert.equal(h.isPassedGradeRemark("DRP", "PASSED"), false);
+  assert.equal(h.isPassedGradeRemark("DROPPED"), false);
+  assert.equal(h.isPassedGradeRemark("INCOMPLETE"), false);
+  assert.equal(h.isPassedGradeRemark(null, "FAILED"), false);
+  assert.equal(h.gradeRemarkIndicator("DROPPED"), "DRP");
+  assert.equal(h.gradeRemarkIndicator("DRP"), "DRP");
+  assert.equal(h.gradeRemarkIndicator("INCOMPLETE"), "INC");
+  assert.equal(h.gradeRemarkIndicator("INC"), "INC");
+  assert.equal(h.gradeRemarkIndicator("FAILED"), "FAIL");
+  assert.equal(h.gradeRemarkSelectionValue("DRP"), "DROPPED");
+  assert.equal(h.gradeRemarkSelectionValue("INCOMPLETE"), "INC");
+
+  assert.match(source, /if \(hasSpecialRemark\) return <td className="score-sheet-score score-sheet-score-hidden"/);
+  assert.match(source, /hasSpecialRemark \? "" : enrollment\.finalPercent/);
+  assert.match(source, /hasSpecialRemark \? <span className="score-sheet-status-indicator"/);
+  assert.match(source, /mobile-score-status-only/);
+  assert.match(source, /const passed=isPassedGradeRemark\(en\.remarks,band\?\.remarks\)/);
+  assert.match(source, /!passed\?""/);
+  assert.match(source, /!isPassedGradeRemark\(enrollment\.remarks,band\?\.remarks\)/);
+  assert.match(source, /gradeRemarkIndicator\(enrollment\.remarks,band\?\.remarks\)/);
+});
+
+test("FCU Excel renders non-passing statuses in the grade cell and leaves numeric columns blank", async () => {
+  const components = [{ name: "EXAM", percentage: 100 }];
+  const categories = [{ id: "EXAM", name: "EXAM", weight: 100 }];
+  const files = await generate(categories, [
+    student("Dropped Student", { EXAM: 83 }, 83, "DRP"),
+    student("Incomplete Student", { EXAM: 79 }, 79, "INCOMPLETE")
+  ], components);
+  const sheet = files["xl/worksheets/sheet1.xml"];
+  assert.match(sheet, /<c r="F17"[^>]*><is><t xml:space="preserve">DRP<\/t><\/is><\/c>/);
+  assert.match(sheet, /<c r="G17"[^>]*><is><t xml:space="preserve">DROPPED<\/t><\/is><\/c>/);
+  assert.match(sheet, /<c r="F18"[^>]*><is><t xml:space="preserve">INC<\/t><\/is><\/c>/);
+  assert.match(sheet, /<c r="G18"[^>]*><is><t xml:space="preserve">INC<\/t><\/is><\/c>/);
+  for (const cell of ["C17", "D17", "E17", "C18", "D18", "E18"]) {
+    assert.doesNotMatch(sheet, new RegExp('<c r="' + cell + '"[^>]*><v>'));
+  }
+});
+
 test("Generic PDF export is offered only once inside the export dropdown", () => {
   assert.match(source, /<strong>Save \/ Print Generic PDF<\/strong>/, "the Generic dropdown retains its PDF option");
   assert.match(source, /"Download Generic Excel Sheet"/, "the Generic dropdown retains its idle Excel option label");
@@ -434,6 +499,17 @@ test("Attendance component calculates its own session percentage and weighted co
   const context = {
     Set, Number, Math,
     categoryPath: category => category.name,
+    isPassedGradeRemark: (remark, fallback) => {
+      const value = String(remark || fallback || "").trim().toUpperCase();
+      return (value === "PASS" ? "PASSED" : value) === "PASSED";
+    },
+    gradeRemarkIndicator: (remark, fallback) => {
+      const value = String(remark || fallback || "").trim().toUpperCase();
+      const normalized = value === "DRP" || value === "DROP" ? "DROPPED"
+        : value === "INCOMPLETE" ? "INC" : value === "PASS" ? "PASSED" : value;
+      return normalized === "DROPPED" ? "DRP" : normalized === "INC" ? "INC"
+        : normalized === "NP" ? "NP" : ["FAILED", "FAIL", "NOT PASSED"].includes(normalized) ? "FAIL" : normalized || "—";
+    },
     calculateGradeBreakdown: () => ({
       items: [
         { categoryId: "sessions", earnedCourse: 10 },
@@ -530,6 +606,17 @@ test("Record Scores Excel export mirrors the full grouped scorebook and saved si
     sortWorksheetRowCells: value => value,
     xmlEscape: escape,
     categoryPath: category => category.name,
+    isPassedGradeRemark: (remark, fallback) => {
+      const value = String(remark || fallback || "").trim().toUpperCase();
+      return (value === "PASS" ? "PASSED" : value) === "PASSED";
+    },
+    gradeRemarkIndicator: (remark, fallback) => {
+      const value = String(remark || fallback || "").trim().toUpperCase();
+      const normalized = value === "DRP" || value === "DROP" ? "DROPPED"
+        : value === "INCOMPLETE" ? "INC" : value === "PASS" ? "PASSED" : value;
+      return normalized === "DROPPED" ? "DRP" : normalized === "INC" ? "INC"
+        : normalized === "NP" ? "NP" : ["FAILED", "FAIL", "NOT PASSED"].includes(normalized) ? "FAIL" : normalized || "—";
+    },
     categoryDescendantIds: (rootId, categories) => {
       const ids = new Set([rootId]);
       let changed = true;
@@ -672,6 +759,17 @@ test("Record Scores export dynamically merges institutional, metadata, category,
     sortWorksheetRowCells: value => value,
     xmlEscape: escape,
     categoryPath: category => category.name,
+    isPassedGradeRemark: (remark, fallback) => {
+      const value = String(remark || fallback || "").trim().toUpperCase();
+      return (value === "PASS" ? "PASSED" : value) === "PASSED";
+    },
+    gradeRemarkIndicator: (remark, fallback) => {
+      const value = String(remark || fallback || "").trim().toUpperCase();
+      const normalized = value === "DRP" || value === "DROP" ? "DROPPED"
+        : value === "INCOMPLETE" ? "INC" : value === "PASS" ? "PASSED" : value;
+      return normalized === "DROPPED" ? "DRP" : normalized === "INC" ? "INC"
+        : normalized === "NP" ? "NP" : ["FAILED", "FAIL", "NOT PASSED"].includes(normalized) ? "FAIL" : normalized || "—";
+    },
     categoryDescendantIds: (rootId, categories) => {
       const ids = new Set([rootId]);
       let changed = true;
@@ -861,6 +959,17 @@ test("PDF component values are weighted by the configured course allocation", ()
   }).outputText;
   const context = {
     categoryPath: category => category.name,
+    isPassedGradeRemark: (remark, fallback) => {
+      const value = String(remark || fallback || "").trim().toUpperCase();
+      return (value === "PASS" ? "PASSED" : value) === "PASSED";
+    },
+    gradeRemarkIndicator: (remark, fallback) => {
+      const value = String(remark || fallback || "").trim().toUpperCase();
+      const normalized = value === "DRP" || value === "DROP" ? "DROPPED"
+        : value === "INCOMPLETE" ? "INC" : value === "PASS" ? "PASSED" : value;
+      return normalized === "DROPPED" ? "DRP" : normalized === "INC" ? "INC"
+        : normalized === "NP" ? "NP" : ["FAILED", "FAIL", "NOT PASSED"].includes(normalized) ? "FAIL" : normalized || "—";
+    },
     gradeSheetComponentPercent: () => 90,
     gradeSheetRootDomainSummary: () => null
   };
