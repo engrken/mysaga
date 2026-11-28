@@ -17,8 +17,7 @@ const CLASS_REMARK_CODES: ReadonlySet<string> = new Set(CLASS_REMARK_OPTIONS.map
 export function normalizeRemark(remark: string | null | undefined): string {
   const value = String(remark ?? "").trim().toUpperCase();
   if (value === "INCOMPLETE") return "INC";
-  if (/^NO\s+(?:(?:EXAM(?:INATION)?|EXAMINATION)\s+)?PERMIT(?:\s*\(NP\))?$/.test(value) ||
-      /^NO\s+PRIVILEGE(?:\s*\(NP\))?$/.test(value)) return "NP";
+  if (/^NO\s+(?:(?:EXAM(?:INATION)?|EXAMINATION)\s+)?PERMIT(?:\s*\(NP\))?$/.test(value)) return "NP";
   if (value === "DRP" || value === "DROP") return "DROPPED";
   if (value === "PASS") return "PASSED";
   if (value === "FAIL" || value === "NOT PASSED") return "FAILED";
