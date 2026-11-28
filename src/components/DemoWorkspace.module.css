@@ -296,3 +296,14 @@
   .shell :global(.student-module-drag-handle){display:none!important}
   .shell :global(.student-draggable-module.is-freeform){transform:none!important}
 }
+
+
+@supports not (height:100dvh){
+  @media(max-width:760px), (pointer:coarse){
+    .shell :global(.student-floating-window){max-height:min(88vh,calc(100vh - env(safe-area-inset-top,0px) - 8px))!important}
+    .shell :global(.student-floating-window-backdrop){height:100vh}
+    .shell :global(.student-floating-window-body){
+      max-height:calc(min(88vh,100vh - env(safe-area-inset-top,0px) - 8px) - 58px - env(safe-area-inset-bottom,0px));
+    }
+  }
+}
