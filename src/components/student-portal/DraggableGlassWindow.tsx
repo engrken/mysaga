@@ -65,11 +65,65 @@ export default function DraggableGlassWindow({
     setCurrentPosition(position);
   }, [position.x, position.y]);
 
+  useEffect(() => {
+    if (minimized || typeof window === "undefined") return;
+    const compactQuery = window.matchMedia("(max-width: 767px), (pointer: coarse)");
+    const body = document.body;
+    const html = document.documentElement;
+    let savedScrollY: number | null = null;
+    let previousBodyStyles: { position: string; top: string; width: string; overflow: string; overscrollBehavior: string } | null = null;
+    let previousHtmlOverflow = "";
+
+    const unlock = () => {
+      if (savedScrollY === null || !previousBodyStyles) return;
+      body.style.position = previousBodyStyles.position;
+      body.style.top = previousBodyStyles.top;
+      body.style.width = previousBodyStyles.width;
+      body.style.overflow = previousBodyStyles.overflow;
+      body.style.overscrollBehavior = previousBodyStyles.overscrollBehavior;
+      html.style.overflow = previousHtmlOverflow;
+      const restoreY = savedScrollY;
+      savedScrollY = null;
+      previousBodyStyles = null;
+      window.scrollTo(0, restoreY);
+    };
+
+    const syncScrollLock = () => {
+      if (!compactQuery.matches) {
+        unlock();
+        return;
+      }
+      if (savedScrollY !== null) return;
+      savedScrollY = window.scrollY;
+      previousBodyStyles = {
+        position: body.style.position,
+        top: body.style.top,
+        width: body.style.width,
+        overflow: body.style.overflow,
+        overscrollBehavior: body.style.overscrollBehavior
+      };
+      previousHtmlOverflow = html.style.overflow;
+      body.style.position = "fixed";
+      body.style.top = `-${savedScrollY}px`;
+      body.style.width = "100%";
+      body.style.overflow = "hidden";
+      body.style.overscrollBehavior = "none";
+      html.style.overflow = "hidden";
+    };
+
+    syncScrollLock();
+    compactQuery.addEventListener("change", syncScrollLock);
+    return () => {
+      compactQuery.removeEventListener("change", syncScrollLock);
+      unlock();
+    };
+  }, [minimized]);
+
   const startDrag = (event: PointerEvent<HTMLButtonElement>) => {
-    if (minimized || window.matchMedia("(max-width: 1180px)").matches) return;
+    if (minimized || event.pointerType !== "mouse" || window.matchMedia("(max-width: 1180px), (pointer: coarse)").matches) return;
     if ((event.target as HTMLElement).closest("button[data-window-action]")) return;
-    const rawX = currentPositionRef.current.x || (inPortal && window.innerWidth >= 1181 ? getDefaultPanelX() : Math.max(12, window.innerWidth - 356));
     const inPortal = Boolean(document.querySelector(".portal-layout"));
+    const rawX = currentPositionRef.current.x || (inPortal && window.innerWidth >= 1181 ? getDefaultPanelX() : Math.max(12, window.innerWidth - 356));
     const layoutRoot = document.querySelector(".portal-layout");
     const configuredTop = layoutRoot
       ? Number.parseFloat(getComputedStyle(layoutRoot).getPropertyValue("--student-panel-default-top"))
@@ -153,7 +207,7 @@ export default function DraggableGlassWindow({
           <span>{title}</span>
           <span className="student-window-drag-hint">MOVE</span>
         </button>
-        <button type="button" className="student-window-minimize" data-window-action="minimize" onClick={onMinimize} aria-label={`Minimize ${title.toLowerCase()}`}>−</button>
+        <button type="button" className="student-window-minimize" data-window-action="minimize" onClick={onMinimize} aria-label={`Close ${title.toLowerCase()}`} title="Close panel">×</button>
       </header>
       <div className="student-floating-window-body">{children}</div>
     </section>
