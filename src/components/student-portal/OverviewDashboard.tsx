@@ -88,6 +88,11 @@ export default function OverviewDashboard({
   const averageValue = metrics.average === null ? "—" : `${metrics.average.toFixed(1)}%`;
   const attendanceValue = metrics.attendanceRate === null ? "—" : `${Math.round(metrics.attendanceRate)}%`;
   const activeLayoutMode = isCompactOrTouchViewport ? "snapped" : preferences.layout;
+  const appearancePreferences: StudentPortalPreferences = isCompactOrTouchViewport
+    ? { ...preferences, layout: "snapped" }
+    : preferences;
+  const updateAppearancePreferences = (next: StudentPortalPreferences) =>
+    onPreferencesChange(isCompactOrTouchViewport ? { ...next, layout: preferences.layout } : next);
 
   return <div className="student-spatial-dashboard" data-student-glass-theme={preferences.theme} data-student-wallpaper={preferences.wallpaper} data-student-layout={activeLayoutMode} style={{ "--student-accent": accentColor, "--student-panel-z": panelFront ? 48 : 42 } as CSSProperties}>
     <div className="student-spatial-heading">
@@ -154,7 +159,7 @@ export default function OverviewDashboard({
         </article>)}
         {demoMode && <p className="student-glass-demo-note">Sample activity statuses are fictional and included to demonstrate the interface.</p>}
         {!demoMode && <p className="student-glass-demo-note">SAGA shows recorded class and assessment information here. It does not infer a live meeting from a timetable.</p>}
-      </div> : <PortalCustomizer preferences={preferences} onChange={onPreferencesChange} onReset={onReset}/>}
+      </div> : <PortalCustomizer preferences={appearancePreferences} onChange={updateAppearancePreferences} onReset={onReset} allowFreeform={!isCompactOrTouchViewport}/>}
     </DraggableGlassWindow>
     </div>
     <div className="student-glass-dashboard-footer"><span>{storageReady && !demoMode ? "Preferences saved in this browser" : "Changes stay in this session"}</span><button type="button" onClick={() => { setPanelTab("customizer"); setPanelMinimized(false); if (customizerRequested) onCustomizerOpened(); }}>Customize portal</button></div>
