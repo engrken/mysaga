@@ -190,7 +190,7 @@ test("FCU final-grade export shows each saved component as raw and weighted colu
   ], components);
   const sheet = files["xl/worksheets/sheet1.xml"];
   const styles = files["xl/styles.xml"];
-  assert.match(sheet, /<mergeCell ref="A1:M9"/);
+  assert.match(sheet, /<mergeCell ref="A1:K9"\/>/);
   assert.match(sheet, /<pageSetup paperSize="14" orientation="portrait" fitToWidth="1"/);
   assert.match(sheet, /showGridLines="0" zoomScale="90"/);
   assert.match(sheet, /<selection pane="bottomLeft" activeCell="A17"/);
@@ -623,8 +623,8 @@ test("Record Scores Excel export mirrors the full grouped scorebook and saved si
   assert.match(sheet, /<c r="B18"[^>]*>.*?Ana Reyes/s);
   assert.match(sheet, /<c r="A19"[^>]*><v>2<\/v><\/c>/);
   assert.match(sheet, /<c r="D18"[^>]*>.*?8 \/ 10/s);
-  assert.match(sheet, /<c r="E18"[^>]*>.*?27\.00%/s);
-  assert.match(sheet, /<c r="I18"[^>]*>.*?46\.00%/s);
+  assert.match(sheet, /<c r="E18"[^>]*><v>27<\/v>/);
+  assert.match(sheet, /<c r="I18"[^>]*><v>46<\/v>/);
   assert.match(sheet, /<c r="L18"[^>]*>.*?90\.00%/s);
   assert.match(sheet, /<c r="M18"[^>]*>.*?2\.00/s);
   assert.match(sheet, /<c r="N18"[^>]*>.*?PASSED/s);
