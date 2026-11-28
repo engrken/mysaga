@@ -151,7 +151,7 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertEqual(len(sheet._images), 1)
         # openpyxl reports the source PNG size as image.width/height.
         # The drawing anchor extent is the actual displayed size in Excel.
-        self.assertEqual(sheet._images[0].anchor.ext.cx, 80 * 9525)
+        self.assertEqual(sheet._images[0].anchor.ext.cx, pixels_to_EMU(80))
         self.assertEqual(sheet._images[0].anchor.ext.cy, 80 * 9525)
         self.assertEqual(sheet._images[0].anchor._from.col, 0)
         self.assertEqual(sheet._images[0].anchor._from.row, 0)
