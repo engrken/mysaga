@@ -3004,3 +3004,25 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
     }
   }
 }
+
+
+/* Explicit domain totals are header cells of their own, not part of the
+   assessment subcategory row. The colgroup supplies their fixed widths. */
+.portal-layout .score-sheet-domain-summary-head {
+  vertical-align: middle;
+  background: var(--bs-secondary-bg, #eef3fa);
+  white-space: normal;
+}
+.portal-layout .score-sheet-domain-summary-head small {
+  display: block;
+  margin-top: 3px;
+  color: var(--bs-secondary-color, #67758c);
+  font-size: .59rem;
+  line-height: 1.2;
+  font-weight: 650;
+}
+.portal-layout .score-sheet-subcategory-placeholder {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
