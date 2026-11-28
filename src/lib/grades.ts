@@ -5,9 +5,9 @@ export type GradeCategoryInput = { name: string; weight: number; conversionBase:
 export const CLASS_REMARK_OPTIONS = [
   { label: "PASSED", value: "PASSED" },
   { label: "FAILED", value: "FAILED" },
-  { label: "INCOMPLETE", value: "INC" },
-  { label: "NO EXAMINATION PERMIT (NP)", value: "NP" },
-  { label: "DROPPED (DRP)", value: "DROPPED" }
+  { label: "INC", value: "INC" },
+  { label: "NP", value: "NP" },
+  { label: "DROPPED", value: "DROPPED" }
 ] as const;
 
 export type ClassRemark = typeof CLASS_REMARK_OPTIONS[number]["value"];

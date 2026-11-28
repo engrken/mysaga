@@ -328,6 +328,25 @@ test("grade remarks normalize status shorthands and masking stays scoped to drop
   assert.match(finalSection, /<col className="w-\[100px\]" \/>/);
   assert.match(finalSection, /<div className="w-\[95px\] mx-auto whitespace-normal break-words leading-tight uppercase">/);
   assert.match(finalSection, /<div className="w-\[105px\] mx-auto whitespace-normal break-words leading-tight uppercase">/);
+  assert.match(source, /function getCleanComponentName\(componentName: string\): string/);
+  assert.match(finalSection, /getCleanComponentName\(component\.name\)/);
+  assert.match(finalSection, />Raw Equivalent<\/span>/);
+  assert.match(finalSection, /component\.percentage\.toFixed\(2\)\}% Configured Weight/);
+  assert.doesNotMatch(finalSection, /component\.name\.toLocaleUpperCase\(\) WEIGHTED/);
+
+  const cleanNameStart = source.indexOf("function getCleanComponentName(");
+  const cleanNameEnd = source.indexOf("\nfunction scoreSheetCategoryLabel(", cleanNameStart);
+  assert.ok(cleanNameStart >= 0 && cleanNameEnd > cleanNameStart, "clean component-name helper is isolated");
+  const cleanNameContext = {};
+  vm.runInNewContext(ts.transpileModule(source.slice(cleanNameStart, cleanNameEnd) +
+    "\nthis.getCleanComponentName = getCleanComponentName;", {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+    }).outputText, cleanNameContext);
+  assert.equal(cleanNameContext.getCleanComponentName("MAJOR EXAM / MIDTERM EXAM"), "MIDTERM EXAM");
+  assert.equal(cleanNameContext.getCleanComponentName("MAJOR EXAM / FINAL EXAM"), "FINAL EXAM");
+  assert.equal(cleanNameContext.getCleanComponentName("EXERCISES"), "EXERCISES");
+  assert.equal(cleanNameContext.getCleanComponentName("QUIZZES / ASSIGNMENTS"), "ASSIGNMENTS");
+
   assert.match(finalSection, /className="block text-\[10px\] text-gray-500 font-normal leading-snug mt-0\.5"/);
   assert.match(finalSection, /font-mono tabular-nums align-middle/);
   assert.match(finalSection, /score-sheet-remark-select w-full min-w-\[130px\] max-w-\[140px\]/);
