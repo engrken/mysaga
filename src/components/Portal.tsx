@@ -140,6 +140,10 @@ function getCleanComponentName(componentName: string): string {
   const parts = componentName.split("/");
   return (parts.length > 1 ? parts[parts.length - 1] : componentName).trim().toUpperCase();
 }
+function renderColumnSubtext(isRawEquivalent: boolean, weightPercentage?: number | string) {
+  const subtext = isRawEquivalent ? "EQ" : `${weightPercentage ?? ""}%`;
+  return <span className="block text-[10px] text-gray-500 font-normal leading-snug mt-0.5">{subtext}</span>;
+}
 function scoreSheetCategoryLabel(name: string) {
   const label = name.trim();
   if (/^laboratory\s+exam\b/i.test(label)) return "Lab Exam";
@@ -3176,11 +3180,11 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
                     {activeGradeSheetComponents.map(component=><Fragment key={component.name}>
                       <th scope="col" className="align-top py-2 px-1 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">
                         <div className="w-[95px] mx-auto whitespace-normal break-words leading-tight uppercase">{getCleanComponentName(component.name)}</div>
-                        <span className="block text-[10px] text-gray-500 font-normal leading-snug mt-0.5">Raw Equivalent</span>
+                        {renderColumnSubtext(true)}
                       </th>
                       <th scope="col" className="align-top py-2 px-1 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">
                         <div className="w-[105px] mx-auto whitespace-normal break-words leading-tight uppercase">{getCleanComponentName(component.name)}</div>
-                        <span className="block text-[10px] text-gray-500 font-normal leading-snug mt-0.5">{component.percentage.toFixed(2)}% Configured Weight</span>
+                        {renderColumnSubtext(false, component.percentage.toFixed(2))}
                       </th>
                     </Fragment>)}
                     <th scope="col" className="align-top py-2 px-1 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">
@@ -3515,7 +3519,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           </div>
         </div>
         <table className="print-grade-table generic-print-grade-table">
-          <thead><tr><th aria-label="Sequence number"></th><th>NAME OF STUDENTS</th>{gradeSheetPrimaryDomains.map(category=><Fragment key={category.id}><th>{/lecture/i.test(category.name)?"Total":"TOTAL"}<small>{category.name} · raw equivalent (%)</small></th><th>{category.name.toLocaleUpperCase()} WEIGHTED<small>{category.weight.toFixed(2)}% of course</small></th></Fragment>)}{gradeSheetAdditionalComponents.map(component=><Fragment key={component.name}><th>{gradeSheetComponentRawLabel(detail,component)}<small>{component.name} · raw equivalent (%)</small></th><th>{component.name.toLocaleUpperCase()} WEIGHTED<small>{component.percentage.toFixed(2)}% configured weight</small></th></Fragment>)}<th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
+          <thead><tr><th aria-label="Sequence number"></th><th>NAME OF STUDENTS</th>{gradeSheetPrimaryDomains.map(category=><Fragment key={category.id}><th>{/lecture/i.test(category.name)?"Total":"TOTAL"}<small>EQ</small></th><th>{category.name.toLocaleUpperCase()} WEIGHTED<small>{category.weight.toFixed(2)}%</small></th></Fragment>)}{gradeSheetAdditionalComponents.map(component=><Fragment key={component.name}><th>{gradeSheetComponentRawLabel(detail,component)}<small>EQ</small></th><th>{component.name.toLocaleUpperCase()} WEIGHTED<small>{component.percentage.toFixed(2)}%</small></th></Fragment>)}<th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
           <tbody>{detail.enrollments.map((enrollment,index)=>{
             const band = detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>enrollment.finalPercent!==null&&enrollment.finalPercent>=item.minPercent);
             const special = !isPassedGradeRemark(enrollment.remarks,band?.remarks);
