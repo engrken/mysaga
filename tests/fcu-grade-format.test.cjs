@@ -365,8 +365,8 @@ test("Generic Excel masks only dropped TG/FG and keeps other status grades visib
   const sheet = files["xl/worksheets/sheet1.xml"];
   assert.match(sheet, /<c r="C17"[^>]*><v>83<\/v>/);
   assert.match(sheet, /<c r="D17"[^>]*><v>83<\/v>/);
-  assert.match(sheet, /<c r="E17"[^>]*><\/c>/);
-  assert.match(sheet, /<c r="F17"[^>]*><\/c>/);
+  assert.match(sheet, /<c r="E17"[^>]*><is><t xml:space="preserve"><\/t><\/is><\/c>/);
+  assert.match(sheet, /<c r="F17"[^>]*><is><t xml:space="preserve"><\/t><\/is><\/c>/);
   assert.match(sheet, /<c r="G17"[^>]*>.*?DROPPED/s);
   assert.match(sheet, /<c r="E18"[^>]*><v>79<\/v>/);
   assert.match(sheet, /<c r="F18"[^>]*>.*?2\.50/s);
@@ -482,7 +482,8 @@ test("Generic Excel masks only dropped TG/FG and keeps other status grades visib
   assert.match(pythonSource, /SAGA-ISO-EXPORT-v1/);
   assert.match(endpoint, /requireRole\("TEACHER"\)/);
   assert.match(endpoint, /teacherId: teacher\.id, schoolId: teacher\.schoolId/);
-  assert.doesNotMatch(endpoint, /calculateGradeBreakdown|calculateCategoryPercent|componentContribution/, "ISO export must not calculate grades");
+  assert.match(endpoint, /calculateGradeBreakdown\(/, "ISO export calculates the course summary from the same grade calculator");
+  assert.doesNotMatch(endpoint, /calculateCategoryPercent|componentContribution/);
   assert.match(endpoint, /createHmac\("sha256", secret\)/);
   assert.match(endpoint, /function normalizeSignatureName\(/);
   assert.match(endpoint, /submittedBy: normalizeSignatureName\(teacher\.fullName\)/);

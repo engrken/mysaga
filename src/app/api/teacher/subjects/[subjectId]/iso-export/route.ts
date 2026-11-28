@@ -219,7 +219,7 @@ export async function POST(request: Request, context: Context) {
     ];
   });
 
-  const logoBytes = Buffer.from(parsed.data.logoPngBase64, "base64");  const logoBytes = Buffer.from(parsed.data.logoPngBase64, "base64");
+  const logoBytes = Buffer.from(parsed.data.logoPngBase64, "base64");
   if (
     logoBytes.length < 8 ||
     logoBytes.length > 350_000 ||
