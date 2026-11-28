@@ -140,7 +140,12 @@
 .score-sheet-status{height:27px;appearance:none;font-size:.52rem;color:#66758c;padding:2px 1px}
 .score-sheet-remark-select{font-size:.56rem}
 .score-sheet-total{text-align:center;font-size:.64rem;font-weight:700;color:#2d559a;overflow-wrap:anywhere}
+.score-sheet-status-indicator{display:inline-flex;min-width:38px;min-height:24px;align-items:center;justify-content:center;padding:3px 8px;border:1px solid #d5dce7;border-radius:5px;background:#f2f5f9;color:#56647a;font-size:.62rem;font-weight:850;letter-spacing:.035em;line-height:1}
+.score-sheet-score-hidden{background:#f8f9fb!important}
 .score-sheet-remark{text-align:center}
+.mobile-score-status-only{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 13px;border-top:1px solid #edf0f4;background:#fbfcfe}
+.mobile-score-status-only .mobile-score-remark{flex:1;min-width:0;margin:0}
+.mobile-score-status-only .score-sheet-status-indicator{flex:none}
 .score-sheet-legend{display:flex;flex-wrap:wrap;gap:7px 16px;padding:8px 2px 0;color:#78869a;font-size:.63rem}
 .score-sheet-legend b{color:#435774}
 @media(max-width:760px){.score-sheet{font-size:.59rem}.score-sheet th,.score-sheet td{padding:4px 2px}.score-sheet-student b{font-size:.57rem}.score-sheet-student small{font-size:.5rem}.score-sheet-input{height:25px;font-size:.58rem}.score-sheet-status{height:20px;font-size:.48rem}.score-sheet-remark-select{font-size:.49rem}.score-sheet-summary-head{font-size:.48rem}.score-sheet-assessment{font-size:.51rem}}
