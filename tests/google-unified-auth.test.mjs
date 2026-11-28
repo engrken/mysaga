@@ -13,7 +13,8 @@ test("SAGA login exposes a school-scoped Continue with Google option", () => {
   assert.ok(login.includes('searchParams.set("schoolId", schoolId)'));
   assert.match(login, /Use the Google email registered to your selected school/);
   assert.match(route, /schoolId/);
-  assert.match(route, /createGoogleSignInOAuthUrl\(schoolId\)/);
+  assert.match(route, /googleOAuthRedirectUriForOrigin\(url\.origin\)/);
+  assert.match(route, /createGoogleSignInOAuthUrl\(schoolId, redirectUri\)/);
   assert.match(route, /school\.subscriptionStatus !== "ACTIVE"/);
 });
 
@@ -21,7 +22,7 @@ test("Google sign-in uses state, nonce, PKCE, and server-verified OpenID identit
   const auth = read("src/lib/google-auth.ts");
   assert.match(auth, /scope: "openid email profile"/);
   assert.ok(auth.includes('purpose: "google-login"'));
-  assert.ok(auth.includes('statePayload.redirectUri !== requiredGoogleEnv("GOOGLE_SSO_REDIRECT_URI")'));
+  assert.match(auth, /isGoogleOAuthRedirectUriAllowed\(statePayload\.redirectUri\)/);
   assert.match(auth, /code_challenge_method: "S256"/);
   assert.match(auth, /code_verifier: verifierCookie/);
   assert.match(auth, /NONCE_COOKIE/);
@@ -144,7 +145,7 @@ test("Chat service tokens cannot be used with a different SAGA email or Google s
   assert.equal((routes.match(/googleConnectionMatchesSAGAAccount\(connection, teacher\)/g) || []).length, 4);
   const reconnect = read("src/app/api/teacher/google-chat/connect/route.ts");
   const connectionStatus = read("src/app/api/teacher/google-chat/connection/route.ts");
-  assert.match(reconnect, /redirectUri: process\.env\.GOOGLE_SSO_REDIRECT_URI/);
+  assert.match(reconnect, /googleOAuthRedirectUriForOrigin\(new URL\(request\.url\)\.origin\)/);
   assert.match(connectionStatus, /connection\.googleSubject === teacher\.googleSubject/);
 });
 
@@ -191,4 +192,21 @@ test("Activities exploration mode blocks student submissions even if a write fla
   const route = read("src/app/api/student/activities/route.ts");
   assert.ok(route.includes('activitiesExplorationOnly || !assertActivitiesWritable("student")'));
   assert.ok(route.includes("Student activity submissions are disabled during Activities exploration mode."));
+});
+
+
+test("Google OAuth callbacks are restricted to origins already configured for SAGA", () => {
+  const chat = read("src/lib/google-chat.ts");
+  const auth = read("src/lib/google-auth.ts");
+  const login = read("src/app/api/auth/google/route.ts");
+  const connect = read("src/app/api/teacher/google-chat/connect/route.ts");
+  const callback = read("src/app/api/integrations/google/callback/route.ts");
+  assert.match(chat, /GOOGLE_SSO_REDIRECT_URI", "GOOGLE_REDIRECT_URI/);
+  assert.match(chat, /callback\.pathname !== GOOGLE_CALLBACK_PATH/);
+  assert.match(chat, /allowedOrigins\.has\(requested\.origin\)/);
+  assert.match(chat, /isGoogleOAuthRedirectUriAllowed/);
+  assert.match(auth, /redirect_uri: statePayload\.redirectUri as string/);
+  assert.match(login, /googleOAuthRedirectUriForOrigin\(url\.origin\)/);
+  assert.match(connect, /googleOAuthRedirectUriForOrigin\(new URL\(request\.url\)\.origin\)/);
+  assert.match(callback, /statePayload\.redirectUri !== expectedCallback/);
 });

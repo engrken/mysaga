@@ -6,6 +6,7 @@ import { createSession, tenantManagerIdentity } from "@/lib/auth";
 import {
   GOOGLE_SERVICE_SCOPES,
   createGoogleOAuthUrl,
+  isGoogleOAuthRedirectUriAllowed,
   signGoogleOAuthState,
   verifyGoogleOAuthState
 } from "@/lib/google-chat";
@@ -33,9 +34,14 @@ export class GoogleSignInError extends Error {
   }
 }
 
-export async function createGoogleSignInOAuthUrl(schoolId: string) {
+export async function createGoogleSignInOAuthUrl(
+  schoolId: string,
+  redirectUri = requiredGoogleEnv("GOOGLE_SSO_REDIRECT_URI")
+) {
   const clientId = requiredGoogleEnv("GOOGLE_CLIENT_ID");
-  const redirectUri = requiredGoogleEnv("GOOGLE_SSO_REDIRECT_URI");
+  if (!isGoogleOAuthRedirectUriAllowed(redirectUri)) {
+    throw new GoogleSignInError("GOOGLE_REDIRECT_NOT_ALLOWED", "This SAGA domain is not configured for Google Sign-In.");
+  }
   const nonce = randomBytes(32).toString("base64url");
   const verifier = randomBytes(32).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
@@ -89,7 +95,7 @@ export async function completeGoogleSignInOAuth(code: string, state: string) {
   const statePayload = await verifyGoogleOAuthState(state).catch(() => null);
   if (!statePayload || statePayload.purpose !== "google-login" ||
       typeof statePayload.schoolId !== "string" || typeof statePayload.nonce !== "string" ||
-      statePayload.redirectUri !== requiredGoogleEnv("GOOGLE_SSO_REDIRECT_URI") ||
+      !isGoogleOAuthRedirectUriAllowed(statePayload.redirectUri) ||
       !nonceCookie || nonceCookie !== statePayload.nonce || !verifierCookie) {
     throw new GoogleSignInError("INVALID_GOOGLE_STATE", "This Google sign-in request expired. Please try again.");
   }
@@ -102,7 +108,7 @@ export async function completeGoogleSignInOAuth(code: string, state: string) {
       code,
       client_id: clientId,
       client_secret: requiredGoogleEnv("GOOGLE_CLIENT_SECRET"),
-      redirect_uri: requiredGoogleEnv("GOOGLE_SSO_REDIRECT_URI"),
+      redirect_uri: statePayload.redirectUri as string,
       grant_type: "authorization_code",
       code_verifier: verifierCookie
     }),
@@ -200,7 +206,7 @@ export async function completeGoogleSignInOAuth(code: string, state: string) {
           {
             expectedGoogleSubject: payload.sub,
             loginHint: email,
-            redirectUri: requiredGoogleEnv("GOOGLE_SSO_REDIRECT_URI"),
+            redirectUri: statePayload.redirectUri as string,
             returnTo: withQuery(returnTo, "googleServices", "connected")
           }
         );

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkAuthThrottle } from "@/lib/rate-limit";
 import { createGoogleSignInOAuthUrl } from "@/lib/google-auth";
+import { googleOAuthRedirectUriForOrigin } from "@/lib/google-chat";
 
 export const runtime = "nodejs";
 
@@ -27,7 +28,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    return NextResponse.redirect(await createGoogleSignInOAuthUrl(schoolId), {
+    const redirectUri = googleOAuthRedirectUriForOrigin(url.origin);
+    return NextResponse.redirect(await createGoogleSignInOAuthUrl(schoolId, redirectUri), {
       headers: { "Cache-Control": "no-store" }
     });
   } catch {

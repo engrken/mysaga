@@ -27,6 +27,60 @@ function requiredEnv(name: string) {
   return value;
 }
 
+const GOOGLE_CALLBACK_PATH = "/api/integrations/google/callback";
+
+/**
+ * Resolve the callback for the current SAGA hostname only when that hostname
+ * is already present in one of the configured Google callback URIs. This
+ * supports the custom domain and legacy Vercel alias without trusting an
+ * arbitrary Host header.
+ */
+export function googleOAuthRedirectUriForOrigin(origin: string) {
+  let requested: URL;
+  try {
+    requested = new URL(origin);
+  } catch {
+    throw new Error("Google OAuth was started from an invalid SAGA origin.");
+  }
+  if (requested.origin !== origin || requested.username || requested.password ||
+      (requested.protocol !== "https:" &&
+       !(requested.protocol === "http:" && ["localhost", "127.0.0.1"].includes(requested.hostname)))) {
+    throw new Error("Google OAuth can only start from an approved SAGA origin.");
+  }
+
+  const allowedOrigins = new Set<string>();
+  for (const name of ["GOOGLE_SSO_REDIRECT_URI", "GOOGLE_REDIRECT_URI"]) {
+    const configured = process.env[name]?.trim();
+    if (!configured) continue;
+    try {
+      const callback = new URL(configured);
+      if (callback.pathname !== GOOGLE_CALLBACK_PATH || callback.search || callback.hash ||
+          callback.username || callback.password) continue;
+      if (callback.protocol === "https:" ||
+          (callback.protocol === "http:" && ["localhost", "127.0.0.1"].includes(callback.hostname))) {
+        allowedOrigins.add(callback.origin);
+      }
+    } catch {
+      // Ignore malformed legacy entries; another configured URI may be valid.
+    }
+  }
+
+  if (!allowedOrigins.has(requested.origin)) {
+    throw new Error("This SAGA domain is not configured as an authorized Google OAuth callback.");
+  }
+  return new URL(GOOGLE_CALLBACK_PATH, requested.origin).toString();
+}
+
+export function isGoogleOAuthRedirectUriAllowed(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    const callback = new URL(value);
+    return googleOAuthRedirectUriForOrigin(callback.origin) === callback.toString();
+  } catch {
+    return false;
+  }
+}
+
 function oauthKey() {
   const secret = requiredEnv("AUTH_SECRET");
   if (secret.length < 32) throw new Error("AUTH_SECRET must contain at least 32 characters.");
@@ -111,7 +165,8 @@ export async function createGoogleOAuthUrl(
 
 export async function completeGoogleOAuth(code: string, state: string) {
   const payload = await verifyGoogleOAuthState(state);
-  if (payload.purpose !== "google-chat-oauth" || typeof payload.uid !== "string" || typeof payload.sid !== "string") {
+  if (payload.purpose !== "google-chat-oauth" || typeof payload.uid !== "string" ||
+      typeof payload.sid !== "string" || !isGoogleOAuthRedirectUriAllowed(payload.redirectUri)) {
     throw new Error("Invalid Google authorization state.");
   }
   const user = await prisma.user.findFirst({

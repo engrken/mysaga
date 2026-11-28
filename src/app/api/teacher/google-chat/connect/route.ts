@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
-import { createGoogleOAuthUrl } from "@/lib/google-chat";
+import { createGoogleOAuthUrl, googleOAuthRedirectUriForOrigin } from "@/lib/google-chat";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
   const teacher = await requireRole("TEACHER");
   if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
@@ -13,7 +13,7 @@ export async function GET() {
       { id: teacher.id, schoolId: teacher.schoolId },
       {
         loginHint: teacher.email,
-        redirectUri: process.env.GOOGLE_SSO_REDIRECT_URI?.trim(),
+        redirectUri: googleOAuthRedirectUriForOrigin(new URL(request.url).origin),
         returnTo
       }
     ));
