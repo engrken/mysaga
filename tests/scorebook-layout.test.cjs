@@ -87,3 +87,15 @@ test("Show all layout keeps a floating horizontal scrollbar synchronized with th
  assert.doesNotMatch(css,/\.portal-layout\s+\.score-sheet-floating-scroll/);
  assert.match(css,/@media\s*\(max-width:\s*760px\),\s*print\s*\{[^}]*\.score-sheet-floating-scroll/s);
 });
+
+
+test("Record Scores reserves root-domain total and weighted columns before the course total", () => {
+  const portal = fs.readFileSync(path.join(__dirname, "../src/components/Portal.tsx"), "utf8");
+  assert.match(portal, /\{ kind: "domain-total", category: group\.parent \}/);
+  assert.match(portal, /\{ kind: "domain-weighted", category: group\.parent \}/);
+  assert.match(portal, /depth === 0 \? 2 : 0/);
+  assert.match(portal, /domain\?\.rawEquivalentPercent/);
+  assert.match(portal, /domain\?\.parentWeightedScore/);
+  assert.match(portal, /<f>.*?<\/f><v>/);
+  assert.match(portal, /SUM\(.*map\(col => excelColumn\(col\) \+ currentRow\)/s);
+});
