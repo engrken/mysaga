@@ -87,3 +87,36 @@ test("Show all layout keeps a floating horizontal scrollbar synchronized with th
  assert.doesNotMatch(css,/\.portal-layout\s+\.score-sheet-floating-scroll/);
  assert.match(css,/@media\s*\(max-width:\s*760px\),\s*print\s*\{[^}]*\.score-sheet-floating-scroll/s);
 });
+
+
+test("Record Scores reserves root-domain total and weighted columns before the course total", () => {
+  const portal = fs.readFileSync(path.join(__dirname, "../src/components/Portal.tsx"), "utf8");
+  assert.match(portal, /\{ kind: "domain-total" as const, category: group\.parent \}/);
+  assert.match(portal, /\{ kind: "domain-weighted" as const, category: group\.parent \}/);
+  assert.match(portal, /depth === 0 \? 2 : 0/);
+  assert.match(portal, /domain\?\.rawEquivalentPercent/);
+  assert.match(portal, /domain\?\.parentWeightedScore/);
+  assert.match(portal, /<f>.*?<\/f><v>/);
+  assert.match(portal, /SUM\(.*map\(col => excelColumn\(col\) \+ currentRow\)/s);
+});
+
+
+test("primary-domain summary columns are budgeted once per root on every auto-fit page", () => {
+  for (const width of [900, 1100, 1280, 1600]) {
+    const categories = [
+      { id: "lecture-a", parentId: "lecture", label: "Lecture / Class Work", assessmentIds: Array.from({ length: 17 }, (_, i) => "la" + i) },
+      { id: "lecture-b", parentId: "lecture", label: "Lecture / Exams", assessmentIds: Array.from({ length: 12 }, (_, i) => "le" + i) },
+      { id: "lab-a", parentId: "lab", label: "Lab / Activities", assessmentIds: Array.from({ length: 8 }, (_, i) => "lb" + i) }
+    ];
+    const widths = workbookWidths(width);
+    const limit = workbookColumnBudget(width);
+    const pages = buildWorkbookPages(categories, width);
+    for (const page of pages) {
+      const summaries = new Set(page.segments.map(segment => segment.parentId).filter(Boolean)).size * 2 * widths.equivalent;
+      const segmentWidth = page.segments.reduce((sum, segment) =>
+        sum + estimateWorkbookSegmentWidth(segment.assessmentIds.length, width), 0);
+      assert.ok(segmentWidth + summaries <= limit,
+        `width ${width} page ${page.label} exceeds budget by ${segmentWidth + summaries - limit}px`);
+    }
+  }
+});

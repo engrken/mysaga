@@ -228,3 +228,56 @@ test("attendance risk excludes future marks and uses one cutoff for server and b
   assert.equal(serverSummary.counted, 20);
   assert.equal(attendance.attendanceRiskSummary(assessments, scores, "2026-11-23").percent.toFixed(1), "17.4");
 });
+
+
+test("primary domain summaries return raw equivalents and rounded course-weighted contributions", () => {
+  const categories = [
+    cat("lecture", null, 60),
+    cat("lecture-assessment", "lecture", 100, [scored(71.39)]),
+    cat("laboratory", null, 40),
+    cat("lab-assessment", "laboratory", 100, [scored(89.5)])
+  ];
+  const result = calculateGradeBreakdown(categories);
+  const lecture = result.domains.find(item => item.categoryId === "lecture");
+  const laboratory = result.domains.find(item => item.categoryId === "laboratory");
+  assert.deepEqual(
+    { raw: lecture.rawEquivalentPercent, weighted: lecture.parentWeightedScore },
+    { raw: 71.39, weighted: 42.83 }
+  );
+  assert.deepEqual(
+    { raw: laboratory.rawEquivalentPercent, weighted: laboratory.parentWeightedScore },
+    { raw: 89.5, weighted: 35.8 }
+  );
+  assert.equal(result.totalPercent, 78.63);
+  assert.equal(
+    Number((lecture.parentWeightedScore + laboratory.parentWeightedScore).toFixed(2)),
+    result.totalPercent
+  );
+});
+
+test("domain summary is null until its primary component has at least one recorded score", () => {
+  const result = calculateGradeBreakdown([
+    cat("lecture", null, 60),
+    cat("lecture-assessment", "lecture", 100, [pending()]),
+    cat("lab", null, 40),
+    cat("lab-assessment", "lab", 100, [scored(80)])
+  ]);
+  assert.deepEqual(result.domains.find(item => item.categoryId === "lecture"), {
+    categoryId: "lecture", courseWeight: 60, rawEquivalentPercent: null,
+    parentWeightedScore: null, recordedItems: 0, pendingItems: 1
+  });
+  assert.equal(result.domains.find(item => item.categoryId === "lab").parentWeightedScore, 32);
+});
+
+
+test("primary domains with direct assessments retain raw percent before course weighting", () => {
+  const result = calculateGradeBreakdown([
+    cat("lecture", null, 60, [scored(71.39)]),
+    cat("lab", null, 40, [scored(89.5)])
+  ]);
+  assert.deepEqual(
+    result.domains.map(item => [item.rawEquivalentPercent, item.parentWeightedScore]),
+    [[71.39, 42.83], [89.5, 35.8]]
+  );
+  assert.equal(result.totalPercent, 78.63);
+});

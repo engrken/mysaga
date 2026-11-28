@@ -3,10 +3,11 @@
  * shrinking workbook cells to unreadable widths. Totals always use the entire
  * gradebook, irrespective of the current assessment view.
  */
-export type WorkbookCategory = { id: string; label: string; assessmentIds: string[] };
+export type WorkbookCategory = { id: string; label: string; assessmentIds: string[]; parentId?: string };
 export type WorkbookSegment = {
   categoryId: string;
   categoryLabel: string;
+  parentId?: string;
   assessmentIds: string[];
   part: number;
   totalParts: number;
@@ -36,7 +37,8 @@ export function estimateWorkbookSegmentWidth(count: number, width: number) {
 export function buildWorkbookPages(categories: WorkbookCategory[], width: number): WorkbookPage[] {
   const limit = workbookColumnBudget(width);
   const widths = workbookWidths(width);
-  const maxItems = Math.max(1, Math.floor((limit - widths.equivalent) / widths.assessment));
+  const hasDomainSummaries = categories.some(category => !!category.parentId);
+  const maxItems = Math.max(1, Math.floor((limit - widths.equivalent * (hasDomainSummaries ? 3 : 1)) / widths.assessment));
   const chunks: WorkbookSegment[] = [];
   for (const category of categories) {
     if (!category.assessmentIds.length) continue;
@@ -45,6 +47,7 @@ export function buildWorkbookPages(categories: WorkbookCategory[], width: number
       chunks.push({
         categoryId: category.id,
         categoryLabel: category.label,
+        parentId: category.parentId,
         assessmentIds: category.assessmentIds.slice(i * maxItems, (i + 1) * maxItems),
         part: i + 1,
         totalParts: count
@@ -54,6 +57,7 @@ export function buildWorkbookPages(categories: WorkbookCategory[], width: number
   const pages: WorkbookPage[] = [];
   let grouped: WorkbookSegment[] = [];
   let used = 0;
+  const pageRoots = new Set<string>();
   const flush = () => {
     if (!grouped.length) return;
     const titles = grouped.map(segment => segment.totalParts > 1
@@ -64,13 +68,16 @@ export function buildWorkbookPages(categories: WorkbookCategory[], width: number
       label: titles.length === 1 ? titles[0] : `${titles[0]} + ${titles.length - 1} more`,
       assessmentCount: grouped.reduce((sum, segment) => sum + segment.assessmentIds.length, 0)
     });
-    grouped = []; used = 0;
+    grouped = []; used = 0; pageRoots.clear();
   };
   for (const segment of chunks) {
-    const needed = estimateWorkbookSegmentWidth(segment.assessmentIds.length, width);
-    if (grouped.length && used + needed > limit) flush();
+    const segmentWidth = estimateWorkbookSegmentWidth(segment.assessmentIds.length, width);
+    const domainWidth = segment.parentId && !pageRoots.has(segment.parentId) ? widths.equivalent * 2 : 0;
+    if (grouped.length && used + segmentWidth + domainWidth > limit) flush();
+    const pageDomainWidth = segment.parentId && !pageRoots.has(segment.parentId) ? widths.equivalent * 2 : 0;
     grouped.push(segment);
-    used += needed;
+    used += segmentWidth + pageDomainWidth;
+    if (segment.parentId) pageRoots.add(segment.parentId);
   }
   flush();
   return pages;

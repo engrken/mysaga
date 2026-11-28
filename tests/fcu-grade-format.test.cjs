@@ -38,7 +38,25 @@ async function generate(categories, enrollments, components) {
     excelColumn: columns,
     xmlEscape: escape,
     weightedCategoryPercent: (enrollment, category) => enrollment.equivalents[category.id] ?? null,
-    gradeSheetAttendancePercent: (detail, enrollment, categoryId) => enrollment.attendancePercent?.[categoryId] ?? null
+    gradeSheetAttendancePercent: (detail, enrollment, categoryId) => enrollment.attendancePercent?.[categoryId] ?? null,
+    gradeSheetRootDomainSummary: (detail, enrollment, category) => {
+      const rawEquivalentPercent = /attendance/i.test(category.name)
+        ? enrollment.attendancePercent?.[category.id] ?? null
+        : enrollment.equivalents?.[category.id] ?? null;
+      return {
+        rawEquivalentPercent,
+        parentWeightedScore: rawEquivalentPercent === null ? null
+          : Math.round(rawEquivalentPercent * category.weight) / 100
+      };
+    },
+    gradeSheetComponentSummary: (detail, enrollment, component) => {
+      const rawEquivalentPercent = enrollment.equivalents[component.name] ?? null;
+      return {
+        rawEquivalentPercent,
+        parentWeightedScore: rawEquivalentPercent === null ? null
+          : Math.round(rawEquivalentPercent * component.percentage) / 100
+      };
+    }
   };
   vm.runInNewContext(compiled + "\nthis.generateGradeFile = downloadFcuGradeXlsx;", context);
   const detail = {
@@ -159,7 +177,7 @@ test("OOXML ZIP writer encodes XML as UTF-8 and writes valid uncompressed ZIP re
   assert.match(entries.get("xl/worksheets/sheet1.xml"), /REGISTRAR’S OFFICE · ACUCA/);
 });
 
-test("FCU final-grade export uses the exact configured components and their weights", async () => {
+test("FCU final-grade export shows each saved component as raw and weighted columns", async () => {
   const components = [
     { name: "EXAM", percentage: 50 },
     { name: "ACT", percentage: 40 },
@@ -172,26 +190,32 @@ test("FCU final-grade export uses the exact configured components and their weig
   ], components);
   const sheet = files["xl/worksheets/sheet1.xml"];
   const styles = files["xl/styles.xml"];
-  assert.match(sheet, /<mergeCell ref="A1:H9"/);
+  assert.match(sheet, /<mergeCell ref="A1:K9"\/>/);
   assert.match(sheet, /<pageSetup paperSize="14" orientation="portrait" fitToWidth="1"/);
   assert.match(sheet, /showGridLines="0" zoomScale="90"/);
   assert.match(sheet, /<selection pane="bottomLeft" activeCell="A17"/);
   assert.match(sheet, /<c r="A15"[^>]*><is><t xml:space="preserve"><\/t><\/is><\/c>/);
   assert.match(sheet, /<c r="B15"[^>]*>.*?NAME OF STUDENTS/s);
-  assert.match(sheet, /<c r="C15"[^>]*>.*?EXAM\. 50%/s);
-  assert.match(sheet, /<c r="D15"[^>]*>.*?ACT\. 40%/s);
-  assert.match(sheet, /<c r="E15"[^>]*>.*?ARP\. 10%/s);
-  assert.match(sheet, /<c r="F15"[^>]*>.*?TOTAL GRADE/s);
-  assert.match(sheet, /<c r="G15"[^>]*>.*?FINAL GRADE/s);
-  assert.match(sheet, /<c r="H15"[^>]*>.*?REMARKS/s);
+  assert.match(sheet, /<c r="C15"[^>]*>.*?EXAM · TOTAL \(RAW %\)/s);
+  assert.match(sheet, /<c r="D15"[^>]*>.*?EXAM · WEIGHTED \(50\.00% OF COURSE\)/s);
+  assert.match(sheet, /<c r="E15"[^>]*>.*?ACT · TOTAL \(RAW %\)/s);
+  assert.match(sheet, /<c r="F15"[^>]*>.*?ACT · WEIGHTED \(40\.00% OF COURSE\)/s);
+  assert.match(sheet, /<c r="G15"[^>]*>.*?ARP · TOTAL \(RAW %\)/s);
+  assert.match(sheet, /<c r="H15"[^>]*>.*?ARP · WEIGHTED \(10\.00% OF COURSE\)/s);
+  assert.match(sheet, /<c r="I15"[^>]*>.*?TOTAL GRADE/s);
+  assert.match(sheet, /<c r="J15"[^>]*>.*?FINAL GRADE/s);
+  assert.match(sheet, /<c r="K15"[^>]*>.*?REMARKS/s);
   assert.match(sheet, /<c r="A17"[^>]*>.*?1\./s);
   assert.match(sheet, /<c r="B17"[^>]*>.*?EXAMPLE STUDENT/s);
-  assert.match(sheet, /<c r="C17"[^>]*><v>40<\/v>/);
-  assert.match(sheet, /<c r="D17"[^>]*><v>36<\/v>/);
-  assert.match(sheet, /<c r="E17"[^>]*><v>10<\/v>/);
-  assert.match(sheet, /<c r="F17"[^>]*><v>86<\/v>/);
-  assert.match(sheet, /<c r="G17"[^>]*>.*?2\.00/s);
-  assert.match(sheet, /<c r="H18"[^>]*>.*?INC/s);
+  assert.match(sheet, /<c r="C17"[^>]*><v>80<\/v>/);
+  assert.match(sheet, /<c r="D17"[^>]*><v>40<\/v>/);
+  assert.match(sheet, /<c r="E17"[^>]*><v>90<\/v>/);
+  assert.match(sheet, /<c r="F17"[^>]*><v>36<\/v>/);
+  assert.match(sheet, /<c r="G17"[^>]*><v>100<\/v>/);
+  assert.match(sheet, /<c r="H17"[^>]*><v>10<\/v>/);
+  assert.match(sheet, /<c r="I17"[^>]*><v>86<\/v>/);
+  assert.match(sheet, /<c r="J17"[^>]*>.*?2\.00/s);
+  assert.match(sheet, /<c r="K18"[^>]*>.*?INC/s);
   assert.doesNotMatch(sheet, /<c r="C18"[^>]*><v>/);
   assert.match(styles, /numFmtId="164"/);
   assert.match(styles, /<sz val="9"\/>/);
@@ -201,10 +225,36 @@ test("FCU final-grade export uses the exact configured components and their weig
   assert.match(sheet, /<c r="A18"[^>]*>.*?2\./s);
   assert.match(sheet, /<col min="1" max="1" width="6"/);
   assert.match(sheet, /<col min="2" max="2" width="32"/);
-  assert.match(sheet, /<col min="3" max="5" width="13"/);
-  assert.match(sheet, /<col min="6" max="6" width="14"/);
-  assert.match(sheet, /<col min="7" max="7" width="11"/);
-  assert.match(sheet, /<col min="8" max="8" width="18"/);
+  assert.match(sheet, /<col min="3" max="8" width="13"/);
+  assert.match(sheet, /<col min="9" max="9" width="14"/);
+  assert.match(sheet, /<col min="10" max="10" width="11"/);
+  assert.match(sheet, /<col min="11" max="11" width="18"/);
+});
+test("Generic Excel keeps primary domains before additional saved subcomponents", async () => {
+  const categories = [
+    { id: "lecture", name: "Lecture", weight: 60, sortOrder: 1 },
+    { id: "exams", name: "Exams", parentId: "lecture", weight: 50, sortOrder: 1 },
+    { id: "lab", name: "Lab", weight: 40, sortOrder: 2 }
+  ];
+  const components = [{ name: "Lecture / Exams", percentage: 50 }];
+  const files = await generate(categories, [
+    student("Domain Student", { lecture: 71.39, lab: 89.5, "Lecture / Exams": 86 }, 78.63)
+  ], components);
+  const sheet = files["xl/worksheets/sheet1.xml"];
+  assert.match(sheet, /<c r="C15"[^>]*>.*?LECTURE · Total \(RAW %\)/s);
+  assert.match(sheet, /<c r="D15"[^>]*>.*?LECTURE · WEIGHTED \(60\.00% OF COURSE\)/s);
+  assert.match(sheet, /<c r="E15"[^>]*>.*?LAB · TOTAL \(RAW %\)/s);
+  assert.match(sheet, /<c r="F15"[^>]*>.*?LAB · WEIGHTED \(40\.00% OF COURSE\)/s);
+  assert.match(sheet, /<c r="G15"[^>]*>.*?LECTURE \/ EXAMS · TOTAL \(RAW %\)/s);
+  assert.match(sheet, /<c r="H15"[^>]*>.*?LECTURE \/ EXAMS · WEIGHTED \(50\.00%\)/s);
+  assert.match(sheet, /<c r="I15"[^>]*>.*?TOTAL GRADE/s);
+  assert.match(sheet, /<c r="C17"[^>]*><v>71\.39<\/v>/);
+  assert.match(sheet, /<c r="D17"[^>]*><v>42\.83<\/v>/);
+  assert.match(sheet, /<c r="E17"[^>]*><v>89\.5<\/v>/);
+  assert.match(sheet, /<c r="F17"[^>]*><v>35\.8<\/v>/);
+  assert.match(sheet, /<c r="G17"[^>]*><v>86<\/v>/);
+  assert.match(sheet, /<c r="H17"[^>]*><v>43<\/v>/);
+  assert.match(sheet, /<c r="I17"[^>]*><v>78\.63<\/v>/);
 });
 
 test("Generic PDF export is offered only once inside the export dropdown", () => {
@@ -212,6 +262,9 @@ test("Generic PDF export is offered only once inside the export dropdown", () =>
   assert.match(source, /"Download Generic Excel Sheet"/, "the Generic dropdown retains its idle Excel option label");
   assert.match(source, /Generating Excel file…/, "the Generic dropdown exposes its loading label");
   assert.doesNotMatch(source, /<button className="btn btn-outline-primary" onClick=\{\(\) => printFinalGradesPdf\("generic"\)\}>Save \/ Print Generic PDF<\/button>/, "the duplicate standalone PDF button is removed");
+  assert.match(source, /gradeSheetPrimaryDomains\.map/);
+  assert.match(source, /gradeSheetAdditionalComponents\.map/);
+  assert.match(source, /gradeSheetComponents\.map\(component=>\{/);
 });
 
 test("ISO Excel export uses dynamic class metadata and omits student-number columns", () => {
@@ -381,10 +434,16 @@ test("Attendance component calculates its own session percentage and weighted co
   const context = {
     Set, Number, Math,
     categoryPath: category => category.name,
-    calculateGradeBreakdown: () => ({ items: [
-      { categoryId: "sessions", earnedCourse: 10 },
-      { categoryId: "other-attendance", earnedCourse: 10 }
-    ] }),
+    calculateGradeBreakdown: () => ({
+      items: [
+        { categoryId: "sessions", earnedCourse: 10 },
+        { categoryId: "other-attendance", earnedCourse: 10 }
+      ],
+      domains: [
+        { categoryId: "attendance", rawEquivalentPercent: 50, parentWeightedScore: 10 },
+        { categoryId: "other-attendance", rawEquivalentPercent: 100, parentWeightedScore: 10 }
+      ]
+    }),
     calculateCategoryPercent: ({ assessments }) => {
       const counted = assessments.filter(item => item.scores[0]?.remark !== "EXCUSED" && (item.scores[0]?.remark || item.scores[0]?.points != null));
       if (!counted.length) return null;
@@ -425,30 +484,33 @@ test("FCU final-grade export calculates Attendance as a weighted component", asy
     attendancePercent: { ATT: 75 }
   }], components);
   const sheet = files["xl/worksheets/sheet1.xml"];
-  assert.match(sheet, /<c r="C15"[^>]*>.*?ATTENDANCE\. 20%/s);
-  assert.match(sheet, /<c r="C17"[^>]*><v>15<\/v>/);
+  assert.match(sheet, /<c r="C15"[^>]*>.*?ATTENDANCE · TOTAL \(RAW %\)/s);
+  assert.match(sheet, /<c r="D15"[^>]*>.*?ATTENDANCE · WEIGHTED \(20\.00% OF COURSE\)/s);
+  assert.match(sheet, /<c r="C17"[^>]*><v>75<\/v>/);
+  assert.match(sheet, /<c r="D17"[^>]*><v>15<\/v>/);
 });
 
-test("FCU final-grade export supports a variable number of components", async () => {
+test("FCU final-grade export supports a variable number of primary domains", async () => {
   const components = [
     { name: "QUIZZES", percentage: 30 },
     { name: "LABORATORY", percentage: 50 },
     { name: "PROJECT", percentage: 20 },
     { name: "ORAL", percentage: 0 }
   ];
-  const cats = components.map(item => ({ id: item.name, name: item.name, weight: item.percentage }));
+  const cats = components.map((item,index) => ({ id: item.name, name: item.name, weight: item.percentage, sortOrder:index }));
   const files = await generate(cats, [student("Student Name", { QUIZZES: 100, LABORATORY: 80, PROJECT: 90, ORAL: 75 }, 85.5)], components);
   const sheet = files["xl/worksheets/sheet1.xml"];
-  assert.match(sheet, /<mergeCell ref="A1:I9"/);
-  assert.match(sheet, /<c r="C15"[^>]*>.*?QUIZZES\. 30%/s);
-  assert.match(sheet, /<c r="D15"[^>]*>.*?LABORATORY\. 50%/s);
-  assert.match(sheet, /<c r="E15"[^>]*>.*?PROJECT\. 20%/s);
-  assert.match(sheet, /<c r="F15"[^>]*>.*?ORAL\. 0%/s);
-  assert.match(sheet, /<c r="G15"[^>]*>.*?TOTAL GRADE/s);
-  assert.match(sheet, /<c r="H15"[^>]*>.*?FINAL GRADE/s);
-  assert.match(sheet, /<c r="I15"[^>]*>.*?REMARKS/s);
+  assert.match(sheet, /<mergeCell ref="A1:M9"/);
+  assert.match(sheet, /<c r="C15"[^>]*>.*?QUIZZES · TOTAL \(RAW %\)/s);
+  assert.match(sheet, /<c r="D15"[^>]*>.*?QUIZZES · WEIGHTED \(30\.00% OF COURSE\)/s);
+  assert.match(sheet, /<c r="E15"[^>]*>.*?LABORATORY · TOTAL \(RAW %\)/s);
+  assert.match(sheet, /<c r="F15"[^>]*>.*?LABORATORY · WEIGHTED \(50\.00% OF COURSE\)/s);
+  assert.match(sheet, /<c r="G15"[^>]*>.*?PROJECT · TOTAL \(RAW %\)/s);
+  assert.match(sheet, /<c r="H15"[^>]*>.*?PROJECT · WEIGHTED \(20\.00% OF COURSE\)/s);
+  assert.match(sheet, /<c r="I15"[^>]*>.*?ORAL · TOTAL \(RAW %\)/s);
+  assert.match(sheet, /<c r="J15"[^>]*>.*?ORAL · WEIGHTED \(0\.00% OF COURSE\)/s);
+  assert.match(sheet, /<c r="K15"[^>]*>.*?TOTAL GRADE/s);
 });
-
 test("Record Scores Excel export mirrors the full grouped scorebook and saved signature profiles", () => {
   const start = source.indexOf("function gradeSheetAttendancePercent(");
   const end = source.indexOf("async function downloadFcuGradeXlsx(", start);
@@ -468,6 +530,20 @@ test("Record Scores Excel export mirrors the full grouped scorebook and saved si
     sortWorksheetRowCells: value => value,
     xmlEscape: escape,
     categoryPath: category => category.name,
+    categoryDescendantIds: (rootId, categories) => {
+      const ids = new Set([rootId]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const category of categories) {
+          if (category.parentId && ids.has(category.parentId) && !ids.has(category.id)) {
+            ids.add(category.id);
+            changed = true;
+          }
+        }
+      }
+      return ids;
+    },
     formatSchedule: raw => { try { return JSON.parse(raw).map(row => `${row.label || "Class"} · ${row.day}, ${row.startTime}–${row.endTime}`).join(" / "); } catch { return raw || ""; } },
     effectiveCategoryWeight: (category, categories) => {
       let root = category;
@@ -541,32 +617,32 @@ test("Record Scores Excel export mirrors the full grouped scorebook and saved si
   assert.match(sheet, /EQUIVALENT/);
   assert.match(sheet, /\(\%\)/);
   assert.doesNotMatch(sheet, /Lecture \/ Quizzes|Quizzes · Quiz 1|Item wt|Course wt|Student Number|2023-0001/);
-  assert.match(sheet, /<mergeCell ref="D14:E15"\/>/);
-  assert.match(sheet, /<mergeCell ref="F14:G15"\/>/);
+  assert.match(sheet, /<mergeCell ref="D14:G15"\/>/);
+  assert.match(sheet, /<mergeCell ref="H14:K15"\/>/);
   assert.match(sheet, /<c r="A18"[^>]*><v>1<\/v><\/c>/);
   assert.match(sheet, /<c r="B18"[^>]*>.*?Ana Reyes/s);
   assert.match(sheet, /<c r="A19"[^>]*><v>2<\/v><\/c>/);
   assert.match(sheet, /<c r="D18"[^>]*>.*?8 \/ 10/s);
-  assert.match(sheet, /<c r="E18"[^>]*>.*?27\.00%/s);
-  assert.match(sheet, /<c r="G18"[^>]*>.*?46\.00%/s);
-  assert.match(sheet, /<c r="H18"[^>]*>.*?90\.00%/s);
-  assert.match(sheet, /<c r="I18"[^>]*>.*?2\.00/s);
-  assert.match(sheet, /<c r="J18"[^>]*>.*?PASSED/s);
+  assert.match(sheet, /<c r="E18"[^>]*><v>27<\/v>/);
+  assert.match(sheet, /<c r="I18"[^>]*><v>46<\/v>/);
+  assert.match(sheet, /<c r="L18"[^>]*><f>SUM\(G18,K18\)<\/f><v>90<\/v>/);
+  assert.match(sheet, /<c r="M18"[^>]*>.*?2\.00/s);
+  assert.match(sheet, /<c r="N18"[^>]*>.*?PASSED/s);
   assert.match(sheet, /TEACHER ONE/);
   assert.match(sheet, /DEAN TWO/);
   assert.match(sheet, /<c r="A21"[^>]*>.*?Submitted by:/s);
-  assert.match(sheet, /<c r="F21"[^>]*>.*?Noted:/s);
+  assert.match(sheet, /<c r="H21"[^>]*>.*?Noted:/s);
   for (let rowNumber = 21; rowNumber <= 26; rowNumber++) {
-    assert.ok(sheet.includes('<mergeCell ref="A' + rowNumber + ':E' + rowNumber + '"/>'));
-    assert.ok(sheet.includes('<mergeCell ref="F' + rowNumber + ':J' + rowNumber + '"/>'));
+    assert.ok(sheet.includes('<mergeCell ref="A' + rowNumber + ':G' + rowNumber + '"/>'));
+    assert.ok(sheet.includes('<mergeCell ref="H' + rowNumber + ':N' + rowNumber + '"/>'));
   }
-  for (const cell of ["A25", "F25", "A26", "F26"]) {
+  for (const cell of ["A25", "H25", "A26", "H26"]) {
     assert.match(sheet, new RegExp('<c r="' + cell + '" s="17"'));
   }
   assert.match(sheet, /<c r="A25"[^>]*>.*?TEACHER ONE/s);
-  assert.match(sheet, /<c r="F25"[^>]*>.*?DEAN TWO/s);
+  assert.match(sheet, /<c r="H25"[^>]*>.*?DEAN TWO/s);
   assert.match(sheet, /<c r="A26"[^>]*>.*?Instructor/s);
-  assert.match(sheet, /<c r="F26"[^>]*>.*?Dean/s);
+  assert.match(sheet, /<c r="H26"[^>]*>.*?Dean/s);
   assert.doesNotMatch(sheet, /SIGNATURE OVER PRINTED NAME \/ DATE/);
   assert.doesNotMatch(sheet, /Teacher&apos;s Signature over Printed Name|Dean&apos;s Signature over Printed Name/);
   assert.match(sheet, /orientation="landscape" fitToWidth="1"/);
@@ -596,6 +672,20 @@ test("Record Scores export dynamically merges institutional, metadata, category,
     sortWorksheetRowCells: value => value,
     xmlEscape: escape,
     categoryPath: category => category.name,
+    categoryDescendantIds: (rootId, categories) => {
+      const ids = new Set([rootId]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const category of categories) {
+          if (category.parentId && ids.has(category.parentId) && !ids.has(category.id)) {
+            ids.add(category.id);
+            changed = true;
+          }
+        }
+      }
+      return ids;
+    },
     formatSchedule: raw => raw || "",
     attendanceDays: assessments => assessments,
     consecutiveLateAbsences: () => new Set()
@@ -639,56 +729,56 @@ test("Record Scores export dynamically merges institutional, metadata, category,
   const sheet = files["xl/worksheets/sheet1.xml"];
   const styles = files["xl/styles.xml"];
 
-  for (const row of [1, 2, 3]) assert.match(sheet, new RegExp('<mergeCell ref="A' + row + ':V' + row + '"/>'));
+  for (const row of [1, 2, 3]) assert.match(sheet, new RegExp('<mergeCell ref="A' + row + ':Z' + row + '"/>'));
   assert.match(sheet, /FILAMER CHRISTIAN UNIVERSITY, INC\./);
   assert.match(sheet, /Roxas Avenue, Roxas City, Capiz, Philippines/);
   assert.match(sheet, /COLLEGE OF ENGINEERING/);
   assert.match(sheet, /<mergeCell ref="A5:B5"\/>/);
   assert.match(sheet, /<mergeCell ref="C5:F5"\/>/);
   assert.match(sheet, /<mergeCell ref="G5:H5"\/>/);
-  assert.match(sheet, /<mergeCell ref="I5:V5"\/>/);
+  assert.match(sheet, /<mergeCell ref="I5:Z5"\/>/);
   assert.match(sheet, /<mergeCell ref="A6:B6"\/>/);
   assert.match(sheet, /<mergeCell ref="C6:F6"\/>/);
   assert.match(sheet, /<mergeCell ref="G6:H6"\/>/);
-  assert.match(sheet, /<mergeCell ref="I6:V6"\/>/);
+  assert.match(sheet, /<mergeCell ref="I6:Z6"\/>/);
   assert.match(sheet, /<mergeCell ref="A8:B8"\/>/);
-  assert.match(sheet, /<mergeCell ref="C8:V8"\/>/);
+  assert.match(sheet, /<mergeCell ref="C8:Z8"\/>/);
   assert.match(sheet, /<mergeCell ref="A9:B9"\/>/);
-  assert.match(sheet, /<mergeCell ref="C9:V9"\/>/);
+  assert.match(sheet, /<mergeCell ref="C9:Z9"\/>/);
 
-  assert.match(sheet, /<mergeCell ref="D14:O14"\/>/);
-  assert.match(sheet, /<mergeCell ref="P14:S14"\/>/);
+  assert.match(sheet, /<mergeCell ref="D14:Q14"\/>/);
+  assert.match(sheet, /<mergeCell ref="R14:W14"\/>/);
   assert.match(sheet, /<mergeCell ref="D15:G15"\/>/);
   assert.match(sheet, /<mergeCell ref="H15:K15"\/>/);
   assert.match(sheet, /<mergeCell ref="L15:O15"\/>/);
-  assert.match(sheet, /<mergeCell ref="P15:S15"\/>/);
+  assert.match(sheet, /<mergeCell ref="R15:U15"\/>/);
   assert.match(sheet, /<c r="D16"[^>]*>.*?Midterm Examination/s);
   assert.match(sheet, /<c r="D17"[^>]*>.*?MAX: 50/s);
   assert.match(sheet, /<c r="G16"[^>]*>.*?EQUIVALENT/s);
   assert.match(sheet, /<c r="G17"[^>]*>.*?\(%\)/s);
 
-  for (const reference of ["T14:T17", "U14:U17", "V14:V17"]) {
+  for (const reference of ["X14:X17", "Y14:Y17", "Z14:Z17"]) {
     assert.ok(sheet.includes('<mergeCell ref="' + reference + '"/>'), reference + " is merged vertically");
   }
-  assert.match(sheet, /<c r="T14"[^>]*>.*?TOTAL GRADE \(%\)/s);
-  assert.match(sheet, /<c r="U14"[^>]*>.*?FINAL GRADE/s);
-  assert.match(sheet, /<c r="V14"[^>]*>.*?REMARKS/s);
+  assert.match(sheet, /<c r="X14"[^>]*>.*?TOTAL GRADE \(%\)/s);
+  assert.match(sheet, /<c r="Y14"[^>]*>.*?FINAL GRADE/s);
+  assert.match(sheet, /<c r="Z14"[^>]*>.*?REMARKS/s);
   for (let rowNumber = 19; rowNumber <= 24; rowNumber++) {
-    assert.ok(sheet.includes('<mergeCell ref="A' + rowNumber + ':K' + rowNumber + '"/>'));
-    assert.ok(sheet.includes('<mergeCell ref="L' + rowNumber + ':V' + rowNumber + '"/>'));
+    assert.ok(sheet.includes('<mergeCell ref="A' + rowNumber + ':M' + rowNumber + '"/>'));
+    assert.ok(sheet.includes('<mergeCell ref="N' + rowNumber + ':Z' + rowNumber + '"/>'));
   }
   for (const rowNumber of [20, 21, 22]) {
     const rowXml = sheet.match(new RegExp('<row r="' + rowNumber + '".*?<\\/row>'))?.[0] ?? "";
     assert.ok(rowXml, 'signature spacer row ' + rowNumber + ' exists');
     assert.doesNotMatch(rowXml, /<t[^>]*>[^<]+<\/t>/, 'signature spacer row ' + rowNumber + ' is blank');
   }
-  for (const cell of ["A23", "L23", "A24", "L24"]) {
+  for (const cell of ["A23", "N23", "A24", "N24"]) {
     assert.match(sheet, new RegExp('<c r="' + cell + '" s="17"'));
   }
   assert.match(sheet, /<c r="A23"[^>]*>.*?TEACHER EXAMPLE/s);
-  assert.match(sheet, /<c r="L23"[^>]*>.*?DEAN EXAMPLE/s);
+  assert.match(sheet, /<c r="N23"[^>]*>.*?DEAN EXAMPLE/s);
   assert.match(sheet, /<c r="A24"[^>]*>.*?Instructor/s);
-  assert.match(sheet, /<c r="L24"[^>]*>.*?Dean/s);
+  assert.match(sheet, /<c r="N24"[^>]*>.*?Dean/s);
   assert.match(styles, /<cellXfs count="18">/);
   assert.match(sheet, /Submitted by:/);
   assert.match(sheet, /Noted:/);
@@ -763,17 +853,21 @@ test("category ordering is hierarchical, persistent, and exposed from Assessment
 });
 
 test("PDF component values are weighted by the configured course allocation", () => {
-  const start = source.indexOf("function gradeSheetComponentContribution(");
+  const start = source.indexOf("function gradeSheetComponentSummary(");
   const end = source.indexOf("\nfunction downloadGradeSheetXlsx(", start);
   assert.ok(start > 0 && end > start, "weighted component helper is present");
   const compiledContribution = ts.transpileModule(source.slice(start, end), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText;
-  const context = { categoryPath: () => "", gradeSheetComponentPercent: () => 90 };
+  const context = {
+    categoryPath: category => category.name,
+    gradeSheetComponentPercent: () => 90,
+    gradeSheetRootDomainSummary: () => null
+  };
   vm.runInNewContext(compiledContribution + "\nthis.contribution = gradeSheetComponentContribution;", context);
-  assert.equal(context.contribution({ categories: [] }, {}, { name: "Quiz", percentage: 70 }), 63);
-  assert.equal(context.contribution({ categories: [] }, {}, { name: "Exam", percentage: 40 }), 36);
-  assert.match(source, /gradeSheetComponentContribution\(detail,enrollment,component\)/);
+  assert.equal(context.contribution({ categories: [{ id: "quiz", parentId: "lecture", name: "Quiz" }] }, {}, { name: "Quiz", percentage: 70 }), 63);
+  assert.equal(context.contribution({ categories: [{ id: "exam", parentId: "lecture", name: "Exam" }] }, {}, { name: "Exam", percentage: 40 }), 36);
+  assert.match(source, /gradeSheetComponentSummary\(detail,enrollment,component\)/);
   const printHeader = source.slice(source.indexOf('<article className="print-grade-sheet'), source.indexOf('<div className="generic-print-course-details">'));
   assert.match(source, /<thead><tr><th aria-label="Sequence number"><\/th><th>NAME OF STUDENTS<\/th>/);
   assert.match(source, /<td>\{index\+1\}\.<\/td><td>\{enrollment\.studentName\.toLocaleUpperCase\(\)\}<\/td>/);
@@ -1075,7 +1169,9 @@ test("printable Collegiate sheet shows each root group's weighted course contrib
   const printSectionStart = source.indexOf('<table className="print-grade-table generic-print-grade-table">');
   const printSectionEnd = source.indexOf("</table>", printSectionStart);
   const printTable = source.slice(printSectionStart, printSectionEnd);
-  assert.ok(printTable.includes("gradeSheetComponentContribution(detail,enrollment,component)"), "each printable component cell uses the weighted contribution mapper");
+  assert.ok(printTable.includes("gradeSheetPrimaryDomains.map"), "each primary domain is displayed in PDF before the final total");
+  assert.ok(printTable.includes("gradeSheetAdditionalComponents.map"), "saved non-root components are retained in the PDF");
+  assert.ok(printTable.includes("gradeSheetComponentSummary(detail,enrollment,component)"), "saved component values use the shared raw/weighted mapper");
   assert.ok(printTable.includes('enrollment.finalPercent.toFixed(2)+"%"'), "TOTAL GRADE continues to show the official calculated course total");
   assert.ok(source.includes('{classSection === "final" && <section id="class-section-final"'), "the same print component is reached from each class Final Grades preview");
 });
