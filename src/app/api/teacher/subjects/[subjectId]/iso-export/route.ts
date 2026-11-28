@@ -175,7 +175,6 @@ export async function POST(request: Request, context: Context) {
 
   const groupedAssessments = new Map<string, typeof subject.assessments>();
   for (const assessment of subject.assessments) {
-    if (assessment.title.toLocaleLowerCase().startsWith("attendance ·")) continue;
     const items = groupedAssessments.get(assessment.categoryId) ?? [];
     items.push(assessment);
     groupedAssessments.set(assessment.categoryId, items);

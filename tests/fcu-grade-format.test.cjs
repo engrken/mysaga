@@ -395,6 +395,7 @@ test("Generic Excel masks only dropped TG/FG and keeps other status grades visib
   assert.match(route, /"NO\.",\s*"NAME OF STUDENTS"/);
   assert.match(route, /rootDomains\.flatMap\(domain => \["EQ", domainWeightLabel\(domain\.weight\)\]\)/);
   assert.match(route, /calculateGradeBreakdown\(/);
+  assert.doesNotMatch(route, /startsWith\("attendance ·"\)/, "ISO uses the same attendance-aware assessment set as the class calculator");
   assert.match(route, /headerGroups/);
   assert.match(route, /rowSpanColumns/);
   assert.match(route, /numericColumns/);
