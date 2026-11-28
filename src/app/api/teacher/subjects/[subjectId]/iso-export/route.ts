@@ -166,16 +166,11 @@ export async function POST(request: Request, context: Context) {
   ];
 
   // Keep assessment scores untouched; normalize only the class-level final remark.
-  const sortedGradeBands = subject.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent);
   const rows: unknown[][] = subject.enrollments.map((enrollment, index) => {
     const scores = academicAssessments.map(item => {
       const score = enrollment.scores.find(value => value.assessmentId === item.id);
       return score?.points ?? score?.remark ?? "";
     });
-    const band = sortedGradeBands.find(item =>
-      enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent
-    );
-    const remark = enrollment.remarks?.trim() || band?.remarks || "";
     return [
       index + 1,
       enrollment.studentName || "",
@@ -183,7 +178,7 @@ export async function POST(request: Request, context: Context) {
       ...parsed.data.componentNames.map(() => ""),
       "",
       enrollment.finalGradeOverride ?? "",
-      gradeRemarkExportCode(remark)
+      gradeRemarkExportCode(enrollment.remarks)
     ];
   });
 
