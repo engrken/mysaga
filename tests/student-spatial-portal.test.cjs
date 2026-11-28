@@ -155,7 +155,7 @@ test("student appearance requests are route-scoped and freeform is limited to Ac
   assert.match(portal, /studentCustomizerRequestedRoute === tab/);
   assert.match(portal, /setStudentCustomizerRequestedRoute\(null\)/);
   assert.match(portal, /const targetPage = tab === "overview" \|\| tab === "chats" \|\| tab === "announcements"/);
-  assert.match(portal, /data-student-layout=\{!teacher \? \(tab === "overview" \? studentPortalPreferences\.layout : "snapped"\) : undefined\}/);
+  assert.match(portal, /data-student-layout=\{!teacher \? \(isCompactOrTouchViewport \|\| tab !== "overview" \? "snapped" : studentPortalPreferences\.layout\) : undefined\}/);
   assert.match(appearance, /useState\(true\)/);
   assert.match(appearance, /layout: "snapped"/);
   assert.match(appearance, /allowFreeform=\{false\}/);
