@@ -1101,7 +1101,7 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
   const widths = '<cols>' +
     '<col min="1" max="1" width="6" customWidth="1"/>' +
     '<col min="2" max="2" width="32" customWidth="1"/>' +
-    (componentColumns.length ? '<col min="3" max="' + totalCol + '" width="13" customWidth="1"/>' : '') +
+    (rootDomainColumns.length + componentColumns.length ? '<col min="3" max="' + totalCol + '" width="13" customWidth="1"/>' : '') +
     '<col min="' + (totalCol + 1) + '" max="' + (totalCol + 1) + '" width="14" customWidth="1"/>' +
     '<col min="' + (totalCol + 2) + '" max="' + (totalCol + 2) + '" width="11" customWidth="1"/>' +
     '<col min="' + (totalCol + 3) + '" max="' + (totalCol + 3) + '" width="18" customWidth="1"/>' +
