@@ -208,7 +208,7 @@ test("Generic Excel emits the merged Lecture/Lab summary with numeric cells", as
   ], []);
   const sheet = files["xl/worksheets/sheet1.xml"];
   assert.match(sheet, /<mergeCell ref="A1:I9"\/>/);
-  assert.match(sheet, /<pageSetup paperSize="14" orientation="landscape" fitToWidth="1"/);
+  assert.match(sheet, /<pageSetup paperSize="14" orientation="portrait" fitToWidth="1" fitToHeight="2"/);
   assert.match(sheet, /<mergeCell ref="C15:D15"\/>/);
   assert.match(sheet, /<mergeCell ref="E15:F15"\/>/);
   for (const range of ["A15:A16","B15:B16","G15:G16","H15:H16","I15:I16"]) assert.ok(sheet.includes('<mergeCell ref="'+range+'"/>'));
@@ -232,7 +232,7 @@ test("Generic Excel emits the merged Lecture/Lab summary with numeric cells", as
   assert.match(sheet, /<col min="1" max="1" width="7"/);
   assert.match(sheet, /<col min="2" max="2" width="32"/);
   assert.doesNotMatch(sheet, /2023-0001|2023-0002/);
-});test("Saved subcomponents do not add columns to the Final Grades summary", async () => {
+});test("Saved subcomponents add weighted component columns to the Final Grades summary", async () => {
   const categories = [
     { id: "lecture", name: "Lecture", weight: 60, sortOrder: 1 },
     { id: "exams", name: "Exams", parentId: "lecture", weight: 50, sortOrder: 1 },
@@ -244,12 +244,17 @@ test("Generic Excel emits the merged Lecture/Lab summary with numeric cells", as
   const sheet = files["xl/worksheets/sheet1.xml"];
   assert.match(sheet, /<mergeCell ref="C15:D15"\/>/);
   assert.match(sheet, /<mergeCell ref="E15:F15"\/>/);
+  assert.match(sheet, /<mergeCell ref="G15:H15"\/>/);
   assert.match(sheet, /<c r="C17"[^>]*><v>71\.39<\/v>/);
   assert.match(sheet, /<c r="D17"[^>]*><v>42\.83<\/v>/);
   assert.match(sheet, /<c r="E17"[^>]*><v>89\.5<\/v>/);
   assert.match(sheet, /<c r="F17"[^>]*><v>35\.8<\/v>/);
-  assert.match(sheet, /<c r="G17"[^>]*><v>78\.63<\/v>/);
-  assert.doesNotMatch(sheet, /EXAMS/);
+  assert.match(sheet, /<c r="G15"[^>]*>.*?EXAMS 50\.00%/s);
+  assert.match(sheet, /<c r="G16"[^>]*>.*?EQ/s);
+  assert.match(sheet, /<c r="H16"[^>]*>.*?50\.00%/s);
+  assert.match(sheet, /<c r="G17"[^>]*><v>86<\/v>/);
+  assert.match(sheet, /<c r="H17"[^>]*><v>43<\/v>/);
+  assert.match(sheet, /<c r="I17"[^>]*><v>78\.63<\/v>/);
 });test("Final Grades uses canonical statuses, two-tier headers, and dropped-only masking", () => {
   const helperStart = source.indexOf("function normalizeGradeRemark(");
   const helperEnd = source.indexOf("\nfunction gradeSheetRootDomainSummary(", helperStart);
@@ -299,7 +304,7 @@ test("Generic Excel emits the merged Lecture/Lab summary with numeric cells", as
   assert.match(printHeader, /<th rowSpan=\{2\}>TG<\/th>/);
   assert.match(printHeader, /<th rowSpan=\{2\}>FG<\/th>/);
   assert.match(printHeader, /<th rowSpan=\{2\}>REMARKS<\/th>/);
-  assert.match(source, /@page \{ size: 13in 8\.5in;/);
+  assert.match(source, /@page \{ size: 8\.5in 13in portrait; margin: \.4in;/);
   assert.match(source, /Edit Record Scores Columns/);
 });test("Generic Excel masks only dropped TG/FG and keeps other status grades visible", async () => {
   const categories = [{ id: "lecture", name: "Lecture", weight: 100 }];
@@ -331,7 +336,7 @@ test("Generic Excel emits the merged Lecture/Lab summary with numeric cells", as
   assert.match(sheet, /<c r="E21"[^>]*><v>91<\/v>/);
   assert.match(sheet, /<c r="G21"[^>]*>.*?PASSED/s);
   assert.doesNotMatch(sheet, /NO PRIVILEGE/);
-});test("Generic PDF uses the same compact summary headers and landscape printing", () => {
+});test("Generic PDF uses the same compact summary headers and portrait printing", () => {
   assert.match(source, /<strong>Save \/ Print Generic PDF<\/strong>/);
   assert.match(source, /"Download Generic Excel Sheet"/);
   assert.match(source, /Generating Excel file…/);
@@ -340,7 +345,7 @@ test("Generic Excel emits the merged Lecture/Lab summary with numeric cells", as
   assert.match(source, /<th rowSpan=\{2\}>NO\.<\/th>/);
   assert.match(source, /<th key=\{domain\.id\} colSpan=\{2\}>/);
   assert.match(source, /<th rowSpan=\{2\}>REMARKS<\/th>/);
-  assert.match(source, /@page \{ size: 13in 8\.5in;/);
+  assert.match(source, /@page \{ size: 8\.5in 13in portrait; margin: \.4in;/);
 });test("ISO signature names preserve saved profile titles without adding a forced prefix", () => {
   const route = fs.readFileSync("src/app/api/teacher/subjects/[subjectId]/iso-export/route.ts", "utf8");
   const start = route.indexOf("function normalizeSignatureName(");
@@ -472,7 +477,7 @@ test("Generic summary exports Attendance as a top-level weighted domain", async 
   const compiledGeneric = ts.transpileModule(source.slice(start, end), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText;
-  assert.match(source, /@page \{ size: 13in 8\.5in;/, "Final Grades PDF is landscape");
+  assert.match(source, /@page \{ size: 8\.5in 13in portrait; margin: \.4in;/, "Final Grades PDF is long-bond portrait");
   assert.match(source, /printFinalGradesPdf\("generic"\)/);
   assert.match(source, /printFinalGradesPdf\("iso"\)/);
   assert.ok(compiledGeneric.includes("gradeSheetEnrollmentBreakdown"), "shared domain helper remains available");
@@ -751,8 +756,10 @@ test("ISO header configuration is isolated per school and FCU receives its suppl
   assert.equal(fcu.issuingOffice, "REGISTRAR’S OFFICE");
   assert.equal(fcu.isoStandard, "ISO 21001:2025");
   const otherSchool = context.readIsoHeaderConfig("Another College", "another-college", null);
-  assert.equal(otherSchool.formName, "");
-  assert.equal(otherSchool.formNo, "");
+  assert.equal(otherSchool.formName, "COLLEGIATE GRADING SHEET");
+  assert.equal(otherSchool.formNo, "FCU-EOMS-RO-006-F");
+  assert.equal(otherSchool.pageNo, "1");
+  assert.equal(otherSchool.accreditationAffiliations.length, 2);
   const savedOtherSchool = context.readIsoHeaderConfig("Another College", "another-college", JSON.stringify({
     ...otherSchool,
     formName: "INSTITUTIONAL RECORD SHEET",
