@@ -396,7 +396,7 @@ test("Generic PDF export is offered only once inside the export dropdown", () =>
   assert.doesNotMatch(source, /<button className="btn btn-outline-primary" onClick=\{\(\) => printFinalGradesPdf\("generic"\)\}>Save \/ Print Generic PDF<\/button>/, "the duplicate standalone PDF button is removed");
   assert.match(source, /gradeSheetPrimaryDomains\.map/);
   assert.match(source, /gradeSheetAdditionalComponents\.map/);
-  assert.match(source, /gradeSheetComponents\.map\(component=>\{/);
+  assert.match(source, /activeGradeSheetComponents\.map\(component=>\{/);
 });
 
 test("ISO Excel export uses dynamic class metadata and omits student-number columns", () => {
@@ -432,7 +432,7 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.doesNotMatch(source.slice(source.indexOf("async function renderIsoExcelSealPng"), source.indexOf("async function exportIsoGradesExcel")), /departmentLogoPath/);
   assert.match(source, /ctx\.drawImage\(schoolLogo, sourceX, sourceY, cropSize, cropSize, 4, 4, 152, 152\)/);
   assert.doesNotMatch(source.slice(source.indexOf("async function renderIsoExcelSealPng"), source.indexOf("async function exportIsoGradesExcel")), /fillText\(/);
-  assert.match(source, /componentNames: gradeSheetComponents\.map/);
+  assert.match(source, /componentNames: activeGradeSheetComponents\.map/);
   assert.match(source, /\/iso-export/);
   assert.match(source, /window\.btoa\(binary\)/);
   assert.match(source, /response\.blob\(\)/);
