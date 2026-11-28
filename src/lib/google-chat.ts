@@ -1,14 +1,24 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 
-const GOOGLE_SCOPES = [
-  "openid",
-  "https://www.googleapis.com/auth/userinfo.email",
+export const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+export const GOOGLE_SERVICES_STATE_COOKIE = "saga_google_services_state";
+
+export const GOOGLE_CHAT_SCOPES = [
   "https://www.googleapis.com/auth/chat.spaces.readonly",
   "https://www.googleapis.com/auth/chat.spaces.create",
   "https://www.googleapis.com/auth/chat.memberships",
   "https://www.googleapis.com/auth/chat.messages.create"
+];
+
+export const GOOGLE_SERVICE_SCOPES = [...GOOGLE_CHAT_SCOPES, GOOGLE_DRIVE_SCOPE];
+
+const GOOGLE_SCOPES = [
+  "openid",
+  "https://www.googleapis.com/auth/userinfo.email",
+  ...GOOGLE_SERVICE_SCOPES
 ];
 
 function requiredEnv(name: string) {
@@ -46,13 +56,36 @@ export function decryptGoogleToken(value: string) {
   return Buffer.concat([decipher.update(Buffer.from(dataText, "base64url")), decipher.final()]).toString("utf8");
 }
 
-export async function createGoogleOAuthUrl(user: { id: string; schoolId: string }) {
+export async function signGoogleOAuthState(payload: Record<string, unknown>) {
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("10m")
+    .setJti(randomBytes(16).toString("hex"))
+    .sign(oauthKey());
+}
+
+export async function verifyGoogleOAuthState(state: string) {
+  return (await jwtVerify(state, oauthKey(), { algorithms: ["HS256"] })).payload;
+}
+
+export async function createGoogleOAuthUrl(
+  user: { id: string; schoolId: string },
+  options: { expectedGoogleSubject?: string; loginHint?: string; returnTo?: string; redirectUri?: string } = {}
+) {
   const clientId = requiredEnv("GOOGLE_CLIENT_ID");
-  const redirectUri = requiredEnv("GOOGLE_REDIRECT_URI");
-  const state = await new SignJWT({ uid: user.id, sid: user.schoolId, purpose: "google-chat-oauth" })
-    .setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("10m").setJti(randomBytes(16).toString("hex")).sign(oauthKey());
-  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-  url.search = new URLSearchParams({
+  const redirectUri = options.redirectUri || requiredEnv("GOOGLE_REDIRECT_URI");
+  const oauthNonce = randomBytes(32).toString("base64url");
+  const state = await signGoogleOAuthState({
+    uid: user.id,
+    redirectUri,
+    oauthNonce,
+    sid: user.schoolId,
+    purpose: "google-chat-oauth",
+    ...(options.expectedGoogleSubject ? { expectedGoogleSubject: options.expectedGoogleSubject } : {}),
+    ...(options.returnTo ? { returnTo: options.returnTo } : {})
+  });
+  const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
@@ -61,18 +94,29 @@ export async function createGoogleOAuthUrl(user: { id: string; schoolId: string 
     prompt: "consent",
     include_granted_scopes: "true",
     state
-  }).toString();
+  });
+  if (options.loginHint) params.set("login_hint", options.loginHint);
+  const cookieStore = await cookies();
+  cookieStore.set(GOOGLE_SERVICES_STATE_COOKIE, oauthNonce, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/api/integrations/google/callback",
+    maxAge: 10 * 60
+  });
+  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  url.search = params.toString();
   return url.toString();
 }
 
 export async function completeGoogleOAuth(code: string, state: string) {
-  const { payload } = await jwtVerify(state, oauthKey(), { algorithms: ["HS256"] });
+  const payload = await verifyGoogleOAuthState(state);
   if (payload.purpose !== "google-chat-oauth" || typeof payload.uid !== "string" || typeof payload.sid !== "string") {
     throw new Error("Invalid Google authorization state.");
   }
   const user = await prisma.user.findFirst({
     where: { id: payload.uid, schoolId: payload.sid, role: "TEACHER", emailVerifiedAt: { not: null } },
-    select: { id: true, schoolId: true }
+    select: { id: true, schoolId: true, email: true }
   });
   if (!user) throw new Error("The teacher account is no longer available.");
 
@@ -83,7 +127,7 @@ export async function completeGoogleOAuth(code: string, state: string) {
       code,
       client_id: requiredEnv("GOOGLE_CLIENT_ID"),
       client_secret: requiredEnv("GOOGLE_CLIENT_SECRET"),
-      redirect_uri: requiredEnv("GOOGLE_REDIRECT_URI"),
+      redirect_uri: typeof payload.redirectUri === "string" ? payload.redirectUri : requiredEnv("GOOGLE_REDIRECT_URI"),
       grant_type: "authorization_code"
     }),
     cache: "no-store"
@@ -95,7 +139,10 @@ export async function completeGoogleOAuth(code: string, state: string) {
     throw new Error("Google authorization did not return the required offline access. Reconnect and approve the requested access.");
   }
 
-  const grantedScopes = new Set((tokens.scope || GOOGLE_SCOPES.join(" ")).split(/\s+/));
+  if (typeof tokens.scope !== "string" || !tokens.scope.trim()) {
+    throw new Error("Google did not confirm the permissions granted to SAGA. Reconnect and approve the requested access.");
+  }
+  const grantedScopes = new Set(tokens.scope.split(/\s+/));
   if (GOOGLE_SCOPES.some(scope => !grantedScopes.has(scope))) {
     throw new Error("Google authorization did not include every required Chat permission. Reconnect and approve all requested permissions.");
   }
@@ -109,13 +156,20 @@ export async function completeGoogleOAuth(code: string, state: string) {
   if (!identityResponse.ok || !identity?.sub || !identity.email || identity.email_verified !== true) {
     throw new Error("Google did not return a verified email address for this account.");
   }
+  if (typeof payload.expectedGoogleSubject === "string" && payload.expectedGoogleSubject !== identity.sub) {
+    throw new Error("Choose the same Google account that you used to sign in to SAGA Portal.");
+  }
+  if (identity.email.trim().toLowerCase() !== user.email.trim().toLowerCase()) {
+    throw new Error("Use the Google email address registered to your SAGA Portal teacher account.");
+  }
 
   const existingConnection = await prisma.googleChatConnection.findUnique({
     where: { schoolId_teacherId: { schoolId: user.schoolId, teacherId: user.id } },
     select: { encryptedRefreshToken: true, googleSubject: true }
   });
-  if (!tokens.refresh_token && !existingConnection) {
-    throw new Error("Google did not grant offline access. Reconnect and approve the requested access.");
+  const sameExistingGoogleAccount = existingConnection?.googleSubject === identity.sub;
+  if (!tokens.refresh_token && !sameExistingGoogleAccount) {
+    throw new Error("Google did not grant offline access for this account. Reconnect and approve the requested access.");
   }
 
   if (existingConnection && existingConnection.googleSubject !== identity.sub) {
@@ -131,19 +185,37 @@ export async function completeGoogleOAuth(code: string, state: string) {
       schoolId: user.schoolId, teacherId: user.id, googleSubject: identity.sub,
       googleEmail: identity.email.toLowerCase(),
       encryptedAccessToken: encryptGoogleToken(tokens.access_token),
-      encryptedRefreshToken: tokens.refresh_token ? encryptGoogleToken(tokens.refresh_token) : existingConnection!.encryptedRefreshToken,
+      encryptedRefreshToken: tokens.refresh_token
+        ? encryptGoogleToken(tokens.refresh_token)
+        : sameExistingGoogleAccount ? existingConnection!.encryptedRefreshToken : "",
       accessTokenExpiresAt: new Date(Date.now() + Math.max(60, tokens.expires_in ?? 3600) * 1000),
-      scopes: tokens.scope ?? GOOGLE_SCOPES.join(" ")
+      scopes: tokens.scope
     },
     update: {
       googleSubject: identity.sub, googleEmail: identity.email.toLowerCase(),
       encryptedAccessToken: encryptGoogleToken(tokens.access_token),
       encryptedRefreshToken: tokens.refresh_token ? encryptGoogleToken(tokens.refresh_token) : existingConnection!.encryptedRefreshToken,
       accessTokenExpiresAt: new Date(Date.now() + Math.max(60, tokens.expires_in ?? 3600) * 1000),
-      scopes: tokens.scope ?? GOOGLE_SCOPES.join(" ")
+      scopes: tokens.scope
     }
   });
-  return { email: identity.email.toLowerCase(), user };
+  return {
+    email: identity.email.toLowerCase(),
+    user,
+    returnTo: typeof payload.returnTo === "string" && payload.returnTo.startsWith("/") && !payload.returnTo.startsWith("//")
+      ? payload.returnTo
+      : "/dashboard"
+  };
+}
+
+
+export function googleConnectionMatchesSAGAAccount(
+  connection: { googleSubject: string; googleEmail: string },
+  user: { email: string; authProvider?: string | null; googleSubject?: string | null }
+) {
+  if (connection.googleEmail.trim().toLowerCase() !== user.email.trim().toLowerCase()) return false;
+  if (user.authProvider === "GOOGLE" && connection.googleSubject !== user.googleSubject) return false;
+  return true;
 }
 
 export async function googleChatAccessToken(connection: {
@@ -202,16 +274,29 @@ export async function syncGoogleChatEnrollment(enrollmentId: string, schoolId: s
     where: { id: enrollmentId, subject: { schoolId }, student: { is: { schoolId, role: "STUDENT", emailVerifiedAt: { not: null } } } },
     select: {
       id: true, student: { select: { email: true } },
-      subject: { select: { id: true, schoolId: true, teacherId: true, googleChatSpace: { select: { spaceName: true } } } }
+      subject: {
+        select: {
+          id: true, schoolId: true, teacherId: true,
+          teacher: { select: { email: true } },
+          googleChatSpace: { select: { spaceName: true } }
+        }
+      }
     }
   });
   if (!enrollment?.student?.email || !enrollment.subject.googleChatSpace) return { synced: false, reason: "not-configured" };
   const spaceName = enrollment.subject.googleChatSpace.spaceName;
   const studentEmail = enrollment.student.email.toLowerCase();
-  const [connection] = await prisma.googleChatConnection.findMany({
-    where: { schoolId, teacherId: enrollment.subject.teacherId }, take: 1
+  const connection = await prisma.googleChatConnection.findUnique({
+    where: { schoolId_teacherId: { schoolId, teacherId: enrollment.subject.teacherId } }
   });
-  if (!connection) return { synced: false, reason: "teacher-not-connected" };
+  if (!connection ||
+      !googleConnectionMatchesSAGAAccount(connection, { email: enrollment.subject.teacher.email })) {
+    return { synced: false, reason: "teacher-not-connected" };
+  }
+  const grantedScopes = new Set(connection.scopes.split(/\s+/).filter(Boolean));
+  if (!grantedScopes.has("https://www.googleapis.com/auth/chat.memberships")) {
+    return { synced: false, reason: "teacher-chat-permission-missing" };
+  }
 
   const sync = await prisma.googleChatMembershipSync.upsert({
     where: { enrollmentId },
@@ -271,7 +356,13 @@ export async function removeGoogleChatEnrollment(enrollmentId: string, schoolId:
     where: { enrollmentId, schoolId },
     select: {
       id: true, studentEmail: true, googleMembershipName: true,
-      subject: { select: { teacherId: true, googleChatSpace: { select: { spaceName: true } } } }
+      subject: {
+        select: {
+          teacherId: true,
+          teacher: { select: { email: true } },
+          googleChatSpace: { select: { spaceName: true } }
+        }
+      }
     }
   });
   if (!sync) return { ok: true };
@@ -282,7 +373,14 @@ export async function removeGoogleChatEnrollment(enrollmentId: string, schoolId:
   const connection = await prisma.googleChatConnection.findUnique({
     where: { schoolId_teacherId: { schoolId, teacherId: sync.subject.teacherId } }
   });
-  if (!connection) return { ok: false, error: "Reconnect the teacher's Google account before removing this member." };
+  if (!connection ||
+      !googleConnectionMatchesSAGAAccount(connection, { email: sync.subject.teacher.email })) {
+    return { ok: false, error: "Reconnect the teacher's Google account that matches the SAGA profile before removing this member." };
+  }
+  const grantedScopes = new Set(connection.scopes.split(/\s+/).filter(Boolean));
+  if (!grantedScopes.has("https://www.googleapis.com/auth/chat.memberships")) {
+    return { ok: false, error: "Reconnect Google services and approve the Chat membership permission before removing this member." };
+  }
   try {
     const token = await googleChatAccessToken(connection);
     let membershipName = sync.googleMembershipName;

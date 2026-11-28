@@ -4,8 +4,7 @@ type LegacyAttachment = { pathname: string; filename: string; contentType: strin
 type SubmissionAttachment = {
   id: string;
   storageProvider: "GOOGLE_DRIVE" | "CLOUDFLARE_R2";
-  fileKey: string | null;
-  fileUrl: string;
+  fileUrl: string | null;
   fileName: string;
   fileSize: number;
   mimeType: string;
@@ -15,10 +14,10 @@ type SubmissionFileRow = {
   id: string;
   submittedAt: string;
   fileUrl?: string | null;
+  storageProvider?: "GOOGLE_DRIVE" | "CLOUDFLARE_R2" | null;
   fileName?: string | null;
   fileSize?: number | null;
   mimeType?: string | null;
-  storageProvider?: "GOOGLE_DRIVE" | "CLOUDFLARE_R2" | null;
   attachments?: SubmissionAttachment[];
   driveUrl?: string | null;
   files?: LegacyAttachment[] | null;
@@ -56,11 +55,13 @@ export function TeacherSubmissionViewer({ activityId, submissions }: {
         mimeType: file.storageProvider === "GOOGLE_DRIVE" ? "Google Drive link" : file.mimeType,
         fileSize: file.fileSize,
         submittedAt: submission.submittedAt,
-        href: file.fileUrl,
-        label: file.storageProvider === "GOOGLE_DRIVE" ? "Open Google Drive" : "View / download"
+        href: file.storageProvider === "CLOUDFLARE_R2"
+          ? "/api/submissions/download?attachmentId=" + encodeURIComponent(file.id)
+          : file.fileUrl || "#",
+        label: file.storageProvider === "GOOGLE_DRIVE" ? "Open Google Drive" : "Download securely"
       });
     }
-    if (submission.fileUrl && submission.fileName) {
+    if (submission.fileName && (submission.fileUrl || submission.storageProvider === "CLOUDFLARE_R2")) {
       rows.push({
         id: submission.id + "-legacy-r2",
         studentName: submission.enrollment.studentName,
@@ -69,8 +70,10 @@ export function TeacherSubmissionViewer({ activityId, submissions }: {
         mimeType: submission.mimeType || "File",
         fileSize: submission.fileSize ?? null,
         submittedAt: submission.submittedAt,
-        href: submission.fileUrl,
-        label: "View / download legacy file"
+        href: submission.storageProvider === "CLOUDFLARE_R2"
+          ? "/api/submissions/download?submissionId=" + encodeURIComponent(submission.id)
+          : submission.fileUrl!,
+        label: "Download securely"
       });
     }
     for (const file of submission.files ?? []) {

@@ -105,15 +105,7 @@ export const lessonPagesSchema = z.array(z.object({
   });
 });
 
-export function validDriveLink(value: string) {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" && !url.username && !url.password && !url.port &&
-      ["drive.google.com", "docs.google.com"].includes(url.hostname);
-  } catch {
-    return false;
-  }
-}
+export { validDriveLink } from "./drive-link.ts";
 
 export const activityHeaders = { "Cache-Control": "private, no-store" };
 export const activityTopicSchema = z.string().trim().max(100).transform(value => value.replace(/\\s+/g, " "));

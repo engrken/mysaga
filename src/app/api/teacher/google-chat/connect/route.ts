@@ -8,8 +8,16 @@ export async function GET() {
   const teacher = await requireRole("TEACHER");
   if (!teacher) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
-    return NextResponse.redirect(await createGoogleOAuthUrl({ id: teacher.id, schoolId: teacher.schoolId }));
+    const returnTo = `/${encodeURIComponent(teacher.school.slug)}/overview?googleServices=connected`;
+    return NextResponse.redirect(await createGoogleOAuthUrl(
+      { id: teacher.id, schoolId: teacher.schoolId },
+      {
+        loginHint: teacher.email,
+        redirectUri: process.env.GOOGLE_SSO_REDIRECT_URI?.trim(),
+        returnTo
+      }
+    ));
   } catch {
-    return NextResponse.json({ error: "Google Chat is not configured yet." }, { status: 503 });
+    return NextResponse.json({ error: "Google Drive and Chat authorization is not configured yet." }, { status: 503 });
   }
 }
