@@ -136,6 +136,10 @@ function DroppingWarning({ streak }: { streak: AbsenceStreak }) {
     </small>}
   </div>;
 }
+function getCleanComponentName(componentName: string): string {
+  const parts = componentName.split("/");
+  return (parts.length > 1 ? parts[parts.length - 1] : componentName).trim().toUpperCase();
+}
 function scoreSheetCategoryLabel(name: string) {
   const label = name.trim();
   if (/^laboratory\s+exam\b/i.test(label)) return "Lab Exam";
@@ -3171,12 +3175,12 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
                     </th>
                     {activeGradeSheetComponents.map(component=><Fragment key={component.name}>
                       <th scope="col" className="align-top py-2 px-1 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">
-                        <div className="w-[95px] mx-auto whitespace-normal break-words leading-tight uppercase">{gradeSheetComponentRawLabel(detail,component)}</div>
-                        <span className="block text-[10px] text-gray-500 font-normal leading-snug mt-0.5">{component.name} · raw equivalent</span>
+                        <div className="w-[95px] mx-auto whitespace-normal break-words leading-tight uppercase">{getCleanComponentName(component.name)}</div>
+                        <span className="block text-[10px] text-gray-500 font-normal leading-snug mt-0.5">Raw Equivalent</span>
                       </th>
                       <th scope="col" className="align-top py-2 px-1 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">
-                        <div className="w-[105px] mx-auto whitespace-normal break-words leading-tight uppercase">{component.name.toLocaleUpperCase()} WEIGHTED</div>
-                        <span className="block text-[10px] text-gray-500 font-normal leading-snug mt-0.5">{component.percentage.toFixed(2)}% configured weight</span>
+                        <div className="w-[105px] mx-auto whitespace-normal break-words leading-tight uppercase">{getCleanComponentName(component.name)}</div>
+                        <span className="block text-[10px] text-gray-500 font-normal leading-snug mt-0.5">{component.percentage.toFixed(2)}% Configured Weight</span>
                       </th>
                     </Fragment>)}
                     <th scope="col" className="align-top py-2 px-1 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">
