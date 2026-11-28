@@ -201,12 +201,15 @@ export default async function PrivacyPage({ searchParams }: PrivacyPageProps) {
           For assignment submissions, files up to 5 MB per file may be uploaded
           directly to the service's private Cloudflare R2 object storage. The
           service stores file details such as the name, size, type, storage reference,
-          and submission relationship. R2 objects are not exposed as public file
-          URLs. When a student or teacher downloads an attachment, SAGA verifies
-          the user's sign-in, school, and submission ownership or assigned-class
-          access, then redirects to a short-lived download URL. The temporary
-          download URL expires after approximately three minutes. Do not share a
-          temporary download URL with anyone else.
+          and submission relationship. The new submission flow does not return
+          public object URLs. When a student or teacher downloads an attachment,
+          SAGA verifies the user's sign-in, school, and submission ownership or
+          assigned-class access, then redirects to a short-lived download URL. The
+          temporary download URL expires after approximately three minutes. Do not
+          share a temporary download URL with anyone else. Previously issued public
+          R2 links may remain accessible under the bucket's existing settings until
+          the operator disables public R2 access after the authenticated download
+          flow has been deployed and verified.
         </p>
         <p>
           For larger files, a student may provide a Google Drive share link instead
