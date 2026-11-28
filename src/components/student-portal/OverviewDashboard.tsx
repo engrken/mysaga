@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { StudentGradeSummary, StudentPortalPreferences } from "./types";
 import { STUDENT_PORTAL_ACCENTS } from "./types";
 import DraggableGlassWindow from "./DraggableGlassWindow";
@@ -36,6 +36,21 @@ export default function OverviewDashboard({
   const [panelMinimized, setPanelMinimized] = useState(false);
   const [panelTab, setPanelTab] = useState<"checklist" | "customizer">("checklist");
   const [panelFront, setPanelFront] = useState(false);
+  const [isCompactOrTouchViewport, setIsCompactOrTouchViewport] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 767px), (pointer: coarse)");
+    const syncViewport = () => {
+      setIsCompactOrTouchViewport(query.matches);
+      setPanelMinimized(query.matches);
+    };
+    syncViewport();
+    if (typeof query.addEventListener === "function") {
+      query.addEventListener("change", syncViewport);
+      return () => query.removeEventListener("change", syncViewport);
+    }
+    query.addListener(syncViewport);
+    return () => query.removeListener(syncViewport);
+  }, []);
 
   const metrics = useMemo(() => {
     const visiblePercents = grades.map(grade => grade.percent).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
@@ -72,8 +87,9 @@ export default function OverviewDashboard({
   const accentColor = STUDENT_PORTAL_ACCENTS[preferences.accent].color;
   const averageValue = metrics.average === null ? "—" : `${metrics.average.toFixed(1)}%`;
   const attendanceValue = metrics.attendanceRate === null ? "—" : `${Math.round(metrics.attendanceRate)}%`;
+  const activeLayoutMode = isCompactOrTouchViewport ? "snapped" : preferences.layout;
 
-  return <div className="student-spatial-dashboard" data-student-glass-theme={preferences.theme} data-student-wallpaper={preferences.wallpaper} data-student-layout={preferences.layout} style={{ "--student-accent": accentColor, "--student-panel-z": panelFront ? 48 : 42 } as CSSProperties}>
+  return <div className="student-spatial-dashboard" data-student-glass-theme={preferences.theme} data-student-wallpaper={preferences.wallpaper} data-student-layout={activeLayoutMode} style={{ "--student-accent": accentColor, "--student-panel-z": panelFront ? 48 : 42 } as CSSProperties}>
     <div className="student-spatial-heading">
       <div><span className="student-spatial-eyebrow">YOUR LEARNING SPACE</span><h2>Good day, {fullName.split(" ")[0]}.</h2><p>Your academic overview, course progress, and class updates in one place.</p></div>
       <span className="student-spatial-period">{grades[0]?.term || "Current term"} · {grades[0]?.academicYear || "Academic records"}</span>
@@ -82,7 +98,7 @@ export default function OverviewDashboard({
     {preferences.modules.metrics && <DraggableGlassModule
       key={`metrics-${preferences.modulePositions.metrics.x}-${preferences.modulePositions.metrics.y}`}
       title="Academic indicators"
-      enabled={preferences.layout === "freeform"}
+      enabled={activeLayoutMode === "freeform"}
       position={preferences.modulePositions.metrics}
       onPositionChange={position => updateModulePosition("metrics", position)}
     >
@@ -96,7 +112,7 @@ export default function OverviewDashboard({
     {preferences.modules.insights && <DraggableGlassModule
       key={`insights-${preferences.modulePositions.insights.x}-${preferences.modulePositions.insights.y}`}
       title="Class insights"
-      enabled={preferences.layout === "freeform"}
+      enabled={activeLayoutMode === "freeform"}
       position={preferences.modulePositions.insights}
       onPositionChange={position => updateModulePosition("insights", position)}
     >
@@ -106,7 +122,7 @@ export default function OverviewDashboard({
     {preferences.modules.courses && <DraggableGlassModule
       key={`courses-${preferences.modulePositions.courses.x}-${preferences.modulePositions.courses.y}`}
       title="Active courses"
-      enabled={preferences.layout === "freeform"}
+      enabled={activeLayoutMode === "freeform"}
       position={preferences.modulePositions.courses}
       onPositionChange={position => updateModulePosition("courses", position)}
     >
@@ -122,7 +138,7 @@ export default function OverviewDashboard({
     <DraggableGlassWindow
       title="Student quick panel"
       minimized={panelMinimized && !customizerRequested}
-      onMinimize={() => setPanelMinimized(true)}
+      onMinimize={() => { setPanelMinimized(true); if (customizerRequested) onCustomizerOpened(); }}
       onExpand={() => { setPanelMinimized(false); setPanelFront(true); }}
       position={preferences.panelPosition}
       onPositionChange={updatePosition}
