@@ -73,6 +73,7 @@ async function generate(categories, enrollments, components) {
         : value === "INCOMPLETE" ? "INC"
         : /^NO\s+(?:(?:EXAM(?:INATION)?|EXAMINATION)\s+)?PERMIT(?:\s*\(NP\))?$/.test(value) || /^NO\s+PRIVILEGE(?:\s*\(NP\))?$/.test(value) ? "NP"
         : value === "PASS" ? "PASSED" : value;
+      return normalized === "DROPPED" ? "DRP" : normalized === "INC" ? "INC"
         : normalized === "NP" ? "NP" : ["FAILED", "FAIL", "NOT PASSED"].includes(normalized) ? "FAIL" : normalized || "—";
     },
   };
