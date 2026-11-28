@@ -138,6 +138,21 @@ test("blank score is pending; recorded zero is not a pending score", () => {
   assert.equal(second.items[0].pendingItems, 0);
 });
 
+test("quick-select status semantics keep DNS and AB in the denominator while EX is omitted", () => {
+  const assessments = [
+    scored(80, 100, "Quiz A"),
+    scored(null, 100, "Quiz B", "ABSENT"),
+    scored(null, 100, "Quiz C", "DID_NOT_SUBMIT"),
+    scored(null, 100, "Quiz D", "EXCUSED")
+  ];
+  const result = calculateGradeBreakdown([cat("quizzes", null, 100, assessments, 100)]);
+  assert.equal(result.items[0].percent, 26.67);
+  assert.equal(result.items[0].recordedItems, 3);
+  assert.equal(result.items[0].pendingItems, 0);
+  assert.equal(result.items[0].excusedItems, 1);
+  assert.equal(result.totalPercent, 26.67);
+});
+
 test("EXCUSED is omitted; ABSENT and DID_NOT_SUBMIT are recorded as zero raw marks", () => {
   assert.equal(calculateCategoryPercent({ conversionBase: 100, assessments: [scored(80), scored(null, 100, "Quiz", "EXCUSED")] }), 80);
   assert.equal(calculateCategoryPercent({ conversionBase: 100, assessments: [scored(80), scored(null, 100, "Quiz", "ABSENT")] }), 40);
