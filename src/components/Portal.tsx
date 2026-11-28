@@ -509,7 +509,7 @@ function downloadGradeSheetXlsx(
   components: GradeSheetComponent[] = [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }],
   assessmentOrder?: Assessment[]
 ) {
-  type ExportCell = { value: unknown; style: number };
+  type ExportCell = { value: unknown; style: number; formula?: string };
   type ScoreColumn =
     | { kind: "assessment"; category: Category; item: Assessment }
     | { kind: "equivalent"; category: Category }
@@ -545,6 +545,8 @@ function downloadGradeSheetXlsx(
     .filter((node): node is ExportCategoryNode => !!node);
 
   const scoreColumns: ScoreColumn[] = [];
+  const domainWeightedColumnByRoot = new Map<string, number>();
+  const domainTotalColumnByRoot = new Map<string, number>();
   let nextColumn = 3;
   const assignColumns = (node: ExportCategoryNode) => {
     node.startColumn = nextColumn;
@@ -552,8 +554,10 @@ function downloadGradeSheetXlsx(
     if (node.items.length) { scoreColumns.push({ kind: "equivalent", category: node.category }); nextColumn++; }
     node.children.forEach(assignColumns);
     if (node.depth === 0) {
+      domainTotalColumnByRoot.set(node.category.id, nextColumn);
       scoreColumns.push({ kind: "domain-total", category: node.category });
       nextColumn++;
+      domainWeightedColumnByRoot.set(node.category.id, nextColumn);
       scoreColumns.push({ kind: "domain-weighted", category: node.category });
       nextColumn++;
     }
@@ -568,9 +572,9 @@ function downloadGradeSheetXlsx(
   const last = excelColumn(columnCount - 1);
   const rows: ExportCell[][] = [];
   const mergedRanges: string[] = [];
-  const addRow = (values: Array<{ col: number; value: unknown; style?: number }>) => {
+  const addRow = (values: Array<{ col: number; value: unknown; style?: number; formula?: string }>) => {
     const row = Array.from({ length: columnCount }, () => ({ value: "", style: 0 } as ExportCell));
-    for (const value of values) row[value.col] = { value: value.value, style: value.style ?? 0 };
+    for (const value of values) row[value.col] = { value: value.value, style: value.style ?? 0, formula: value.formula };
     rows.push(row);
   };
   const addMergedValue = (
@@ -742,7 +746,17 @@ function downloadGradeSheetXlsx(
     })));
     const contributionByCategory = new Map(breakdown.items.map(item => [item.categoryId, item]));
     const domainSummaryByCategory = new Map(breakdown.domains.map(item => [item.categoryId, item]));
-    const values: Array<{ col: number; value: unknown; style?: number }> = [
+    const currentRow = rows.length + 1;
+    const equivalentColumnsByRoot = new Map<string, number[]>();
+    for (const root of rootNodes) {
+      const descendants = categoryDescendantIds(root.category.id, detail.categories);
+      equivalentColumnsByRoot.set(root.category.id, scoreColumns.flatMap((column, columnIndex) =>
+        column.kind === "equivalent" && descendants.has(column.category.id) &&
+          contributionByCategory.get(column.category.id)?.earnedWithinRoot !== null
+          ? [3 + columnIndex] : []
+      ));
+    }
+    const values: Array<{ col: number; value: unknown; style?: number; formula?: string }> = [
       { col: 0, value: index + 1, style: 7 },
       { col: 1, value: enrollment.studentName, style: 6 },
       { col: 2, value: attendancePercent === null ? "—" : attendancePercent.toFixed(2) + "%", style: 7 }
@@ -760,11 +774,19 @@ function downloadGradeSheetXlsx(
         const domain = domainSummaryByCategory.get(column.category.id);
         const score = column.kind === "domain-total" ? domain?.rawEquivalentPercent : domain?.parentWeightedScore;
         const value = specialRemark || score == null ? "—" : score.toFixed(2) + "%";
-        values.push({ col: 3 + columnIndex, value, style: 7 });
+        const rawFormulaColumns = column.kind === "domain-total" ? equivalentColumnsByRoot.get(column.category.id) ?? [] : [];
+        const formula = !specialRemark && rawFormulaColumns.length
+          ? "SUM(" + rawFormulaColumns.map(col => excelColumn(col) + currentRow).join(",") + ")"
+          : undefined;
+        values.push({ col: 3 + columnIndex, value, style: 7, formula });
       }
     });
+    const weightedDomainColumns = [...domainWeightedColumnByRoot.values()];
+    const totalFormula = !specialRemark && enrollment.finalPercent !== null && weightedDomainColumns.length
+      ? "SUM(" + weightedDomainColumns.map(col => excelColumn(col) + currentRow).join(",") + ")"
+      : undefined;
     values.push(
-      { col: totalColumn, value: enrollment.finalPercent === null ? "—" : enrollment.finalPercent.toFixed(2) + "%", style: 7 },
+      { col: totalColumn, value: enrollment.finalPercent === null ? "—" : enrollment.finalPercent.toFixed(2) + "%", style: 7, formula: totalFormula },
       { col: finalColumn, value: specialRemark ? enrollment.remarks : enrollment.finalGradeOverride || band?.finalGrade || "—", style: 7 },
       { col: remarksColumn, value: specialRemark ? enrollment.remarks : band?.remarks || "Not yet graded", style: 7 }
     );
@@ -802,6 +824,7 @@ function downloadGradeSheetXlsx(
     const rowNumber = rowIndex + 1;
     const xmlCells = sortWorksheetRowCells(values.map((cell, colIndex) => {
       const reference = excelColumn(colIndex) + rowNumber;
+      if (cell.formula && typeof cell.value === "number" && Number.isFinite(cell.value)) return '<c r="' + reference + '" s="' + cell.style + '"><f>' + xmlEscape(cell.formula) + '</f><v>' + cell.value + '</v></c>';
       if (typeof cell.value === "number" && Number.isFinite(cell.value)) return '<c r="' + reference + '" s="' + cell.style + '"><v>' + cell.value + '</v></c>';
       return '<c r="' + reference + '" s="' + cell.style + '" t="inlineStr"><is><t xml:space="preserve">' + xmlEscape(cell.value) + '</t></is></c>';
     }).join(""));
