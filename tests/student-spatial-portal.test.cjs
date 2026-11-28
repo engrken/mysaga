@@ -115,5 +115,5 @@ test("demo sign-in always returns safe JSON and the browser handles empty or mal
   assert.match(entry, /const responseText = await response\.text\(\)/);
   assert.match(entry, /try \{\s*data = JSON\.parse\(responseText\)/);
   assert.match(entry, /returned an empty response/);
-  assert.match(entry, /!data\.redirect\.startsWith\("\/\/"\)/);
+  assert.ok(entry.includes('data.redirect.startsWith("//")'));
 });
