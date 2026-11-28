@@ -330,7 +330,8 @@ test("grade remarks normalize status shorthands and masking stays scoped to drop
   assert.match(finalSection, /<div className="w-\[105px\] mx-auto whitespace-normal break-words leading-tight uppercase">/);
   assert.match(finalSection, /className="block text-\[10px\] text-gray-500 font-normal leading-snug mt-0\.5"/);
   assert.match(finalSection, /font-mono tabular-nums align-middle/);
-  assert.match(finalSection, /score-sheet-remark-select w-full max-w-\[92px\]/);
+  assert.match(finalSection, /score-sheet-remark-select w-full min-w-\[130px\] max-w-\[140px\]/);
+  assert.match(finalSection, /title="NP means No Examination Permit \(No Permit\)\."/);
   assert.ok(recordSection.includes("<PendingGradeDash />"), "unentered calculated values render as centered gray dashes");
   assert.doesNotMatch(recordSection, /isDroppedStatus|hasSpecialRemark|mobile-score-status-only/, "Record Scores is not masked by Final Grades status rules");
 });
