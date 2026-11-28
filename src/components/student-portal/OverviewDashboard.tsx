@@ -73,7 +73,7 @@ export default function OverviewDashboard({
   const averageValue = metrics.average === null ? "—" : `${metrics.average.toFixed(1)}%`;
   const attendanceValue = metrics.attendanceRate === null ? "—" : `${Math.round(metrics.attendanceRate)}%`;
 
-  return <div className="student-spatial-dashboard" data-student-glass-theme={preferences.theme} data-student-wallpaper={preferences.wallpaper} data-student-layout={preferences.layout} style={{ "--student-accent": accentColor, "--student-panel-z": panelFront ? 125 : 96 } as CSSProperties}>
+  return <div className="student-spatial-dashboard" data-student-glass-theme={preferences.theme} data-student-wallpaper={preferences.wallpaper} data-student-layout={preferences.layout} style={{ "--student-accent": accentColor, "--student-panel-z": panelFront ? 48 : 42 } as CSSProperties}>
     <div className="student-spatial-heading">
       <div><span className="student-spatial-eyebrow">YOUR LEARNING SPACE</span><h2>Good day, {fullName.split(" ")[0]}.</h2><p>Your academic overview, course progress, and class updates in one place.</p></div>
       <span className="student-spatial-period">{grades[0]?.term || "Current term"} · {grades[0]?.academicYear || "Academic records"}</span>
