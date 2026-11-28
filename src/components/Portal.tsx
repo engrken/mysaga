@@ -975,11 +975,17 @@ async function downloadFcuGradeXlsx(
   teacherName: string, teacherPosition: string, notedByName: string, notedByPosition: string,
   components: GradeSheetComponent[], headerPng: Uint8Array
 ) {
-  // Final Grades is a top-level domain summary. Configurable components apply
-  // only to the detailed Record Scores export.
+  // Keep the Lecture/Laboratory course domains, then append the selected nested
+  // components as a live, display-only breakdown.
   const rootDomains = categories.filter(category => !category.parentId)
     .slice().sort((a, b) => a.sortOrder - b.sortOrder);
-  const totalCol = 2 + rootDomains.length * 2;
+  const customComponents = components.filter(component => {
+    const category = categories.find(item =>
+      categoryPath(item, categories).trim().toLocaleLowerCase() === component.name.trim().toLocaleLowerCase()
+    );
+    return Boolean(category?.parentId);
+  });
+  const totalCol = 2 + (rootDomains.length + customComponents.length) * 2;
   const finalCol = totalCol + 1;
   const remarksCol = totalCol + 2;
   const columnCount = remarksCol + 1;
@@ -1031,6 +1037,14 @@ async function downloadFcuGradeXlsx(
     );
     mergeRanges.push(excelColumn(startColumn) + headerRow + ":" + excelColumn(startColumn + 1) + headerRow);
   });
+  customComponents.forEach((component, index) => {
+    const startColumn = 2 + rootDomains.length * 2 + index * 2;
+    headerValues.push(
+      { col: startColumn, value: component.name.split("/").pop()?.trim().toLocaleUpperCase() + " " + component.percentage.toFixed(2) + "%", style: 4 },
+      { col: startColumn + 1, value: "", style: 4 }
+    );
+    mergeRanges.push(excelColumn(startColumn) + headerRow + ":" + excelColumn(startColumn + 1) + headerRow);
+  });
   addRow(headerValues);
   const subHeaderRow = rows.length + 1;
   const subHeaderValues: Array<{ col: number; value: unknown; style?: number }> = [];
@@ -1041,6 +1055,13 @@ async function downloadFcuGradeXlsx(
       { col: startColumn + 1, value: gradeDomainWeight(domain), style: 5 }
     );
   });
+  customComponents.forEach((component, index) => {
+    const startColumn = 2 + rootDomains.length * 2 + index * 2;
+    subHeaderValues.push(
+      { col: startColumn, value: "EQ", style: 5 },
+      { col: startColumn + 1, value: component.percentage.toFixed(2) + "%", style: 5 }
+    );
+  });
   addRow(subHeaderValues);
   for (const column of [0, 1, totalCol, finalCol, remarksCol]) {
     const letter = excelColumn(column);
@@ -1049,11 +1070,16 @@ async function downloadFcuGradeXlsx(
 
   for (const [index, enrollment] of detail.enrollments.entries()) {
     const summaries = rootDomains.map(domain => gradeSheetRootDomainSummary(detail, enrollment, domain));
-    const domainValues = summaries.flatMap(summary => [
+    const rootValues = summaries.flatMap(summary => [
       summary?.rawEquivalentPercent ?? null,
       summary?.parentWeightedScore ?? null
     ]);
-    const weightedShares = domainValues.filter((_, position) => position % 2 === 1)
+    const componentValues = customComponents.flatMap(component => {
+      const summary = gradeSheetComponentSummary(detail, enrollment, component);
+      return [summary.rawEquivalentPercent, summary.parentWeightedScore];
+    });
+    const domainValues = [...rootValues, ...componentValues];
+    const weightedShares = rootValues.filter((_, position) => position % 2 === 1)
       .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
     const total = weightedShares.length
       ? Number(weightedShares.reduce((sum, value) => sum + value, 0).toFixed(2))
@@ -1068,7 +1094,7 @@ async function downloadFcuGradeXlsx(
     ];
     domainValues.forEach((value, valueIndex) => values.push({
       col: 2 + valueIndex,
-      value: value == null ? "" : Number(value.toFixed(2)),
+      value: dropped || value == null ? "" : Number(value.toFixed(2)),
       style: typeof value === "number" ? 6 : 8
     }));
     values.push(
