@@ -22,11 +22,13 @@ const wallpapers: Array<{ id: StudentWallpaper; label: string }> = [
 export default function PortalCustomizer({
   preferences,
   onChange,
-  onReset
+  onReset,
+  allowFreeform = true
 }: {
   preferences: StudentPortalPreferences;
   onChange: (next: StudentPortalPreferences) => void;
   onReset: () => void;
+  allowFreeform?: boolean;
 }) {
   const update = (patch: Partial<StudentPortalPreferences>) => onChange({ ...preferences, ...patch });
   const updateModule = (name: keyof StudentPortalPreferences["modules"], checked: boolean) =>
@@ -78,10 +80,21 @@ export default function PortalCustomizer({
       <div className="student-customizer-label student-layout-label">Layout mode</div>
       <div className="student-customizer-choice-list two" role="group" aria-label="Layout mode">
         {([["snapped", "Snapped grid"], ["freeform", "Freeform windows"]] as Array<[StudentLayoutMode, string]>).map(([value, label]) =>
-          <button key={value} type="button" className={preferences.layout === value ? "is-selected" : ""} aria-pressed={preferences.layout === value} onClick={() => update({ layout: value })}>{label}</button>
+          <button
+            key={value}
+            type="button"
+            className={`${preferences.layout === value ? "is-selected" : ""}${!allowFreeform && value === "freeform" ? " is-disabled" : ""}`}
+            aria-pressed={preferences.layout === value}
+            aria-disabled={!allowFreeform && value === "freeform"}
+            disabled={!allowFreeform && value === "freeform"}
+            title={!allowFreeform && value === "freeform" ? "Freeform windows are available only on Academic Overview." : undefined}
+            onClick={() => update({ layout: value })}
+          >{label}</button>
         )}
       </div>
-      <p className="student-customizer-help">In Freeform mode, drag the small handle above each overview module to reposition it. On smaller screens, modules return to the stacked layout.</p>
+      <p className="student-customizer-help">{allowFreeform
+        ? "In Freeform mode, drag the small handle above each overview module to reposition it. On smaller screens, modules return to the stacked layout."
+        : "Freeform window positioning is available only on Academic Overview. This page keeps a structured, snapped layout."}</p>
     </section>
     <button type="button" className="student-reset-original" onClick={onReset}>↺ Reset to Original</button>
     <p className="student-customizer-help reset-note">Restore the default light-glass theme, wallpaper, ocean accent, visible modules, and panel position.</p>
