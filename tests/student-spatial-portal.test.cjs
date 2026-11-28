@@ -194,3 +194,13 @@ test("structured student pages use the complete content width without a persiste
   assert.match(css, /\.portal-layout > \.main-area\{[\s\S]*?min-height:100dvh/);
   assert.match(css, /\.portal-layout > \.main-area > \.content-wrap\{[\s\S]*?width:min\(100%,1680px\)/);
 });
+
+
+test("secondary-page customization reset preserves the saved Academic Overview layout preference", () => {
+  const portal = read("src/components/Portal.tsx");
+  const appearance = read("src/components/student-portal/StudentAppearanceWindow.tsx");
+  assert.match(portal, /function resetStudentPortalPreferences\(preserveOverviewLayout = false\)/);
+  assert.match(portal, /preserveOverviewLayout[\s\S]*?layout: studentPortalPreferences\.layout/);
+  assert.equal((portal.match(/onReset=\{\(\) => resetStudentPortalPreferences\(true\)\}/g) || []).length, 2);
+  assert.match(appearance, /onChange\(\{ \.\.\.next, layout: preferences\.layout \}\)/);
+});
