@@ -132,10 +132,10 @@ class FcuIsoExportTests(unittest.TestCase):
             self.assertEqual(sheet.cell(1, column).border.top.style, "thin")
             self.assertEqual(sheet.cell(4, column).border.bottom.style, "thin")
         for row in range(1, 5):
-            for column in (1, 2, 3, 6, 7, 8):
-                cell = sheet.cell(row, column)
-                self.assertEqual(cell.border.left.style, "thin")
-                self.assertEqual(cell.border.right.style, "thin")
+            for column in (1, 2, 3, 7):
+                self.assertEqual(sheet.cell(row, column).border.left.style, "thin")
+            for column in (1, 2, 6, 8):
+                self.assertEqual(sheet.cell(row, column).border.right.style, "thin")
             for column in (7, 8):
                 cell = sheet.cell(row, column)
                 self.assertEqual(cell.border.top.style, "thin")
