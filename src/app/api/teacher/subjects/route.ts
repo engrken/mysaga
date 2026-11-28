@@ -12,8 +12,27 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const academicYear = params.get("academicYear")?.trim();
   const term = params.get("term")?.trim();
-  const subjects = await prisma.subject.findMany({ where: { teacherId: teacher.id, schoolId: teacher.schoolId, ...(academicYear && /^\d{4}-\d{4}$/.test(academicYear) ? { academicYear } : {}), ...(term ? { term: term === "3rd Trimester" ? { in: ["3rd Trimester", "3rd Semester"] } : term } : {}) }, orderBy: [{ academicYear: "desc" }, { code: "asc" }], include: { _count: { select: { enrollments: true } } } });
-  return NextResponse.json({ subjects });
+  const includeAllSemesters = params.get("includeAllSemesters") === "1";
+  const validAcademicYear = !!academicYear && /^\\d{4}-\\d{4}$/.test(academicYear);
+  if (includeAllSemesters && !validAcademicYear) {
+    return NextResponse.json({ error: "Choose a valid academic year to load grading setup sources." }, { status: 400 });
+  }
+  const subjects = await prisma.subject.findMany({
+    where: {
+      teacherId: teacher.id,
+      schoolId: teacher.schoolId,
+      ...(validAcademicYear ? { academicYear } : {}),
+      ...(includeAllSemesters
+        ? { term: { in: ["1st Semester", "2nd Semester"] } }
+        : term ? { term: term === "3rd Trimester" ? { in: ["3rd Trimester", "3rd Semester"] } : term } : {})
+    },
+    orderBy: [{ academicYear: "desc" }, { term: "asc" }, { code: "asc" }],
+    include: { _count: { select: { enrollments: true } } }
+  });
+  return NextResponse.json(
+    { subjects },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }
 export async function POST(request: Request) {
   const teacher = await requireRole("TEACHER");
