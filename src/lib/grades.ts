@@ -6,7 +6,7 @@ export const CLASS_REMARK_OPTIONS = [
   { label: "PASSED", value: "PASSED" },
   { label: "FAILED", value: "FAILED" },
   { label: "INCOMPLETE", value: "INC" },
-  { label: "NO EXAMINATION PERMIT (NP)", value: "NP" },
+  { label: "NP", value: "NP" },
   { label: "DROPPED (DRP)", value: "DROPPED" }
 ] as const;
 
