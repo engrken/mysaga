@@ -219,3 +219,28 @@ test("Record Scores header uses explicit summary subheaders and the same body le
   assert.match(portal, /scope="colgroup"/);
   assert.match(portal, /scope="col"/);
 });
+
+
+test("Record Scores never masks score cells for class remarks; only DROPPED is masked on Final Grades", () => {
+  const portal = fs.readFileSync(path.join(__dirname, "../src/components/Portal.tsx"), "utf8");
+  const recordStart = portal.indexOf('{classSection === "record"');
+  const analyticsStart = portal.indexOf('{classSection === "analytics"', recordStart);
+  const recordSection = portal.slice(recordStart, analyticsStart);
+  assert.ok(recordStart >= 0 && analyticsStart > recordStart);
+  assert.doesNotMatch(recordSection, /hasSpecialRemark|isPassedGradeRemark|mobile-score-status-only/);
+  assert.match(recordSection, /className="score-sheet-input"/);
+  assert.match(recordSection, /className="score-sheet-category-equivalent"/);
+  assert.match(recordSection, /showWeightBreakdown && <tr className="score-sheet-breakdown-row"/);
+  assert.match(portal, /const isFinalGradesTab = classSection === "final"/);
+
+  const finalStart = portal.indexOf('{classSection === "final" && <section id="class-section-final"');
+  const finalEnd = portal.indexOf("\\n        </>}", finalStart);
+  const finalSection = portal.slice(finalStart, finalEnd);
+  assert.match(finalSection, /isDroppedStatus=isFinalGradesTab && resolvedGradeRemark\(en\.remarks,band\?\.remarks\)==="DROPPED"/);
+  assert.doesNotMatch(finalSection, /!passed|passed\?/);
+  assert.match(finalSection, /isDroppedStatus\?<span className="score-sheet-status-indicator"/);
+  assert.match(portal, /if \(value === "DRP" \|\| value === "DROP"\) return "DROPPED"/);
+
+  const contribution = fs.readFileSync(path.join(__dirname, "../src/components/GradeContributionPanel.tsx"), "utf8");
+  assert.doesNotMatch(contribution, /Not displayed for|\["INC", "NP", "DROPPED"\]/);
+});
