@@ -39,6 +39,14 @@ async function generate(categories, enrollments, components) {
     xmlEscape: escape,
     weightedCategoryPercent: (enrollment, category) => enrollment.equivalents[category.id] ?? null,
     gradeSheetAttendancePercent: (detail, enrollment, categoryId) => enrollment.attendancePercent?.[categoryId] ?? null,
+    gradeSheetRootDomainSummary: (detail, enrollment, category) => {
+      const rawEquivalentPercent = enrollment.equivalents[category.id] ?? null;
+      return {
+        rawEquivalentPercent,
+        parentWeightedScore: rawEquivalentPercent === null ? null
+          : Math.round(rawEquivalentPercent * category.weight) / 100
+      };
+    },
     gradeSheetComponentSummary: (detail, enrollment, component) => {
       const rawEquivalentPercent = enrollment.equivalents[component.name] ?? null;
       return {
