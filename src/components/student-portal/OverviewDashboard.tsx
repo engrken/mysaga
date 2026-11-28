@@ -33,7 +33,7 @@ export default function OverviewDashboard({
   onCustomizerOpened: () => void;
   demoMode?: boolean;
 }) {
-  const [panelMinimized, setPanelMinimized] = useState(false);
+  const [panelMinimized, setPanelMinimized] = useState(true);
   const [panelTab, setPanelTab] = useState<"checklist" | "customizer">("checklist");
   const [panelFront, setPanelFront] = useState(false);
   const [isCompactOrTouchViewport, setIsCompactOrTouchViewport] = useState(false);
