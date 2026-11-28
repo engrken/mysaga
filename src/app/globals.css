@@ -2703,3 +2703,18 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
 @media(max-width:767px){
   .student-floating-window-backdrop{display:block}
 }
+
+
+/* Keep the desktop utility panel entirely within its reserved side column. */
+@media(min-width:1181px){
+  .student-floating-window{
+    max-height:min(76vh,calc(100vh - 210px),650px);
+  }
+  .student-floating-window-body{
+    max-height:calc(min(76vh,calc(100vh - 210px),650px) - 48px);
+  }
+}
+@media(max-width:1180px){
+  .student-window-drag-handle{cursor:default;touch-action:auto}
+  .student-window-drag-hint,.student-window-grip{display:none}
+}
