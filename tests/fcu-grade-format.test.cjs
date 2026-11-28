@@ -188,7 +188,7 @@ test("FCU final-grade export shows each saved component as raw and weighted colu
   ], components);
   const sheet = files["xl/worksheets/sheet1.xml"];
   const styles = files["xl/styles.xml"];
-  assert.match(sheet, /<mergeCell ref="A1:K9"/);
+  assert.match(sheet, /<mergeCell ref="A1:M9"/);
   assert.match(sheet, /<pageSetup paperSize="14" orientation="portrait" fitToWidth="1"/);
   assert.match(sheet, /showGridLines="0" zoomScale="90"/);
   assert.match(sheet, /<selection pane="bottomLeft" activeCell="A17"/);
@@ -662,6 +662,20 @@ test("Record Scores export dynamically merges institutional, metadata, category,
     sortWorksheetRowCells: value => value,
     xmlEscape: escape,
     categoryPath: category => category.name,
+    categoryDescendantIds: (rootId, categories) => {
+      const ids = new Set([rootId]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const category of categories) {
+          if (category.parentId && ids.has(category.parentId) && !ids.has(category.id)) {
+            ids.add(category.id);
+            changed = true;
+          }
+        }
+      }
+      return ids;
+    },
     formatSchedule: raw => raw || "",
     attendanceDays: assessments => assessments,
     consecutiveLateAbsences: () => new Set()
