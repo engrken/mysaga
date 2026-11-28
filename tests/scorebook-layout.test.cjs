@@ -223,7 +223,7 @@ test("Record Scores header uses explicit summary subheaders and the same body le
 
 test("Record Scores never masks score cells for class remarks; only DROPPED is masked on Final Grades", () => {
   const portal = fs.readFileSync(path.join(__dirname, "../src/components/Portal.tsx"), "utf8");
-  const recordStart = portal.indexOf('{classSection === "record"');
+  const recordStart = portal.indexOf('{classSection === "record" && <section id="class-section-record"');
   const analyticsStart = portal.indexOf('{classSection === "analytics"', recordStart);
   const recordSection = portal.slice(recordStart, analyticsStart);
   assert.ok(recordStart >= 0 && analyticsStart > recordStart);
