@@ -785,7 +785,7 @@ function downloadGradeSheetXlsx(
       ? "SUM(" + weightedDomainColumns.map(col => excelColumn(col) + currentRow).join(",") + ")"
       : undefined;
     values.push(
-      { col: totalColumn, value: specialRemark || enrollment.finalPercent === null ? "—" : enrollment.finalPercent, style: 7, formula: totalFormula },
+      { col: totalColumn, value: enrollment.finalPercent === null ? "—" : enrollment.finalPercent, style: 7, formula: totalFormula },
       { col: finalColumn, value: specialRemark ? enrollment.remarks : enrollment.finalGradeOverride || band?.finalGrade || "—", style: 7 },
       { col: remarksColumn, value: specialRemark ? enrollment.remarks : band?.remarks || "Not yet graded", style: 7 }
     );
