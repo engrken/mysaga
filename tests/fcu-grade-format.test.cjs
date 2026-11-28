@@ -195,11 +195,11 @@ test("FCU final-grade export shows each saved component as raw and weighted colu
   assert.match(sheet, /<c r="A15"[^>]*><is><t xml:space="preserve"><\/t><\/is><\/c>/);
   assert.match(sheet, /<c r="B15"[^>]*>.*?NAME OF STUDENTS/s);
   assert.match(sheet, /<c r="C15"[^>]*>.*?EXAM · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="D15"[^>]*>.*?EXAM · WEIGHTED \(50\.00%\)/s);
+  assert.match(sheet, /<c r="D15"[^>]*>.*?EXAM · WEIGHTED \(50\.00% OF COURSE\)/s);
   assert.match(sheet, /<c r="E15"[^>]*>.*?ACT · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="F15"[^>]*>.*?ACT · WEIGHTED \(40\.00%\)/s);
+  assert.match(sheet, /<c r="F15"[^>]*>.*?ACT · WEIGHTED \(40\.00% OF COURSE\)/s);
   assert.match(sheet, /<c r="G15"[^>]*>.*?ARP · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="H15"[^>]*>.*?ARP · WEIGHTED \(10\.00%\)/s);
+  assert.match(sheet, /<c r="H15"[^>]*>.*?ARP · WEIGHTED \(10\.00% OF COURSE\)/s);
   assert.match(sheet, /<c r="I15"[^>]*>.*?TOTAL GRADE/s);
   assert.match(sheet, /<c r="J15"[^>]*>.*?FINAL GRADE/s);
   assert.match(sheet, /<c r="K15"[^>]*>.*?REMARKS/s);
