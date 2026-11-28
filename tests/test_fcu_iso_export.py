@@ -122,8 +122,8 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertEqual(sheet["A5"].font.sz, 8)
         self.assertEqual(sheet["A6"].font.sz, 8)
         self.assertEqual(sheet["A5"].alignment.horizontal, "center")
-        self.assertIsNone(sheet["A5"].border.left.style)
-        self.assertIsNone(sheet["A6"].border.bottom.style)
+        self.assertIsNone(sheet["A5"].border.left)
+        self.assertIsNone(sheet["A6"].border.bottom)
         self.assertIsNone(sheet["A1"].value, "the seal is the only A1:A4 content")
 
         # Validate the merged-cell perimeter: merged interiors carry only
@@ -230,7 +230,7 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertIsNone(sheet["A17"].border.bottom.style)
         self.assertIsNone(sheet["E17"].border.bottom.style)
         self.assertEqual(sheet.freeze_panes, "A12")
-        self.assertEqual(sheet.print_title_rows, "11:11")
+        self.assertEqual(sheet.print_title_rows, "$11:$11")
 
     def test_header_and_accreditation_spans_follow_a_wide_active_table(self):
         payload = dict(self.payload)
@@ -320,13 +320,13 @@ class FcuIsoExportTests(unittest.TestCase):
         payload = dict(self.payload)
         payload["class"] = dict(self.payload["class"], classId="migration_2026_ece-16")
         workbook = load_workbook(BytesIO(build_iso_workbook(payload)))
-        self.assertEqual(workbook.active["B8"].value, "")
+        self.assertIsNone(workbook.active["B8"].value)
 
     def test_class_id_never_falls_back_to_section_or_subject_id(self):
         payload = dict(self.payload)
         payload["class"] = dict(self.payload["class"], classId=None, sectionName="BSECE 4", id="migration_2026_ece-16")
         workbook = load_workbook(BytesIO(build_iso_workbook(payload)))
-        self.assertEqual(workbook.active["B8"].value, "")
+        self.assertIsNone(workbook.active["B8"].value)
 
     def test_every_sheet_xml_row_serializes_cells_in_column_order(self):
         workbook_bytes = build_iso_workbook(self.payload)
