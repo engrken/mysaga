@@ -5,17 +5,30 @@ import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "
 type Position = { x: number; y: number };
 const WINDOW_WIDTH = 320;
 
+function getPortalRightEdge() {
+  const content = document.querySelector(".portal-layout .content-wrap");
+  return content?.getBoundingClientRect().right ?? window.innerWidth;
+}
+
+function getDefaultPanelX() {
+  return Math.max(12, getPortalRightEdge() - WINDOW_WIDTH - 18);
+}
+
 function clampPanelX(value: number) {
-  const minX = window.innerWidth >= 1181
-    ? Math.max(12, window.innerWidth - WINDOW_WIDTH - 380)
-    : 12;
-  const maxX = Math.max(minX, window.innerWidth - WINDOW_WIDTH - 12);
+  if (window.innerWidth < 1181) {
+    return Math.max(12, Math.min(window.innerWidth - WINDOW_WIDTH - 12, value));
+  }
+  const rightEdge = getPortalRightEdge();
+  const minX = Math.max(12, rightEdge - 370);
+  const maxX = Math.max(minX, rightEdge - WINDOW_WIDTH - 12);
   return Math.max(minX, Math.min(maxX, value));
 }
 
 function clampPanelY(value: number, inPortal: boolean) {
-  const minY = inPortal ? 176 : 82;
-  const estimatedHeight = Math.min(window.innerHeight - 24, 620);
+  const pageHeader = inPortal ? document.querySelector(".student-portal-topbar") : null;
+  const headerBottom = pageHeader?.getBoundingClientRect().bottom ?? 164;
+  const minY = inPortal ? Math.max(176, headerBottom + 16) : 82;
+  const estimatedHeight = Math.min(window.innerHeight * 0.76, Math.max(240, window.innerHeight - 210), 650);
   const maxY = Math.max(minY, window.innerHeight - estimatedHeight - 12);
   return Math.max(minY, Math.min(maxY, value));
 }
@@ -55,7 +68,7 @@ export default function DraggableGlassWindow({
   const startDrag = (event: PointerEvent<HTMLButtonElement>) => {
     if (minimized || window.matchMedia("(max-width: 767px)").matches) return;
     if ((event.target as HTMLElement).closest("button[data-window-action]")) return;
-    const rawX = currentPositionRef.current.x || Math.max(12, window.innerWidth - 356);
+    const rawX = currentPositionRef.current.x || (inPortal && window.innerWidth >= 1181 ? getDefaultPanelX() : Math.max(12, window.innerWidth - 356));
     const inPortal = Boolean(document.querySelector(".portal-layout"));
     const layoutRoot = document.querySelector(".portal-layout");
     const configuredTop = layoutRoot
@@ -102,7 +115,9 @@ export default function DraggableGlassWindow({
 
   const inPortal = typeof document !== "undefined" && Boolean(document.querySelector(".portal-layout"));
   const visiblePosition = typeof window === "undefined" ? currentPosition : {
-    x: currentPosition.x > 0 ? clampPanelX(currentPosition.x) : 0,
+    x: currentPosition.x > 0
+      ? clampPanelX(currentPosition.x)
+      : inPortal && window.innerWidth >= 1181 ? getDefaultPanelX() : 0,
     y: currentPosition.y > 0 ? clampPanelY(currentPosition.y, inPortal) : 0
   };
 
