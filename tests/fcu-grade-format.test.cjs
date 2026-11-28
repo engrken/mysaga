@@ -38,6 +38,10 @@ async function generate(categories, enrollments, components) {
     zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
     excelColumn: columns,
     xmlEscape: escape,
+    getCleanComponentName: name => {
+      const parts = String(name).split("/");
+      return (parts.length > 1 ? parts[parts.length - 1] : String(name)).trim().toUpperCase();
+    },
     weightedCategoryPercent: (enrollment, category) => enrollment.equivalents[category.id] ?? null,
     gradeSheetAttendancePercent: (detail, enrollment, categoryId) => enrollment.attendancePercent?.[categoryId] ?? null,
     gradeSheetRootDomainSummary: (detail, enrollment, category) => {
@@ -342,9 +346,11 @@ test("grade remarks normalize status shorthands and masking stays scoped to drop
   const printHeader = source.slice(printHeaderStart, printHeaderEnd);
   assert.ok(printHeaderStart >= 0 && printHeaderEnd > printHeaderStart, "printable Final Grades header is isolated");
   assert.match(printHeader, /<small>EQ<\/small>/);
+  assert.match(printHeader, /getCleanComponentName\(category\.name\)/);
+  assert.match(printHeader, /getCleanComponentName\(component\.name\)/);
   assert.match(printHeader, /category\.weight\.toFixed\(2\)\}%<\/small>/);
   assert.match(printHeader, /component\.percentage\.toFixed\(2\)\}%<\/small>/);
-  assert.doesNotMatch(printHeader, /raw equivalent|configured weight|% of course/i);
+  assert.doesNotMatch(printHeader, /raw equivalent|configured weight|% of course|WEIGHTED/i);
 
 
   const cleanNameStart = source.indexOf("function getCleanComponentName(");
@@ -454,7 +460,9 @@ test("ISO Excel export uses dynamic class metadata and omits student-number colu
   assert.match(route, /return score\?\.points \?\? score\?\.remark \?\? ""/);
   assert.match(route, /\.\.\.parsed\.data\.componentNames\.map\(\(\) => ""\)/);
   assert.match(route, /enrollment\.finalGradeOverride \?\? ""/);
-  assert.match(route, /enrollment\.remarks \?\? ""/);
+  assert.match(route, /cleanComponentName\(name\) \+ "\\nEQ"/);
+  assert.match(route, /gradeRemarkExportCode\(remark\)/);
+  assert.match(route, /sortedGradeBands/);
 });
 
 test("ISO Excel export uses the authenticated Python openpyxl generator", () => {
@@ -476,6 +484,8 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(source, /window\.btoa\(binary\)/);
   assert.match(source, /response\.blob\(\)/);
   assert.match(pythonSource, /from openpyxl import Workbook/);
+  assert.match(pythonSource, /def _normalize_export_remark\(/);
+  assert.match(pythonSource, /_normalize_export_remark\(value\)/);
   assert.match(pythonSource, /column_count = max\(7, len\(headers\)/, "active column count is computed before header layout");
   assert.match(pythonSource, /center_end_column = column_count - 2/);
   assert.match(pythonSource, /metadata_label_column = column_count - 1/);
