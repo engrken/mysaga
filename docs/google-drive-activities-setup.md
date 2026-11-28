@@ -31,60 +31,59 @@ The Google Chat API permissions are user-delegated teacher permissions. Creating
 
 Use the **same Google Cloud project and OAuth Web application client** already configured for SAGA's Google Chat integration. Do not create a new OAuth client or replace its client secret.
 
-1. In that project, enable:
-   - Google Drive API
-   - Google Picker API
-   - Google Chat API
+1. Enable the Google Drive API, Google Picker API, and Google Chat API in that project.
 2. In Google Auth Platform → Clients, open the existing Web application OAuth client.
-3. Confirm its Authorized redirect URI includes the exact value used by `GOOGLE_REDIRECT_URI`, currently the SAGA callback:
-   `/api/integrations/google/callback`.
-   Do not remove the existing redirect URI; the legacy Chat reconnect path continues using it.
-4. Add these Authorized JavaScript origins for Google Picker and Google Identity Services:
+3. Add the exact callback URI configured in Production `GOOGLE_SSO_REDIRECT_URI`:
+   - `https://my.sagaportal.online/api/integrations/google/callback`
+4. Keep the exact legacy callback URI configured in `GOOGLE_REDIRECT_URI`. If that variable points to the legacy Vercel hostname, authorize:
+   - `https://mysaga.vercel.app/api/integrations/google/callback`
+   Do not remove or silently change the existing callback. The SAGA OAuth start routes accept only origins whose exact callback URI is configured in one of these two Vercel variables. Do not add arbitrary origins.
+5. Add these Authorized JavaScript origins for Google Picker and Google Identity Services:
    - `https://my.sagaportal.online`
-   - `https://faculty-grade-portal-git-feat-activities-45ffe4-kentbsece-7567.vercel.app` (SAGA Preview branch alias)
+   - `https://mysaga.vercel.app` (keep while this legacy alias is used)
    - `http://localhost:3000` (local development only)
-   Add any other actual SAGA hostnames only when they are used for testing.
-5. Create a Google API key for Picker. Restrict it to the authorized SAGA website referrers using HTTP-referrer restrictions. Also allow the Google Picker iframe origin:
-   `https://docs.google.com/*`.
-6. Restrict the API key to the Google Picker API and Google Drive API. Do not leave the key unrestricted.
-7. Record the Google Cloud **project number** (numeric value). Google Picker uses this as its App ID, not the project ID.
-8. In Google Auth Platform → Data Access, confirm the configured consent screen lists the scopes above. Add test users or complete the required Google verification for the app's publishing status and requested Chat permissions before inviting external users.
+   This release does not use a Vercel Preview deployment. When `qa-preview` is used later, add its exact callback URI and JavaScript origin to Google Cloud and configure branch-scoped Vercel variables before testing.
+6. Create a Google API key for Picker. Restrict it to the approved SAGA website referrers using HTTP-referrer restrictions. Also allow the Google Picker iframe origin `https://docs.google.com/*`.
+7. Restrict the API key to the Google Picker API and Google Drive API. Do not leave the key unrestricted.
+8. Record the Google Cloud **project number** (numeric value). Google Picker uses this as its App ID, not the project ID.
+9. In Google Auth Platform → Data Access, confirm the configured consent screen lists the scopes above. Add test users or complete the required Google verification for the app's publishing status and requested Chat permissions before inviting external users.
 
-Google recommends incremental authorization so applications request additional API permissions when those features are needed. SAGA therefore uses a minimal OpenID login first, then requests teacher Drive/Chat scopes only for teacher accounts.
+SAGA verifies Google ID-token signature, issuer, audience, expiry, nonce, and verified email. It matches that email to an existing account in the selected school and does not create an account or override SAGA roles, tenant membership, or class authorization.
 
 ## Vercel environment variables
 
-Use the existing SAGA OAuth values in **Production** for this release. Preview values remain isolated and must be configured specifically for `qa-preview` before that environment is used:
+Use the existing OAuth client values in **Production** for this single-deployment release. The existing Preview variables remain isolated; do not create a Preview deployment as part of this release.
 
 | Variable | Purpose |
 | --- | --- |
 | `GOOGLE_CLIENT_ID` | Existing OAuth Web application client ID |
 | `GOOGLE_CLIENT_SECRET` | Existing server-only OAuth client secret |
-| `GOOGLE_REDIRECT_URI` | Existing legacy callback; keep unchanged and keep its exact URI authorized in Google Cloud |
-| `GOOGLE_SSO_REDIRECT_URI` | Primary unified sign-in callback; Production uses `https://my.sagaportal.online/api/integrations/google/callback` |
+| `GOOGLE_REDIRECT_URI` | Existing legacy callback URI; keep unchanged and authorized in Google Cloud |
+| `GOOGLE_SSO_REDIRECT_URI` | Primary unified sign-in callback; Production currently uses `https://my.sagaportal.online/api/integrations/google/callback` |
 | `GOOGLE_TOKEN_ENCRYPTION_KEY` | Existing 32-byte key encoded as 64-character hex or base64; encrypts teacher service tokens |
 | `GOOGLE_DRIVE_API_KEY` | Restricted Google API key for Picker |
 | `GOOGLE_DRIVE_APP_ID` | Numeric Google Cloud project number |
 
 Keep the OAuth client secret and token encryption key server-only. Never use a `NEXT_PUBLIC_` prefix for them.
 
-The following flags control only the optional Activities Drive controls. They do not control the availability of Google Sign-In on the SAGA login page. Keep these at the currently configured Production exploration values; do not enable publishing or student submissions in this release:
+The following flags control only the optional Activities Drive controls. They do not control Google Sign-In on the SAGA login page:
 
-| Variable | Value / purpose |
+| Variable | Purpose |
 | --- | --- |
-| `SAGA_ACTIVITIES_GOOGLE_DRIVE_EXPLORATION` | `true` to enable server-side Activities Drive routes |
-| `NEXT_PUBLIC_SAGA_ACTIVITIES_GOOGLE_DRIVE_EXPLORATION` | `true` to show the optional Activities Drive controls |
+| `SAGA_ACTIVITIES_GOOGLE_DRIVE_EXPLORATION` | Enables server-side Activities Drive routes when set to `true` |
+| `NEXT_PUBLIC_SAGA_ACTIVITIES_GOOGLE_DRIVE_EXPLORATION` | Shows optional Activities Drive controls when set to `true` |
 
-For Production exploration, keep these existing Activities guards unchanged:
+Keep the current Production Activities safeguards unchanged for this release:
 
 - `SAGA_ACTIVITIES_EXPLORATION_ONLY=true`
 - `NEXT_PUBLIC_SAGA_ACTIVITIES_EXPLORATION_ONLY=true`
+- `SAGA_ACTIVITIES_TEACHER_WRITE=true` — permits teacher draft/question-bank exploration only; the server exploration guard blocks publishing and other non-exploration actions.
 - `SAGA_ACTIVITIES_PUBLISH_ENABLED=false`
 - `NEXT_PUBLIC_SAGA_ACTIVITIES_PUBLISH_ENABLED=false`
-- `SAGA_ACTIVITIES_TEACHER_WRITE=false`
 - `SAGA_ACTIVITIES_STUDENT_WRITE=false`
+- `NEXT_PUBLIC_SAGA_ACTIVITIES_STUDENT_WRITE=false`
 
-Do not switch on publishing, grading, student submissions, or general Activity writes as part of Google integration.
+Do not enable publishing or student submission writes as part of Google integration. Those require a separate release decision after the full Activities workflow has been reviewed.
 
 ## Suggested verification sequence
 
