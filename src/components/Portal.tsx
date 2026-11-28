@@ -444,6 +444,11 @@ function gradeSheetComponentPercent(detail: Detail, enrollment: Enrollment, comp
   }
   return totalWeight > 0 ? Number((weighted / totalWeight).toFixed(2)) : null;
 }
+
+function PendingGradeDash() {
+  return <span className="block text-center text-gray-400" aria-label="Pending score">—</span>;
+}
+
 function normalizeGradeRemark(remark: string | null | undefined) {
   const value = String(remark ?? "").trim().toLocaleUpperCase();
   if (value === "DRP" || value === "DROP") return "DROPPED";
@@ -485,9 +490,6 @@ function scoreRemarkFromQuickCode(code: string): WorkbookChange["remark"] {
   return null;
 }
 
-function PendingGradeDash() {
-  return <span className="block text-center text-gray-400" aria-label="Pending score">—</span>;
-}
 
 function gradeSheetRootDomainSummary(detail: Detail, enrollment: Enrollment, root: Category) {
   const grouped = new Map<string, Assessment[]>();
