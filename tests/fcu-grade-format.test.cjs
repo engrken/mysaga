@@ -314,9 +314,9 @@ test("FCU Excel renders non-passing statuses in the grade cell and leaves numeri
   ], components);
   const sheet = files["xl/worksheets/sheet1.xml"];
   assert.match(sheet, /<c r="F17"[^>]*><is><t xml:space="preserve">DRP<\/t><\/is><\/c>/);
-  assert.match(sheet, /<c r="G17"[^>]*><is><t xml:space="preserve">DROPPED<\/t><\/is><\/c>/);
+  assert.match(sheet, /<c r="G17"[^>]*><is><t xml:space="preserve">DRP<\/t><\/is><\/c>/);
   assert.match(sheet, /<c r="F18"[^>]*><is><t xml:space="preserve">INC<\/t><\/is><\/c>/);
-  assert.match(sheet, /<c r="G18"[^>]*><is><t xml:space="preserve">INC<\/t><\/is><\/c>/);
+  assert.match(sheet, /<c r="G18"[^>]*><is><t xml:space="preserve">INCOMPLETE<\/t><\/is><\/c>/);
   for (const cell of ["C17", "D17", "E17", "C18", "D18", "E18"]) {
     assert.doesNotMatch(sheet, new RegExp('<c r="' + cell + '"[^>]*><v>'));
   }
