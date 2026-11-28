@@ -28,9 +28,9 @@ test("class remarks use one unique canonical dictionary and normalize legacy val
   assert.deepEqual(CLASS_REMARK_OPTIONS, [
     { label: "PASSED", value: "PASSED" },
     { label: "FAILED", value: "FAILED" },
-    { label: "INCOMPLETE", value: "INC" },
+    { label: "INC", value: "INC" },
     { label: "NP", value: "NP" },
-    { label: "DROPPED (DRP)", value: "DROPPED" }
+    { label: "DROPPED", value: "DROPPED" }
   ]);
   assert.equal(CLASS_REMARK_OPTIONS.find(option => option.value === "NP")?.label, "NP");
   assert.equal(new Set(CLASS_REMARK_OPTIONS.map(option => option.value)).size, CLASS_REMARK_OPTIONS.length);
