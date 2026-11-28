@@ -25,7 +25,7 @@ export default function DraggableGlassModule({
   const boundsRef = useRef({ left: 0, right: 0, top: 0, bottom: 0 });
 
   const begin = (event: PointerEvent<HTMLButtonElement>) => {
-    if (!enabled || window.matchMedia("(max-width: 767px)").matches) return;
+    if (!enabled || event.pointerType !== "mouse" || window.matchMedia("(max-width: 767px), (pointer: coarse)").matches) return;
     const element = event.currentTarget.closest(".student-draggable-module") as HTMLElement | null;
     const rect = element?.getBoundingClientRect();
     const base = offsetRef.current;
