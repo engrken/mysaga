@@ -13,7 +13,7 @@ from openpyxl.utils.units import pixels_to_EMU
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from api.iso_export import build_iso_workbook, _short_assessment_header
+from api.iso_export import build_iso_workbook, _short_assessment_header, _normalize_export_remark
 
 
 def sample_logo() -> str:
@@ -305,6 +305,11 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertEqual([sheet[f"G{row}"].value for row in range(12, 16)], ["NP", "NP", "INC", "DRP"])
         self.assertTrue(sheet["C11"].alignment.wrap_text)
         self.assertTrue(sheet["D11"].alignment.wrap_text)
+
+    def test_only_no_examination_permit_aliases_normalize_to_np(self):
+        self.assertEqual(_normalize_export_remark("NO EXAMINATION PERMIT"), "NP")
+        self.assertEqual(_normalize_export_remark("NO PERMIT"), "NP")
+        self.assertEqual(_normalize_export_remark("NO PRIVILEGE"), "NO PRIVILEGE")
 
     def test_activity_and_subtotal_headers_are_shortened_without_parent_paths(self):
         self.assertEqual(_short_assessment_header("Final Design / Design (%)"), "Design (%)")
