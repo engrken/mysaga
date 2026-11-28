@@ -46,6 +46,23 @@ def _safe_text(value: object, fallback: str = "") -> str:
     return re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F]", "", text)
 
 
+def _normalize_export_remark(value: object) -> str:
+    """Normalize legacy class remarks to the short codes shown in SAGA exports."""
+    remark = _safe_text(value).strip().upper()
+    if remark == "INCOMPLETE":
+        return "INC"
+    if (
+        re.match(r"^NO\s+(?:(?:EXAM(?:INATION)?|EXAMINATION)\s+)?PERMIT(?:\s*\(NP\))?$", remark)
+        or re.match(r"^NO\s+PRIVILEGE(?:\s*\(NP\))?$", remark)
+    ):
+        return "NP"
+    if remark in {"DROPPED", "DRP", "DROP"}:
+        return "DRP"
+    if remark in {"FAILED", "FAIL", "NOT PASSED"}:
+        return "FAIL"
+    return remark
+
+
 def _short_assessment_header(value: object) -> str:
     """Remove category paths and compact an activity title with its max points."""
     heading = _safe_text(value).strip()
@@ -314,10 +331,12 @@ def build_iso_workbook(payload: dict) -> bytes:
         for column_number in range(1, column_count + 1):
             value = row_values[column_number - 1] if column_number <= len(row_values) else ""
             cell = worksheet.cell(row_offset, column_number)
+            heading = _safe_text(normalized_headers[column_number - 1]).upper()
+            if "REMARK" in heading and value not in (None, ""):
+                value = _normalize_export_remark(value)
             _set_literal(cell, value)
             cell.border = THIN_BORDER
             cell.font = body_font
-            heading = _safe_text(normalized_headers[column_number - 1]).upper()
             horizontal = "left" if column_number == 2 else "center"
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 horizontal = "right"
