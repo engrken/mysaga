@@ -6,7 +6,10 @@
     "changes": [
       "Added a standalone class bulletin board: teachers can draft, publish, schedule, pin, expire, edit, and archive formal class announcements from each class workspace.",
       "Added a compiled student Announcements feed gathering currently published notices from all enrolled classes, with class filters and per-student read receipts.",
-      "Kept SAGA Announcements independent from Google Chat, which remains the separate real-time classroom messaging integration."
+      "Kept SAGA Announcements independent from Google Chat, which remains the separate real-time classroom messaging integration.",
+      "Added authenticated, tenant-scoped downloads for private Cloudflare R2 activity submissions, with short-lived links and legacy attachment compatibility.",
+      "Improved student submissions with multi-batch file selection, per-file removal, strict Google Drive file-link validation, and private R2 storage.",
+      "Added unified Google sign-in and shared teacher Google Drive / Google Chat authorization, with identity matching and explicit consent."
     ]
   },
   {
@@ -16,14 +19,16 @@
     "changes": [
       "Added Student Roster filters for program, year level, and section in tenant management."
     ]
-  },{
+  },
+  {
     "version": "0.14.0-beta.2",
     "date": "2026-11-26",
     "kind": "improvement",
     "changes": [
       "Made Class ID optional when creating or editing a class; duplicate checks still apply when an ID is entered."
     ]
-  },{
+  },
+  {
     "version": "0.14.0-beta.1",
     "date": "2026-11-26",
     "kind": "feature",

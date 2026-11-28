@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-type Connection = { connected: boolean; connection: { googleEmail: string } | null };
+type Connection = { connected: boolean; connection: {
+  googleEmail: string; matchesPortalEmail: boolean; driveEnabled: boolean; chatEnabled: boolean
+} | null };
 type Space = { spaceName: string; displayName: string; externalUserAllowed: boolean } | null;
 type SpaceOption = { name: string; displayName: string; externalUserAllowed: boolean };
 
@@ -16,18 +18,29 @@ export default function GoogleChatControls({ subjectId }: { subjectId: string })
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  async function refresh() {
-    const [connectionResponse, spaceResponse, spacesResponse] = await Promise.all([
-      fetch("/api/teacher/google-chat/connection", { cache: "no-store" }),
-      fetch(`/api/teacher/google-chat/subjects/${encodeURIComponent(subjectId)}/space`, { cache: "no-store" }),
-      fetch("/api/teacher/google-chat/spaces", { cache: "no-store" })
-    ]);
-    if (connectionResponse.ok) setConnection(await connectionResponse.json());
-    if (spaceResponse.ok) setSpace((await spaceResponse.json()).space);
-    if (spacesResponse.ok) { const data = await spacesResponse.json(); setSpaces(data.spaces || []); }
-  }
-
-  useEffect(() => { void refresh(); }, [subjectId]);
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const [connectionResponse, spaceResponse, spacesResponse] = await Promise.all([
+          fetch("/api/teacher/google-chat/connection", { cache: "no-store" }),
+          fetch(`/api/teacher/google-chat/subjects/${encodeURIComponent(subjectId)}/space`, { cache: "no-store" }),
+          fetch("/api/teacher/google-chat/spaces", { cache: "no-store" })
+        ]);
+        if (!active) return;
+        if (connectionResponse.ok) setConnection(await connectionResponse.json());
+        if (spaceResponse.ok) setSpace((await spaceResponse.json()).space);
+        if (spacesResponse.ok) {
+          const data = await spacesResponse.json();
+          if (active) setSpaces(data.spaces || []);
+        }
+      } catch (reason) {
+        if (active) setError(reason instanceof Error ? reason.message : "Could not load Google Chat status.");
+      }
+    };
+    void load();
+    return () => { active = false; };
+  }, [subjectId]);
 
   async function createSpace() {
     setBusy(true); setError(""); setMessage("");
@@ -85,21 +98,69 @@ export default function GoogleChatControls({ subjectId }: { subjectId: string })
   return <section className="surface gradebook-card mt-3" aria-label="Google Chat class integration">
     <div className="section-heading">
       <div><span className="eyebrow">OPTIONAL CLASS TOOL</span><h2>Google Chat Space</h2>
-        <p className="muted">Connect your Google account and keep this class Space aligned with the SAGA roster. Students are invited using their verified SAGA email, which must be the Google account email they use in Chat. External Gmail and Workspace invitations also depend on both organizations’ Chat policies; invited students may need to accept.</p>
+        <p className="muted">Use the same Google account you use to sign in to SAGA Portal. Teacher Google sign-in can authorize both the Drive Picker and class Chat tools, so you do not need separate Google accounts for each feature. Students are invited using their verified SAGA email; external Gmail and Workspace invitations still depend on both organizations&apos; Chat policies.</p>
       </div>
     </div>
     {!connection?.connected ? <div className="d-flex flex-wrap align-items-center gap-2">
-      <a className="btn btn-outline-primary" href="/api/teacher/google-chat/connect">Connect Google account</a>
-      <span className="muted small">Connect once; you can use the same account for your other classes.</span>
+      <button type="button" className="btn btn-outline-primary" onClick={() => window.location.assign(new URL("/api/teacher/google-chat/connect", window.location.origin).toString())}>Enable Google Drive &amp; Chat</button>
+      <span className="muted small">This uses the Google email registered to your SAGA teacher account.</span>
     </div> : <div className="d-flex flex-wrap align-items-center gap-2">
-      <span className="small">Connected as <b>{connection.connection?.googleEmail}</b></span> <a className="btn btn-outline-secondary btn-sm" href="/api/teacher/google-chat/connect">Reconnect Google account</a>
-      {!space ? <><button className="btn btn-primary btn-sm" onClick={() => void createSpace()} disabled={busy}>Create class Space</button>
-        {spaces.filter(item => item.externalUserAllowed).length > 0 && <><select className="form-select form-select-sm" style={{maxWidth: "280px"}} value={selectedSpaceName} onChange={event => setSelectedSpaceName(event.target.value)}><option value="">Or choose an existing Space…</option>{spaces.filter(item => item.externalUserAllowed).map(item => <option key={item.name} value={item.name}>{item.displayName}</option>)}</select><button className="btn btn-outline-primary btn-sm" onClick={() => void linkExistingSpace()} disabled={busy || !selectedSpaceName}>Link selected Space</button></>}</> :
-        <><span className="badge text-bg-success">Space linked</span><span className="small">{space.displayName}</span>
-          <button className="btn btn-outline-primary btn-sm" onClick={() => void syncMembers()} disabled={busy}>Sync class members</button></>}
+      <span className="small">Google account <b>{connection.connection?.googleEmail}</b></span>
+      {connection.connection?.matchesPortalEmail
+        ? <span className="badge text-bg-success">Matches SAGA</span>
+        : <span className="badge text-bg-warning">Different from SAGA email</span>}
+      {connection.connection?.driveEnabled
+        ? <span className="badge text-bg-success">Drive enabled</span>
+        : <span className="badge text-bg-warning">Drive permission needed</span>}
+      {connection.connection?.chatEnabled
+        ? <span className="badge text-bg-success">Chat enabled</span>
+        : <span className="badge text-bg-warning">Chat permission needed</span>}
+      {(!connection.connection?.matchesPortalEmail || !connection.connection?.driveEnabled || !connection.connection?.chatEnabled) &&
+        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => window.location.assign(new URL("/api/teacher/google-chat/connect", window.location.origin).toString())}>Reconnect Google services</button>}
+      {connection.connection?.matchesPortalEmail && connection.connection?.chatEnabled && (
+        !space ? (
+          <>
+            <button className="btn btn-primary btn-sm" onClick={() => void createSpace()} disabled={busy}>
+              Create class Space
+            </button>
+            {spaces.filter(item => item.externalUserAllowed).length > 0 && (
+              <>
+                <select
+                  className="form-select form-select-sm"
+                  style={{ maxWidth: "280px" }}
+                  value={selectedSpaceName}
+                  onChange={event => setSelectedSpaceName(event.target.value)}
+                >
+                  <option value="">Or choose an existing Space…</option>
+                  {spaces.filter(item => item.externalUserAllowed).map(item => (
+                    <option key={item.name} value={item.name}>{item.displayName}</option>
+                  ))}
+                </select>
+                <button
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={() => void linkExistingSpace()}
+                  disabled={busy || !selectedSpaceName}
+                >
+                  Link selected Space
+                </button>
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <span className="badge text-bg-success">Space linked</span>
+            <span className="small">{space.displayName}</span>
+            <button className="btn btn-outline-primary btn-sm" onClick={() => void syncMembers()} disabled={busy}>
+              Sync class members
+            </button>
+          </>
+        )
+      )}
     </div>}
+    {space && (!connection?.connection?.matchesPortalEmail || !connection.connection.chatEnabled) &&
+      <p className="text-warning small mt-2">Chat actions are paused until the Google account and Chat permissions match your SAGA teacher account. Reconnect Google services to continue.</p>}
     {space && !space.externalUserAllowed && <p className="text-warning small mt-2">This Space does not allow external Google accounts.</p>}
-    {space && <div className="mt-3">
+    {space && connection?.connection?.matchesPortalEmail && connection.connection.chatEnabled && <div className="mt-3">
       <label className="form-label small" htmlFor={`chat-announcement-${subjectId}`}>Send a class announcement</label>
       <textarea id={`chat-announcement-${subjectId}`} className="form-control mb-2" rows={3} maxLength={4000} value={announcement} onChange={event => setAnnouncement(event.target.value)} placeholder="Write an announcement for this class…" />
       <button className="btn btn-outline-primary btn-sm" onClick={() => void sendAnnouncement()} disabled={busy || !announcement.trim()}>Send announcement</button>

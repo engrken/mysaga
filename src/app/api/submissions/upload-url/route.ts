@@ -5,9 +5,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { assertActivitiesWritable } from "@/lib/activity-feature-flags";
+import { activitiesExplorationOnly, assertActivitiesWritable } from "@/lib/activity-feature-flags";
 import { activityEnrollmentIdentity, activityHeaders } from "@/lib/class-activities";
-import { getR2BucketName, getR2Client, getR2PublicUrl, sanitizeR2FileName } from "@/lib/r2";
+import { getR2BucketName, getR2Client, sanitizeR2FileName } from "@/lib/r2";
 
 export const runtime = "nodejs";
 
@@ -26,7 +26,7 @@ const error = (message: string, status = 400) => reply({ error: message }, statu
 export async function POST(request: Request) {
   const student = await requireRole("STUDENT");
   if (!student) return error("Unauthorized.", 401);
-  if (!assertActivitiesWritable("student")) {
+  if (activitiesExplorationOnly || !assertActivitiesWritable("student")) {
     return error("Student assignment uploads are disabled while this beta is read-only.", 423);
   }
 
@@ -92,7 +92,6 @@ export async function POST(request: Request) {
       uploadUrl,
       uploadHeaders,
       fileKey,
-      publicUrl: getR2PublicUrl(fileKey),
       fileName: safeName,
       fileSize: input.fileSize,
       mimeType

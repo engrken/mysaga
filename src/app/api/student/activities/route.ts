@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { assertActivitiesWritable } from "@/lib/activity-feature-flags";
+import { activitiesExplorationOnly, assertActivitiesWritable } from "@/lib/activity-feature-flags";
 import {
   activityEnrollmentIdentity, activityHeaders, gradeQuizAnswers, QuizAnswer,
   quizSnapshotSchema, sanitizeLessonHtml
@@ -66,9 +66,9 @@ export async function GET(request: Request) {
       releaseGrade: true, releaseAnswers: true,
       ...(activityId ? { questions: true, instructions: true, materialUrl: true, lessonPages: true } : {}),
       submissions: { where: { enrollmentId: { in: enrollmentIds } },
-        select: { text: true, driveUrl: true, files: true, storageProvider: true, fileUrl: true,
+        select: { id: true, text: true, driveUrl: true, files: true, storageProvider: true, fileUrl: true,
           fileName: true, fileSize: true, mimeType: true, offline: true, submittedAt: true,
-          attachments: { select: { id: true, storageProvider: true, fileKey: true, fileUrl: true,
+          attachments: { select: { id: true, storageProvider: true, fileUrl: true,
             fileName: true, fileSize: true, mimeType: true, createdAt: true } },
           points: true, feedback: true, gradedAt: true } },
       quizAttempts: { where: { enrollmentId: { in: enrollmentIds } },
@@ -100,10 +100,17 @@ export async function GET(request: Request) {
             .map(page => ({ ...page, content: sanitizeLessonHtml(page.content) })) : undefined,
       attempts, attemptsRemaining: Math.max(0, row.attemptsAllowed - attempts.length),
       submission: submission ? {
+        id: submission.id,
         text: submission.text, driveUrl: submission.driveUrl, files: submission.files, offline: submission.offline,
-        storageProvider: submission.storageProvider, fileUrl: submission.fileUrl, fileName: submission.fileName,
+        storageProvider: submission.storageProvider,
+        fileUrl: submission.storageProvider === "CLOUDFLARE_R2" ? null : submission.fileUrl,
+        fileName: submission.fileName,
         fileSize: submission.fileSize, mimeType: submission.mimeType,
-        attachments: submission.attachments.map(file => ({ ...file, fileSize: Number(file.fileSize) })),
+        attachments: submission.attachments.map(file => ({
+          ...file,
+          fileUrl: file.storageProvider === "CLOUDFLARE_R2" ? null : file.fileUrl,
+          fileSize: Number(file.fileSize)
+        })),
         submittedAt: submission.submittedAt, graded: submission.gradedAt !== null,
         points: release ? submission.points : null, feedback: release ? submission.feedback : null
       } : null
@@ -115,7 +122,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const student = await requireRole("STUDENT");
   if (!student) return error("Unauthorized.", 401);
-  if (!assertActivitiesWritable("student")) return error("Student activity submissions are disabled while this beta is read-only.", 423);
+  if (activitiesExplorationOnly || !assertActivitiesWritable("student")) {
+    return error("Student activity submissions are disabled during Activities exploration mode.", 423);
+  }
   const parsed = submissionSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return error("Check your submission and try again.");
   const input = parsed.data;

@@ -525,7 +525,7 @@ model ActivitySubmissionFile {
   submissionId   String
   storageProvider StorageProvider
   fileKey        String?         @unique
-  fileUrl        String
+  fileUrl        String?
   fileName       String
   fileSize       BigInt
   mimeType       String

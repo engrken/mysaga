@@ -12,3 +12,8 @@ export const activitiesPublishEnabled =
 
 export const activitiesStudentReadOnly =
   activitiesReadOnly || (production && process.env.NEXT_PUBLIC_SAGA_ACTIVITIES_STUDENT_WRITE !== "true");
+
+/** Google Drive Picker / student identity verification is a separate exploration gate. */
+export const activitiesGoogleDriveExploration =
+  process.env.NEXT_PUBLIC_SAGA_ACTIVITIES_GOOGLE_DRIVE_EXPLORATION === "true" &&
+  (!production || activitiesExplorationOnly);
