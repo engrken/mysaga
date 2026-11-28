@@ -257,7 +257,7 @@ test("mobile navigation, demo alert actions, and long page titles wrap without h
   const css = read("src/app/globals.css");
   const banner = read("src/components/RealDemoBanner.module.css");
   const demoCss = read("src/components/DemoWorkspace.module.css");
-  assert.match(css, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css, /\.portal-top-links\{[\s\S]*?flex-direction:column/);
   assert.match(css, /overflow-wrap:anywhere/);
   assert.match(css, /overflow-x:clip/);
   assert.match(css, /-webkit-overflow-scrolling:touch/);
