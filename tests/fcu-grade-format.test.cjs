@@ -687,7 +687,7 @@ test("category ordering is hierarchical, persistent, and exposed from Assessment
 });
 
 test("Final Grades print summary uses root-domain weighted contributions", () => {
-  const start = source.indexOf("function gradeSheetComponentContribution(");
+  const start = source.indexOf("function gradeSheetComponentSummary(");
   const end = source.indexOf("\nfunction downloadGradeSheetXlsx(", start);
   assert.ok(start > 0 && end > start, "weighted component helper is present");
   const compiledContribution = ts.transpileModule(source.slice(start, end), {
@@ -710,7 +710,7 @@ test("Final Grades print summary uses root-domain weighted contributions", () =>
   const printStart = source.indexOf('<table className="print-grade-table generic-print-grade-table">');
   const printEnd = source.indexOf("</table>", printStart);
   const printTable = source.slice(printStart, printEnd);
-  assert.ok(printTable.includes("gradeSheetEnrollmentBreakdown(detail,enrollment)"));
+  assert.ok(printTable.includes("gradeSheetEnrollmentBreakdown(detail, enrollment)"));
   assert.ok(printTable.includes("gradeSheetPrimaryDomains.map"));
   assert.ok(printTable.includes("domainShares.reduce"));
   assert.ok(!printTable.includes("gradeSheetAdditionalComponents.map"));
@@ -911,7 +911,7 @@ test("printable Collegiate sheet shows each root-domain weighted contribution", 
   const printEnd = source.indexOf("</table>", printStart);
   const printTable = source.slice(printStart, printEnd);
   assert.ok(printTable.includes("gradeSheetPrimaryDomains.map"));
-  assert.ok(printTable.includes("gradeSheetEnrollmentBreakdown(detail,enrollment)"));
+  assert.ok(printTable.includes("gradeSheetEnrollmentBreakdown(detail, enrollment)"));
   assert.ok(!printTable.includes("gradeSheetAdditionalComponents.map"));
   assert.ok(printTable.includes("domainShares.reduce"));
   assert.ok(printTable.includes("total.toFixed(2)"));
