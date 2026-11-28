@@ -176,7 +176,7 @@ def build_iso_workbook(payload: dict) -> bytes:
     worksheet.sheet_view.showGridLines = True
     worksheet.freeze_panes = "A13" if two_tier_headers else "A12"
     worksheet.sheet_properties.pageSetUpPr.fitToPage = True
-    worksheet.page_setup.orientation = "portrait"
+    worksheet.page_setup.orientation = "landscape" if two_tier_headers else "portrait"
     worksheet.page_setup.paperSize = "14"  # Folio paper code: Long bond, 8.5 x 13 inches.
     worksheet.page_setup.fitToWidth = 1
     worksheet.page_setup.fitToHeight = 0
@@ -369,7 +369,7 @@ def build_iso_workbook(payload: dict) -> bytes:
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     data_start_row = 13 if two_tier_headers else 12
-    for row_offset, row_values in enumerate(rows, start=data_start_row):    for row_offset, row_values in enumerate(rows, start=12):
+    for row_offset, row_values in enumerate(rows, start=data_start_row):
         worksheet.row_dimensions[row_offset].height = 22
         for column_number in range(1, column_count + 1):
             value = row_values[column_number - 1] if column_number <= len(row_values) else ""
