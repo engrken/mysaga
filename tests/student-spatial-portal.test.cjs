@@ -105,3 +105,15 @@ test("freeform mode enables independently draggable and persistent overview modu
   assert.match(customizer, /drag the small handle above each overview module/i);
   assert.match(css, /student-module-drag-handle/);
 });
+
+test("demo sign-in always returns safe JSON and the browser handles empty or malformed responses", () => {
+  const route = read("src/app/api/auth/demo/route.ts");
+  const entry = read("src/components/ActualDemoEntry.tsx");
+  assert.match(route, /catch \(error\)/);
+  assert.match(route, /\[demo-session\] Unable to create a public demo session/);
+  assert.match(route, /NextResponse\.json\([\s\S]*?temporarily unavailable/);
+  assert.match(entry, /const responseText = await response\.text\(\)/);
+  assert.match(entry, /try \{\s*data = JSON\.parse\(responseText\)/);
+  assert.match(entry, /returned an empty response/);
+  assert.match(entry, /!data\.redirect\.startsWith\("\/\/"\)/);
+});
