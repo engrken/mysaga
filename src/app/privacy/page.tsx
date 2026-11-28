@@ -195,6 +195,7 @@ export default async function PrivacyPage({ searchParams }: PrivacyPageProps) {
           through Google Account settings. Google then processes account and Chat
           activity under Google's own terms and privacy information.
         </p>
+
         <h2>5. Assignments, uploaded files, and Google Drive links</h2>
         <p>
           For assignment submissions, files up to 5 MB per file may be uploaded
