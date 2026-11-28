@@ -234,7 +234,7 @@ test("Record Scores never masks score cells for class remarks; only DROPPED is m
   assert.match(portal, /const isFinalGradesTab = classSection === "final"/);
 
   const finalStart = portal.indexOf('{classSection === "final" && <section id="class-section-final"');
-  const finalEnd = portal.indexOf("\\n        </>}", finalStart);
+  const finalEnd = portal.indexOf(String.fromCharCode(10) + "        </>}", finalStart);
   const finalSection = portal.slice(finalStart, finalEnd);
   assert.match(finalSection, /isDroppedStatus=isFinalGradesTab && resolvedGradeRemark\(en\.remarks,band\?\.remarks\)==="DROPPED"/);
   assert.doesNotMatch(finalSection, /!passed|passed\?/);
