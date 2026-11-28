@@ -151,6 +151,14 @@ def build_iso_workbook(payload: dict) -> bytes:
         "notedByName", "notedByPosition",
     )
     clean_header = {key: _safe_text(header.get(key, "")) for key in header_fields}
+    clean_header["pageNo"] = _safe_text(header.get("pageNo", "1")).strip() or "1"
+    affiliations = header.get("accreditationAffiliations")
+    if isinstance(affiliations, list):
+        affiliations = [_safe_text(value).strip() for value in affiliations if _safe_text(value).strip()]
+    else:
+        affiliations = [clean_header["affiliationLine1"], clean_header["affiliationLine2"]]
+    clean_header["affiliationLine1"] = affiliations[0] if affiliations else ""
+    clean_header["affiliationLine2"] = "\\n".join(affiliations[1:]) if len(affiliations) > 1 else ""
     required_fields = header_fields
     if any(not clean_header[key].strip() for key in required_fields):
         raise ValueError("Complete all ISO document-control fields before exporting.")
@@ -176,14 +184,14 @@ def build_iso_workbook(payload: dict) -> bytes:
     worksheet.sheet_view.showGridLines = True
     worksheet.freeze_panes = "A13" if two_tier_headers else "A12"
     worksheet.sheet_properties.pageSetUpPr.fitToPage = True
-    worksheet.page_setup.orientation = "landscape" if two_tier_headers else "portrait"
-    worksheet.page_setup.paperSize = "14"  # Folio paper code: Long bond, 8.5 x 13 inches.
+    worksheet.page_setup.orientation = "portrait"
+    worksheet.page_setup.paperSize = "14"  # Folio / long bond: 8.5 x 13 inches.
     worksheet.page_setup.fitToWidth = 1
-    worksheet.page_setup.fitToHeight = 0
-    worksheet.page_margins.left = 0.25
-    worksheet.page_margins.right = 0.25
-    worksheet.page_margins.top = 0.35
-    worksheet.page_margins.bottom = 0.35
+    worksheet.page_setup.fitToHeight = 2
+    worksheet.page_margins.left = 0.4
+    worksheet.page_margins.right = 0.4
+    worksheet.page_margins.top = 0.4
+    worksheet.page_margins.bottom = 0.4
     worksheet.page_margins.header = 0.15
     worksheet.page_margins.footer = 0.15
     worksheet.print_title_rows = "11:12" if two_tier_headers else "11:11"
@@ -255,7 +263,7 @@ def build_iso_workbook(payload: dict) -> bytes:
     metadata = (
         (2, "Effectivity:", clean_header["effectivity"]),
         (3, "Issuing Office:", clean_header["issuingOffice"]),
-        (4, "Page No.", "1"),
+        (4, "Page No.", clean_header["pageNo"]),
     )
     for row_number, label, value in metadata:
         label_cell = worksheet.cell(row_number, metadata_label_column)
@@ -279,8 +287,8 @@ def build_iso_workbook(payload: dict) -> bytes:
         worksheet[coordinate].border = NO_BORDER
         worksheet[coordinate].font = Font(name="Arial", size=8, color="FF000000")
         worksheet[coordinate].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    worksheet.row_dimensions[5].height = 17
-    worksheet.row_dimensions[6].height = 17
+    worksheet.row_dimensions[5].height = 20
+    worksheet.row_dimensions[6].height = 24
     worksheet.row_dimensions[7].height = 22
 
     _add_logo(worksheet, _safe_text(payload.get("logoPngBase64", "")))
@@ -289,7 +297,7 @@ def build_iso_workbook(payload: dict) -> bytes:
     normalized_headers.extend([""] * (column_count - len(normalized_headers)))
     header_fill = PatternFill(fill_type="solid", fgColor="FFEFEFEF")
     table_font = Font(name="Arial", size=8, bold=True, color="FF000000")
-    body_font = Font(name="Arial", size=9, color="FF000000")
+    body_font = Font(name="Arial", size=8, color="FF000000")
 
     # Class metadata is supplied by the authenticated subject route for every export.
     # Accept both the explicit class shape and subject-style field names for compatibility.
@@ -370,7 +378,7 @@ def build_iso_workbook(payload: dict) -> bytes:
 
     data_start_row = 13 if two_tier_headers else 12
     for row_offset, row_values in enumerate(rows, start=data_start_row):
-        worksheet.row_dimensions[row_offset].height = 22
+        worksheet.row_dimensions[row_offset].height = 17
         for column_number in range(1, column_count + 1):
             value = row_values[column_number - 1] if column_number <= len(row_values) else ""
             cell = worksheet.cell(row_offset, column_number)
@@ -393,25 +401,25 @@ def build_iso_workbook(payload: dict) -> bytes:
     for index in range(column_count):
         heading = _safe_text(normalized_headers[index]).upper()
         if index == 0:
-            width = 7
+            width = 4.5
         elif index == 1:
-            width = 32
+            width = 24
         elif heading == "TG":
-            width = 12
+            width = 7
         elif heading == "FG":
-            width = 10
+            width = 6
         elif "REMARK" in heading:
-            width = 15
+            width = 10
         elif heading == "EQ" or heading.endswith("%"):
-            width = 12
+            width = 7.5
         else:
             width = 10
         worksheet.column_dimensions[get_column_letter(index + 1)].width = width
 
     # The final two columns form the right metadata grid. A combined 40-character
     # allocation keeps "REGISTRAR'S OFFICE" and "October 1, 2025" on one line.
-    worksheet.column_dimensions[get_column_letter(metadata_label_column)].width = 18
-    worksheet.column_dimensions[get_column_letter(metadata_value_column)].width = 22
+    worksheet.column_dimensions[get_column_letter(metadata_label_column)].width = 13
+    worksheet.column_dimensions[get_column_letter(metadata_value_column)].width = 16
 
     # Signature block: headings, blank signing space, then centered printed names and positions.
     data_end_row = (12 if two_tier_headers else 11) + len(rows)
@@ -496,8 +504,8 @@ def build_iso_workbook(payload: dict) -> bytes:
         worksheet[coordinate].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     worksheet.print_area = "A1:{0}{1}".format(last_column, signature_position_row)
-    workbook.properties.title = "FCU-EOMS-RO-006-F Collegiate Grading Sheet"
-    workbook.properties.subject = "Educational Organization Management System"
+    workbook.properties.title = clean_header["formNo"] + " " + clean_header["formName"]
+    workbook.properties.subject = clean_header["eomsTitle"]
     workbook.properties.creator = clean_header["organizationName"]
 
     output = BytesIO()
