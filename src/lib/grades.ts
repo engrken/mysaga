@@ -212,7 +212,8 @@ export function calculateGradeBreakdown(categories: GradeCalculationCategory[]) 
     }
     const contributions = items.filter(item => descendants.has(item.categoryId) && item.earnedCourse !== null);
     const rawEquivalentPercent = contributions.length
-      ? roundPercent(contributions.reduce((sum, item) => sum + (item.earnedWithinRoot ?? 0), 0))
+      ? roundPercent(contributions.reduce((sum, item) =>
+          sum + (item.categoryId === root.id ? (item.percent ?? 0) : (item.earnedWithinRoot ?? 0)), 0))
       : null;
     const parentWeightedScore = contributions.length
       ? roundPercent(contributions.reduce((sum, item) => sum + (item.earnedCourse ?? 0), 0))
