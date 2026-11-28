@@ -9,3 +9,22 @@
 .actions button:hover{background:#fbeab8}
 .actions button:disabled{opacity:.65;cursor:wait}
 @media(max-width:760px){.notice{padding:13px 17px}.actions{width:100%;justify-content:flex-start}}
+
+
+.notice{box-sizing:border-box;width:100%;max-width:100%;min-width:0;align-items:flex-start}
+.copy{flex:1 1 360px;min-width:0;overflow-wrap:anywhere}
+.actions{flex:0 1 auto;min-width:0;max-width:100%;justify-content:flex-end}
+.actions a,.actions button{max-width:100%;min-height:38px}
+@media(max-width:760px){
+  .notice{display:grid;grid-template-columns:minmax(0,1fr);gap:9px;padding:12px 16px}
+  .copy{width:100%;max-width:100%;font-size:.75rem}
+  .copy strong{line-height:1.35}
+  .copy span{font-size:.72rem;line-height:1.45}
+  .actions{display:flex;width:100%;flex:1 1 auto;justify-content:flex-start;gap:8px}
+  .actions a,.actions button{flex:1 1 138px;min-width:0;min-height:40px;padding:8px 10px;white-space:normal;text-align:center}
+}
+@media(max-width:390px){
+  .notice{padding:12px 16px}
+  .actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .actions a,.actions button{width:100%;font-size:.7rem}
+}
