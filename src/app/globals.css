@@ -2519,3 +2519,101 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
 .portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-module-drag-handle{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.18);color:#d3deed}
 @media(max-width:767px){.student-module-drag-handle{display:none!important}.student-draggable-module.is-freeform{transform:none!important}}
 @media(prefers-reduced-motion:reduce){.student-draggable-module.is-freeform{transition:none}}
+
+
+/* Student workspace refinement: align the title bar and content column, and keep the quick panel below the page header. */
+.portal-layout[data-saga-role="student"]{--student-panel-default-top:190px}
+.portal-layout[data-saga-role="student"][data-student-demo="true"]{--student-panel-default-top:362px}
+.portal-layout[data-saga-role="student"] .content-wrap{max-width:1680px}
+.portal-layout[data-saga-role="student"] .student-portal-topbar{padding:0}
+.portal-layout[data-saga-role="student"] .student-portal-topbar-inner{display:flex;align-items:center;justify-content:space-between;gap:20px;width:100%;max-width:1680px;margin:0 auto;padding:0 44px}
+@media(min-width:1181px){
+  .portal-layout[data-saga-role="student"][data-student-page="overview"] .student-portal-topbar-inner{padding-right:370px}
+}
+@media(max-width:1100px){
+  .portal-layout[data-saga-role="student"] .student-portal-topbar-inner{padding-left:28px;padding-right:28px}
+}
+@media(max-width:760px){
+  .portal-layout[data-saga-role="student"] .student-portal-topbar-inner{padding:0 17px;gap:10px}
+}
+
+/* The dark option is a soft midnight-blue glass, not an opaque black/smoked overlay. */
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .main-area{
+  color:#f1f6fc;
+  background:radial-gradient(ellipse at 12% 8%,rgba(128,170,218,.22),transparent 38%),radial-gradient(ellipse at 86% 20%,rgba(144,129,194,.16),transparent 36%),linear-gradient(135deg,#1a2b40 0%,#293f58 52%,#20364d 100%);
+}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .portal-top-nav{background:rgba(37,56,78,.86);border-color:rgba(239,246,255,.2)}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .topbar{background:rgba(40,60,83,.82);border-color:rgba(235,243,253,.2);color:#f5f8fd}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-glass-kpi-card,
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-glass-insights,
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-glass-active-courses{
+  background:rgba(55,77,101,.76);
+  border-color:rgba(239,246,255,.24);
+  box-shadow:0 18px 42px rgba(8,21,37,.15),inset 0 1px 0 rgba(255,255,255,.18);
+}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-floating-window{
+  background:rgba(39,59,82,.94);
+  border-color:rgba(240,247,255,.28);
+  box-shadow:0 22px 56px rgba(8,20,35,.24),inset 0 1px 0 rgba(255,255,255,.16);
+  backdrop-filter:blur(22px) saturate(125%);
+}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-window-drag-handle,
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-floating-window-head{color:#f0f5fc}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-window-minimize{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.2);color:#edf4fc}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"][data-student-wallpaper="custom"] .main-area{background-image:linear-gradient(rgba(18,34,53,.42),rgba(18,34,53,.5)),var(--student-wallpaper-image),linear-gradient(135deg,#1a2b40,#293f58);background-position:center;background-size:cover}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-glass-analytics{background:rgba(255,255,255,.08)}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-glass-schedule-card{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.19)}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-glass-schedule-card>strong{color:#eaf2fc}
+
+/* Shared appearance controls and theme-aware surfaces on Announcements and Class Chats. */
+.student-page-customizer{display:flex;justify-content:flex-end;position:relative;margin:0 0 14px}
+.student-page-customizer-trigger{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(124,148,181,.3);border-radius:999px;background:rgba(255,255,255,.58);padding:9px 14px;color:var(--student-accent,#3985e8);font-size:.7rem;font-weight:850;box-shadow:0 5px 16px rgba(31,55,87,.06);backdrop-filter:blur(15px)}
+.student-page-customizer-trigger>span{font-size:.9rem}
+.student-page-customizer-panel{width:min(100%,960px);margin:0 0 15px auto;padding:19px;border:1px solid rgba(255,255,255,.68);border-radius:18px;background:rgba(255,255,255,.72);box-shadow:0 15px 38px rgba(29,52,83,.09);backdrop-filter:blur(22px) saturate(135%)}
+.student-page-customizer-panel>header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin:0 0 15px}
+.student-page-customizer-panel>header h2{margin:4px 0;font-size:1rem;font-weight:850;color:#263c59}
+.student-page-customizer-panel>header p{margin:0;color:#7b8ba0;font-size:.72rem}
+.student-page-customizer-close{width:30px;height:30px;flex:none;border:1px solid rgba(113,137,170,.22);border-radius:9px;background:rgba(255,255,255,.7);color:#71839b;font-size:1.15rem}
+.student-page-customizer-panel .student-portal-customizer{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:15px}
+.student-page-customizer-note{margin:12px 0 0;color:#8492a6;font-size:.62rem}
+.student-theme-page{min-width:0;color:#273a55}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="light-glass"] .student-theme-page .surface,
+.portal-layout[data-saga-role="student"][data-student-glass-theme="light-glass"] .student-theme-page .empty-state{
+  background:rgba(255,255,255,.68);
+  border-color:rgba(255,255,255,.78);
+  box-shadow:0 12px 30px rgba(35,59,91,.055);
+  backdrop-filter:blur(17px) saturate(130%);
+}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="light-glass"] .student-theme-page .student-page-customizer-panel{background:rgba(255,255,255,.78)}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page{color:#eff5fc}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .surface,
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .empty-state,
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .student-page-customizer-panel{
+  color:#eef4fc;
+  background:rgba(54,76,100,.78);
+  border-color:rgba(239,246,255,.22);
+  box-shadow:0 16px 36px rgba(9,23,39,.14),inset 0 1px 0 rgba(255,255,255,.08);
+  backdrop-filter:blur(20px) saturate(125%);
+}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page h2,
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page h3,
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page b,
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .student-page-customizer-panel>header h2{color:#f1f6fc}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page p,
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .muted,
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page small,
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .text-body-secondary{color:#c0cee0!important}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .border-top{border-color:rgba(239,246,255,.17)!important}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .student-page-customizer-trigger{background:rgba(53,76,100,.78);border-color:rgba(239,246,255,.24);color:#dcecff}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-page-customizer-panel .student-customizer-label{color:#f0f5fc}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-page-customizer-panel .student-customizer-choice-list button,
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-page-customizer-panel .student-wallpaper-option{background:rgba(255,255,255,.1);border-color:rgba(239,246,255,.2);color:#dbe7f5}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-page-customizer-panel .student-customizer-field{color:#c6d4e5}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-page-customizer-panel .student-customizer-field input{background:rgba(255,255,255,.12);border-color:rgba(239,246,255,.2);color:#f1f6fc}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-page-customizer-panel .student-customizer-help,
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-page-customizer-note{color:#bfcee0}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="classic"] .student-page-customizer-panel{background:#fff;border-color:#e3e9f2;backdrop-filter:none}
+@media(max-width:760px){
+  .student-page-customizer-panel{padding:14px}
+  .student-page-customizer-panel .student-portal-customizer{grid-template-columns:1fr}
+}
