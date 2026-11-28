@@ -112,9 +112,17 @@ export default function DraggableGlassWindow({
     };
 
     syncScrollLock();
-    compactQuery.addEventListener("change", syncScrollLock);
+    if (typeof compactQuery.addEventListener === "function") {
+      compactQuery.addEventListener("change", syncScrollLock);
+    } else {
+      compactQuery.addListener(syncScrollLock);
+    }
     return () => {
-      compactQuery.removeEventListener("change", syncScrollLock);
+      if (typeof compactQuery.removeEventListener === "function") {
+        compactQuery.removeEventListener("change", syncScrollLock);
+      } else {
+        compactQuery.removeListener(syncScrollLock);
+      }
       unlock();
     };
   }, [minimized]);
