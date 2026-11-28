@@ -2984,3 +2984,16 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
   border-color:rgba(255,255,255,.2);
   color:#eef4fc;
 }
+
+
+@supports not (height:100dvh){
+  @media(max-width:767px), (pointer:coarse){
+    .portal-layout .student-floating-window{
+      max-height:min(88vh,calc(100vh - env(safe-area-inset-top,0px) - 8px))!important;
+    }
+    .portal-layout .student-floating-window-backdrop{height:100vh;min-height:100vh}
+    .portal-layout .student-floating-window-body{
+      max-height:calc(min(88vh,100vh - env(safe-area-inset-top,0px) - 8px) - 58px - env(safe-area-inset-bottom,0px));
+    }
+  }
+}
