@@ -12,7 +12,7 @@ test("real student overview uses the spatial dashboard without removing existing
   assert.match(portal, /<StudentClassEnrollment/);
   assert.match(portal, /student-grade-section/);
   assert.match(portal, /student-grade-\$\{g\.id\}/);
-  assert.match(portal, /setStudentCustomizerRequested\(true\)/);
+  assert.match(portal, /setStudentCustomizerRequestedRoute\(targetPage\)/);
 });
 
 test("student theme preferences are account-scoped, validated, and never persisted for demo users", () => {
@@ -203,4 +203,78 @@ test("secondary-page customization reset preserves the saved Academic Overview l
   assert.match(portal, /preserveOverviewLayout[\s\S]*?layout: studentPortalPreferences\.layout/);
   assert.equal((portal.match(/onReset=\{\(\) => resetStudentPortalPreferences\(true\)\}/g) || []).length, 2);
   assert.match(appearance, /onChange\(\{ \.\.\.next, layout: preferences\.layout \}\)/);
+});
+
+
+test("mobile and touch viewports force snapped layouts while desktop mouse users retain Freeform", () => {
+  const portal = read("src/components/Portal.tsx");
+  const dashboard = read("src/components/student-portal/OverviewDashboard.tsx");
+  const module = read("src/components/student-portal/DraggableGlassModule.tsx");
+  const customizer = read("src/components/student-portal/PortalCustomizer.tsx");
+  assert.match(portal, /matchMedia\("\(max-width: 767px\), \(pointer: coarse\)"\)/);
+  assert.match(portal, /isCompactOrTouchViewport \|\| tab !== "overview" \? "snapped" : studentPortalPreferences\.layout/);
+  assert.match(dashboard, /const activeLayoutMode = isCompactOrTouchViewport \? "snapped" : preferences\.layout/);
+  assert.equal((dashboard.match(/enabled=\{activeLayoutMode === "freeform"\}/g) || []).length, 3);
+  assert.match(dashboard, /allowFreeform=\{!isCompactOrTouchViewport\}/);
+  assert.match(dashboard, /layout: preferences\.layout/);
+  assert.match(customizer, /disabled=\{!allowFreeform && value === "freeform"\}/);
+  assert.match(module, /event\.pointerType !== "mouse"/);
+  assert.match(module, /matchMedia\("\(max-width: 767px\), \(pointer: coarse\)"\)/);
+});
+
+test("mobile floating panels lock background scrolling and restore the previous scroll position", () => {
+  const panel = read("src/components/student-portal/DraggableGlassWindow.tsx");
+  assert.match(panel, /if \(minimized \|\| typeof window === "undefined"\) return/);
+  assert.match(panel, /compactQuery = window\.matchMedia\("\(max-width: 767px\), \(pointer: coarse\)"\)/);
+  assert.match(panel, /body\.style\.position = "fixed"/);
+  assert.match(panel, /body\.style\.top =/);
+  assert.match(panel, /html\.style\.overflow = "hidden"/);
+  assert.match(panel, /window\.scrollTo\(0, restoreY\)/);
+  assert.match(panel, /compactQuery\.removeListener\(syncScrollLock\)/);
+  assert.match(panel, /event\.pointerType !== "mouse"/);
+});
+
+test("mobile panel presentation is a full-width bottom sheet with a touch backdrop and persistent close header", () => {
+  const panel = read("src/components/student-portal/DraggableGlassWindow.tsx");
+  const css = read("src/app/globals.css");
+  assert.match(panel, /student-floating-window-backdrop/);
+  assert.match(css, /@media\(max-width:767px\), \(pointer:coarse\)/);
+  assert.match(css, /inset:0;[\s\S]*?z-index:48/);
+  assert.match(css, /pointer-events:auto/);
+  assert.match(css, /backdrop-filter:blur\(5px\)/);
+  assert.match(css, /width:100vw!important/);
+  assert.match(css, /max-height:min\(88dvh/);
+  assert.match(css, /border-radius:22px 22px 0 0/);
+  assert.match(css, /student-floating-window-head\{[\s\S]*?position:sticky/);
+  assert.match(css, /student-window-minimize\{[\s\S]*?position:sticky/);
+  assert.match(css, /safe-area-inset-bottom/);
+  assert.match(css, /portal-top-nav\{z-index:30!important\}/);
+  assert.match(css, /student-floating-window\{[\s\S]*?z-index:50!important/);
+});
+
+test("mobile navigation, demo alert actions, and long page titles wrap without horizontal bleed", () => {
+  const css = read("src/app/globals.css");
+  const banner = read("src/components/RealDemoBanner.module.css");
+  const demoCss = read("src/components/DemoWorkspace.module.css");
+  assert.match(css, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css, /overflow-wrap:anywhere/);
+  assert.match(css, /overflow-x:clip/);
+  assert.match(css, /-webkit-overflow-scrolling:touch/);
+  assert.match(banner, /padding:12px 16px/);
+  assert.match(banner, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(banner, /flex:1 1 138px/);
+  assert.match(demoCss, /safetyBar\{[\s\S]*?flex-wrap:wrap/);
+  assert.match(demoCss, /100dvh/);
+  assert.match(demoCss, /overflow-x:clip/);
+});
+
+test("student app and Practice Demo use dynamic viewport sizing and touch-safe structured scrolling", () => {
+  const css = read("src/app/globals.css");
+  const demoCss = read("src/components/DemoWorkspace.module.css");
+  assert.match(css, /min-height:100dvh/);
+  assert.match(css, /max-height:min\(88dvh/);
+  assert.match(css, /overscroll-behavior:contain/);
+  assert.match(css, /touch-action:pan-y/);
+  assert.match(demoCss, /min-height:100dvh/);
+  assert.match(demoCss, /overflow-x:auto/);
 });
