@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate deploy; fi && prisma generate && npm run test:department-logo && npm run test:grades && npm run test:classes && npm run test:simulation && npm run test:scorebook-layout && npm run test:tenant && npm run test:teacher-signup && npm run test:identity && npm run test:invites && npm run test:release && npm run test:theme && npm run test:demo && npm run test:virtual-assistant && npm run test:activities && npm run test:announcements && npm run test:student-portal && npm run test:google-drive && npm run test:cognix-errors && npm run lint && next build",
+    "build": "prisma generate && npm run test:department-logo && npm run test:grades && npm run test:classes && npm run test:simulation && npm run test:scorebook-layout && npm run test:tenant && npm run test:teacher-signup && npm run test:identity && npm run test:invites && npm run test:release && npm run test:theme && npm run test:demo && npm run test:virtual-assistant && npm run test:activities && npm run test:announcements && npm run test:student-portal && npm run test:google-drive && npm run test:cognix-errors && npm run lint && next build && if [ \"$VERCEL_ENV\" = \"production\" ]; then prisma migrate deploy; fi",
     "test:grades": "node --test tests/grades.test.cjs tests/assessment-setup.test.cjs",
     "test:classes": "node --test tests/class-navigation.test.cjs tests/class-chat-period.test.mjs",
     "postinstall": "prisma generate",
