@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { reportCognixDatabaseUnavailable } from "@/lib/cognix-error-reporter";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ export async function GET() {
     }, { headers });
   } catch {
     // Keep database connection details and query errors out of the public response.
+    reportCognixDatabaseUnavailable();
     console.error("[saga-health] database readiness check failed");
     return NextResponse.json({
       service: "saga",

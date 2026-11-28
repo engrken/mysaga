@@ -46,3 +46,12 @@ Both values must stay server-side. Do not use a `NEXT_PUBLIC_` prefix or put eit
 - The assistant is read-only. It performs no grade calculations, student evaluation, attendance decisions, data mutation, or autonomous actions.
 - Neither endpoint persists the conversation or logs message contents or generated text.
 - AI-generated system guidance is instructional only; teachers remain responsible for using SAGA's authoritative on-screen workflow and validation messages.
+
+
+## Technical incident event adapter
+
+When the existing database readiness check returns its degraded 503 response, SAGA schedules a best-effort technical event to Cognix after the response. The event contains only a generated event UUID, timestamp, fixed application/category/severity/component/operation/dependency codes, HTTP status, and deployment environment.
+
+The adapter does not send database error text, SQL, request data, user or tenant identity, student/teacher information, or application records. It uses only the existing server-side `COGNIX_API_URL` and `COGNIX_API_KEY`, requires HTTPS, and applies a two-second timeout. A Cognix outage or rejected event does not alter SAGA's health response or expose integration details to the caller.
+
+This is operational error telemetry only. It does not enable the retired academic assistant, learning-resource, or teacher-summary capabilities, and it does not grant Cognix database or application-data access.
