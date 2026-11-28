@@ -268,3 +268,16 @@ test("domain summary is null until its primary component has at least one record
   });
   assert.equal(result.domains.find(item => item.categoryId === "lab").parentWeightedScore, 32);
 });
+
+
+test("primary domains with direct assessments retain raw percent before course weighting", () => {
+  const result = calculateGradeBreakdown([
+    cat("lecture", null, 60, [scored(71.39)]),
+    cat("lab", null, 40, [scored(89.5)])
+  ]);
+  assert.deepEqual(
+    result.domains.map(item => [item.rawEquivalentPercent, item.parentWeightedScore]),
+    [[71.39, 42.83], [89.5, 35.8]]
+  );
+  assert.equal(result.totalPercent, 78.63);
+});
