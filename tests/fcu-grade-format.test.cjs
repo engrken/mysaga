@@ -228,11 +228,41 @@ test("FCU final-grade export shows each saved component as raw and weighted colu
   assert.match(sheet, /<col min="10" max="10" width="11"/);
   assert.match(sheet, /<col min="11" max="11" width="18"/);
 });
+test("Generic Excel keeps primary domains before additional saved subcomponents", async () => {
+  const categories = [
+    { id: "lecture", name: "Lecture", weight: 60, sortOrder: 1 },
+    { id: "exams", name: "Exams", parentId: "lecture", weight: 50, sortOrder: 1 },
+    { id: "lab", name: "Lab", weight: 40, sortOrder: 2 }
+  ];
+  const components = [{ name: "Lecture / Exams", percentage: 50 }];
+  const files = await generate(categories, [
+    student("Domain Student", { lecture: 71.39, lab: 89.5, "Lecture / Exams": 86 }, 78.63)
+  ], components);
+  const sheet = files["xl/worksheets/sheet1.xml"];
+  assert.match(sheet, /<c r="C15"[^>]*>.*?LECTURE · Total \(RAW %\)/s);
+  assert.match(sheet, /<c r="D15"[^>]*>.*?LECTURE · WEIGHTED \(60\.00% OF COURSE\)/s);
+  assert.match(sheet, /<c r="E15"[^>]*>.*?LAB · TOTAL \(RAW %\)/s);
+  assert.match(sheet, /<c r="F15"[^>]*>.*?LAB · WEIGHTED \(40\.00% OF COURSE\)/s);
+  assert.match(sheet, /<c r="G15"[^>]*>.*?LECTURE \/ EXAMS · TOTAL \(RAW %\)/s);
+  assert.match(sheet, /<c r="H15"[^>]*>.*?LECTURE \/ EXAMS · WEIGHTED \(50\.00%\)/s);
+  assert.match(sheet, /<c r="I15"[^>]*>.*?TOTAL GRADE/s);
+  assert.match(sheet, /<c r="C17"[^>]*><v>71\.39<\/v>/);
+  assert.match(sheet, /<c r="D17"[^>]*><v>42\.83<\/v>/);
+  assert.match(sheet, /<c r="E17"[^>]*><v>89\.5<\/v>/);
+  assert.match(sheet, /<c r="F17"[^>]*><v>35\.8<\/v>/);
+  assert.match(sheet, /<c r="G17"[^>]*><v>86<\/v>/);
+  assert.match(sheet, /<c r="H17"[^>]*><v>43<\/v>/);
+  assert.match(sheet, /<c r="I17"[^>]*><v>78\.63<\/v>/);
+});
+
 test("Generic PDF export is offered only once inside the export dropdown", () => {
   assert.match(source, /<strong>Save \/ Print Generic PDF<\/strong>/, "the Generic dropdown retains its PDF option");
   assert.match(source, /"Download Generic Excel Sheet"/, "the Generic dropdown retains its idle Excel option label");
   assert.match(source, /Generating Excel file…/, "the Generic dropdown exposes its loading label");
   assert.doesNotMatch(source, /<button className="btn btn-outline-primary" onClick=\{\(\) => printFinalGradesPdf\("generic"\)\}>Save \/ Print Generic PDF<\/button>/, "the duplicate standalone PDF button is removed");
+  assert.match(source, /gradeSheetPrimaryDomains\.map/);
+  assert.match(source, /gradeSheetAdditionalComponents\.map/);
+  assert.match(source, /gradeSheetComponents\.map\(component=>\{/);
 });
 
 test("ISO Excel export uses dynamic class metadata and omits student-number columns", () => {
