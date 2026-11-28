@@ -20,8 +20,11 @@ export default function StudentAppearanceWindow({
   onRequestHandled: () => void;
   demoMode?: boolean;
 }) {
-  const [minimized, setMinimized] = useState(false);
+  const [minimized, setMinimized] = useState(true);
   const [front, setFront] = useState(false);
+  const pagePreferences: StudentPortalPreferences = { ...preferences, layout: "snapped" };
+  const updatePagePreferences = (next: StudentPortalPreferences) =>
+    onChange({ ...next, layout: preferences.layout });
 
   const updatePosition = (panelPosition: StudentPortalPreferences["panelPosition"]) => {
     onChange({ ...preferences, panelPosition });
@@ -39,7 +42,7 @@ export default function StudentAppearanceWindow({
   return <div
     id="student-appearance-window-host"
     className="student-appearance-window-host"
-    style={{ "--student-panel-z": front ? 125 : 96 } as CSSProperties}
+    style={{ "--student-panel-z": front ? 48 : 42 } as CSSProperties}
   >
     <DraggableGlassWindow
       key={`appearance-${preferences.panelPosition.x}:${preferences.panelPosition.y}`}
@@ -52,7 +55,7 @@ export default function StudentAppearanceWindow({
       onPositionChange={updatePosition}
       onActivate={() => setFront(true)}
     >
-      <PortalCustomizer preferences={preferences} onChange={onChange} onReset={onReset}/>
+      <PortalCustomizer preferences={pagePreferences} onChange={updatePagePreferences} onReset={onReset} allowFreeform={false}/>
       <p className="student-appearance-window-note">
         {demoMode
           ? "Demo changes are temporary and stay in this session."
