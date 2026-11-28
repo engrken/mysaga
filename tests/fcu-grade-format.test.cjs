@@ -40,7 +40,9 @@ async function generate(categories, enrollments, components) {
     weightedCategoryPercent: (enrollment, category) => enrollment.equivalents[category.id] ?? null,
     gradeSheetAttendancePercent: (detail, enrollment, categoryId) => enrollment.attendancePercent?.[categoryId] ?? null,
     gradeSheetRootDomainSummary: (detail, enrollment, category) => {
-      const rawEquivalentPercent = enrollment.equivalents[category.id] ?? null;
+      const rawEquivalentPercent = /attendance/i.test(category.name)
+        ? enrollment.attendancePercent?.[category.id] ?? null
+        : enrollment.equivalents?.[category.id] ?? null;
       return {
         rawEquivalentPercent,
         parentWeightedScore: rawEquivalentPercent === null ? null
@@ -432,10 +434,16 @@ test("Attendance component calculates its own session percentage and weighted co
   const context = {
     Set, Number, Math,
     categoryPath: category => category.name,
-    calculateGradeBreakdown: () => ({ items: [
-      { categoryId: "sessions", earnedCourse: 10 },
-      { categoryId: "other-attendance", earnedCourse: 10 }
-    ] }),
+    calculateGradeBreakdown: () => ({
+      items: [
+        { categoryId: "sessions", earnedCourse: 10 },
+        { categoryId: "other-attendance", earnedCourse: 10 }
+      ],
+      domains: [
+        { categoryId: "attendance", rawEquivalentPercent: 50, parentWeightedScore: 10 },
+        { categoryId: "other-attendance", rawEquivalentPercent: 100, parentWeightedScore: 10 }
+      ]
+    }),
     calculateCategoryPercent: ({ assessments }) => {
       const counted = assessments.filter(item => item.scores[0]?.remark !== "EXCUSED" && (item.scores[0]?.remark || item.scores[0]?.points != null));
       if (!counted.length) return null;
@@ -476,8 +484,10 @@ test("FCU final-grade export calculates Attendance as a weighted component", asy
     attendancePercent: { ATT: 75 }
   }], components);
   const sheet = files["xl/worksheets/sheet1.xml"];
-  assert.match(sheet, /<c r="C15"[^>]*>.*?ATTENDANCE\. 20%/s);
-  assert.match(sheet, /<c r="C17"[^>]*><v>15<\/v>/);
+  assert.match(sheet, /<c r="C15"[^>]*>.*?ATTENDANCE · TOTAL \(RAW %\)/s);
+  assert.match(sheet, /<c r="D15"[^>]*>.*?ATTENDANCE · WEIGHTED \(20\.00% OF COURSE\)/s);
+  assert.match(sheet, /<c r="C17"[^>]*><v>75<\/v>/);
+  assert.match(sheet, /<c r="D17"[^>]*><v>15<\/v>/);
 });
 
 test("FCU final-grade export supports a variable number of primary domains", async () => {
@@ -607,8 +617,8 @@ test("Record Scores Excel export mirrors the full grouped scorebook and saved si
   assert.match(sheet, /EQUIVALENT/);
   assert.match(sheet, /\(\%\)/);
   assert.doesNotMatch(sheet, /Lecture \/ Quizzes|Quizzes · Quiz 1|Item wt|Course wt|Student Number|2023-0001/);
-  assert.match(sheet, /<mergeCell ref="D14:E15"\/>/);
-  assert.match(sheet, /<mergeCell ref="H14:I15"\/>/);
+  assert.match(sheet, /<mergeCell ref="D14:G15"\/>/);
+  assert.match(sheet, /<mergeCell ref="H14:K15"\/>/);
   assert.match(sheet, /<c r="A18"[^>]*><v>1<\/v><\/c>/);
   assert.match(sheet, /<c r="B18"[^>]*>.*?Ana Reyes/s);
   assert.match(sheet, /<c r="A19"[^>]*><v>2<\/v><\/c>/);
