@@ -923,13 +923,25 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
   };
   const logoPng = headerPng;
 
-  const componentColumns = components.map((component, index) => ({
+  const rootDomainColumns = categories.filter(category => !category.parentId).slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((category, index) => ({
+      category,
+      rawCol: index * 2 + 2,
+      weightedCol: index * 2 + 3
+    }));
+  const rootDomainNames = new Set(rootDomainColumns.map(item =>
+    componentCategoryPath(item.category).trim().toLocaleLowerCase()
+  ));
+  const componentColumns = components.filter(component =>
+    !rootDomainNames.has(component.name.trim().toLocaleLowerCase())
+  ).map((component, index) => ({
     component,
     category: categories.find(category => componentCategoryPath(category).trim().toLocaleLowerCase() === component.name.trim().toLocaleLowerCase()),
-    rawCol: index * 2 + 2,
-    weightedCol: index * 2 + 3
+    rawCol: 2 + rootDomainColumns.length * 2 + index * 2,
+    weightedCol: 2 + rootDomainColumns.length * 2 + index * 2 + 1
   }));
-  const totalCol = 2 + componentColumns.length * 2;
+  const totalCol = 2 + (rootDomainColumns.length + componentColumns.length) * 2;
   const columnCount = totalCol + 3;
   const last = excelColumn(columnCount - 1);
   const cells: Array<Array<{ value: unknown; style: number }>> = [];
@@ -960,10 +972,22 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
   row([
     { col: 0, value: "", style: 4 },
     { col: 1, value: "NAME OF STUDENTS", style: 4 },
+    ...rootDomainColumns.flatMap(item => ([
+      {
+        col: item.rawCol,
+        value: item.category.name.toLocaleUpperCase() + " · " + (/lecture/i.test(item.category.name) ? "Total" : "TOTAL") + " (RAW %)",
+        style: 4
+      },
+      {
+        col: item.weightedCol,
+        value: item.category.name.toLocaleUpperCase() + " · WEIGHTED (" + item.category.weight.toFixed(2) + "% OF COURSE)",
+        style: 4
+      }
+    ])),
     ...componentColumns.flatMap(item => ([
       {
         col: item.rawCol,
-        value: item.component.name.toLocaleUpperCase() + " · " + (item.category && !item.category.parentId && /lecture/i.test(item.category.name) ? "Total" : "TOTAL") + " (RAW %)",
+        value: item.component.name.toLocaleUpperCase() + " · TOTAL (RAW %)",
         style: 4
       },
       {
@@ -981,6 +1005,21 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
   for (const [index, enrollment] of detail.enrollments.entries()) {
     const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
     const special = ["INC", "NP", "DROPPED"].includes(enrollment.remarks || "");
+    const domainValues = rootDomainColumns.flatMap(item => {
+      const summary = gradeSheetRootDomainSummary(detail, enrollment, item.category);
+      return [
+        {
+          col: item.rawCol,
+          value: special || summary?.rawEquivalentPercent == null ? "" : Number(summary.rawEquivalentPercent.toFixed(2)),
+          style: 5
+        },
+        {
+          col: item.weightedCol,
+          value: special || summary?.parentWeightedScore == null ? "" : Number(summary.parentWeightedScore.toFixed(2)),
+          style: 5
+        }
+      ];
+    });
     const componentValues = componentColumns.flatMap(item => {
       const summary = gradeSheetComponentSummary(detail, enrollment, item.component);
       return [
@@ -1000,6 +1039,7 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     row([
       { col: 0, value: String(index + 1) + ".", style: 6 },
       { col: 1, value: enrollment.studentName.toLocaleUpperCase(), style: 7 },
+      ...domainValues,
       ...componentValues,
       { col: totalCol, value: special || enrollment.finalPercent === null ? "" : Number(enrollment.finalPercent.toFixed(2)), style: 5 },
       { col: totalCol + 1, value: gradeString, style: 6 },
@@ -1313,6 +1353,14 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     return defaultConfigured.length ? defaultConfigured : configured.length ? configured : [{ name: "EXAM", percentage: 50 }, { name: "ACT", percentage: 40 }, { name: "ARP", percentage: 10 }];
   }, [user.defaultGradeSheetComponents, detail?.categories, detail?.assessments]);
   const [gradeSheetComponents, setGradeSheetComponents] = useState<GradeSheetComponent[]>(defaultGradeSheetComponents);
+  const gradeSheetPrimaryDomains = (detail?.categories ?? []).filter(category => !category.parentId)
+    .slice().sort((a, b) => a.sortOrder - b.sortOrder);
+  const gradeSheetPrimaryDomainNames = new Set(gradeSheetPrimaryDomains.map(category =>
+    categoryPath(category, detail?.categories ?? []).trim().toLocaleLowerCase()
+  ));
+  const gradeSheetAdditionalComponents = gradeSheetComponents.filter(component =>
+    !gradeSheetPrimaryDomainNames.has(component.name.trim().toLocaleLowerCase())
+  );
   const [componentDraft, setComponentDraft] = useState<GradeSheetComponent[]>(defaultGradeSheetComponents);
   const [componentEditorOpen, setComponentEditorOpen] = useState(false);
   const [classesMenuOpen, setClassesMenuOpen] = useState(false); const [onboardingOpen, setOnboardingOpen] = useState(false); const [helpOpen, setHelpOpen] = useState(false); const [helpInitialTab, setHelpInitialTab] = useState<"quick" | "faq" | "student" | "faculty">("quick"); const [subjectPage, setSubjectPage] = useState(1); const [classPage, setClassPage] = useState(1); const [rosterPage, setRosterPage] = useState(1);
@@ -3287,11 +3335,11 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           </div>
         </div>
         <table className="print-grade-table generic-print-grade-table">
-          <thead><tr><th aria-label="Sequence number"></th><th>NAME OF STUDENTS</th>{gradeSheetComponents.map(component=><Fragment key={component.name}><th>{gradeSheetComponentRawLabel(detail,component)}<small>{component.name} · raw equivalent (%)</small></th><th>{component.name.toLocaleUpperCase()} WEIGHTED<small>{component.percentage.toFixed(2)}% configured weight</small></th></Fragment>)}<th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
+          <thead><tr><th aria-label="Sequence number"></th><th>NAME OF STUDENTS</th>{gradeSheetPrimaryDomains.map(category=><Fragment key={category.id}><th>{/lecture/i.test(category.name)?"Total":"TOTAL"}<small>{category.name} · raw equivalent (%)</small></th><th>{category.name.toLocaleUpperCase()} WEIGHTED<small>{category.weight.toFixed(2)}% of course</small></th></Fragment>)}{gradeSheetAdditionalComponents.map(component=><Fragment key={component.name}><th>{gradeSheetComponentRawLabel(detail,component)}<small>{component.name} · raw equivalent (%)</small></th><th>{component.name.toLocaleUpperCase()} WEIGHTED<small>{component.percentage.toFixed(2)}% configured weight</small></th></Fragment>)}<th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
           <tbody>{detail.enrollments.map((enrollment,index)=>{
             const band = detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>enrollment.finalPercent!==null&&enrollment.finalPercent>=item.minPercent);
             const special = ["INC","NP","DROPPED"].includes(enrollment.remarks || "");
-            return <tr key={enrollment.id}><td>{index+1}.</td><td>{enrollment.studentName.toLocaleUpperCase()}</td>{gradeSheetComponents.map(component=>{const summary=gradeSheetComponentSummary(detail,enrollment,component);return <Fragment key={component.name}><td>{special||summary.rawEquivalentPercent===null?"":summary.rawEquivalentPercent.toFixed(2)+"%"}</td><td>{special||summary.parentWeightedScore===null?"":summary.parentWeightedScore.toFixed(2)+"%"}</td></Fragment>;})}<td>{special||enrollment.finalPercent===null?"":enrollment.finalPercent.toFixed(2)+"%"}</td><td>{special?"":enrollment.finalGradeOverride||band?.finalGrade||""}</td><td>{enrollment.remarks||band?.remarks||""}</td></tr>;
+            return <tr key={enrollment.id}><td>{index+1}.</td><td>{enrollment.studentName.toLocaleUpperCase()}</td>{gradeSheetPrimaryDomains.map(category=>{const summary=gradeSheetRootDomainSummary(detail,enrollment,category);return <Fragment key={category.id}><td>{special||summary?.rawEquivalentPercent==null?"":summary.rawEquivalentPercent.toFixed(2)+"%"}</td><td>{special||summary?.parentWeightedScore==null?"":summary.parentWeightedScore.toFixed(2)+"%"}</td></Fragment>;})}{gradeSheetAdditionalComponents.map(component=>{const summary=gradeSheetComponentSummary(detail,enrollment,component);return <Fragment key={component.name}><td>{special||summary.rawEquivalentPercent===null?"":summary.rawEquivalentPercent.toFixed(2)+"%"}</td><td>{special||summary.parentWeightedScore===null?"":summary.parentWeightedScore.toFixed(2)+"%"}</td></Fragment>;})}<td>{special||enrollment.finalPercent===null?"":enrollment.finalPercent.toFixed(2)+"%"}</td><td>{special?"":enrollment.finalGradeOverride||band?.finalGrade||""}</td><td>{enrollment.remarks||band?.remarks||""}</td></tr>;
           })}</tbody>
         </table>
         <div className="print-signatures">
