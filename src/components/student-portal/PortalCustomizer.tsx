@@ -38,7 +38,7 @@ export default function PortalCustomizer({
       <div className="student-customizer-choice-list" role="group" aria-label="Portal theme">
         {([
           ["light-glass", "Default Light Glass"],
-          ["dark-glass", "Smoked Dark Glass"],
+          ["dark-glass", "Soft Midnight Blue Glass"],
           ["classic", "Classic Original Theme"]
         ] as Array<[StudentGlassTheme, string]>).map(([value, label]) =>
           <button key={value} type="button" className={preferences.theme === value ? "is-selected" : ""} aria-pressed={preferences.theme === value} onClick={() => update({ theme: value })}>{label}</button>
