@@ -198,8 +198,37 @@ export function calculateGradeBreakdown(categories: GradeCalculationCategory[]) 
     });
   }
   const recorded = items.filter(item => item.earnedCourse !== null);
+  const domains = categories.filter(category => !category.parentId).map(root => {
+    const descendants = new Set([root.id]);
+    let expanded = true;
+    while (expanded) {
+      expanded = false;
+      for (const category of categories) {
+        if (category.parentId && descendants.has(category.parentId) && !descendants.has(category.id)) {
+          descendants.add(category.id);
+          expanded = true;
+        }
+      }
+    }
+    const contributions = items.filter(item => descendants.has(item.categoryId) && item.earnedCourse !== null);
+    const rawEquivalentPercent = contributions.length
+      ? roundPercent(contributions.reduce((sum, item) => sum + (item.earnedWithinRoot ?? 0), 0))
+      : null;
+    const parentWeightedScore = contributions.length
+      ? roundPercent(contributions.reduce((sum, item) => sum + (item.earnedCourse ?? 0), 0))
+      : null;
+    return {
+      categoryId: root.id,
+      courseWeight: roundPercent(root.weight),
+      rawEquivalentPercent,
+      parentWeightedScore,
+      recordedItems: contributions.reduce((sum, item) => sum + item.recordedItems, 0),
+      pendingItems: items.filter(item => descendants.has(item.categoryId)).reduce((sum, item) => sum + item.pendingItems, 0)
+    };
+  });
   return {
     items,
+    domains,
     totalPercent: recorded.length ? roundPercent(recorded.reduce((total, item) => total + (item.earnedCourse ?? 0), 0)) : null
   };
 }
