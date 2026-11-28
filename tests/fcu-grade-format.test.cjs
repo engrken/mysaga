@@ -490,7 +490,7 @@ test("FCU final-grade export supports a variable number of primary domains", asy
   const cats = components.map((item,index) => ({ id: item.name, name: item.name, weight: item.percentage, sortOrder:index }));
   const files = await generate(cats, [student("Student Name", { QUIZZES: 100, LABORATORY: 80, PROJECT: 90, ORAL: 75 }, 85.5)], components);
   const sheet = files["xl/worksheets/sheet1.xml"];
-  assert.match(sheet, /<mergeCell ref="A1:K9"/);
+  assert.match(sheet, /<mergeCell ref="A1:M9"/);
   assert.match(sheet, /<c r="C15"[^>]*>.*?QUIZZES · TOTAL \(RAW %\)/s);
   assert.match(sheet, /<c r="D15"[^>]*>.*?QUIZZES · WEIGHTED \(30\.00% OF COURSE\)/s);
   assert.match(sheet, /<c r="E15"[^>]*>.*?LABORATORY · TOTAL \(RAW %\)/s);
@@ -608,31 +608,31 @@ test("Record Scores Excel export mirrors the full grouped scorebook and saved si
   assert.match(sheet, /\(\%\)/);
   assert.doesNotMatch(sheet, /Lecture \/ Quizzes|Quizzes · Quiz 1|Item wt|Course wt|Student Number|2023-0001/);
   assert.match(sheet, /<mergeCell ref="D14:E15"\/>/);
-  assert.match(sheet, /<mergeCell ref="F14:G15"\/>/);
+  assert.match(sheet, /<mergeCell ref="H14:I15"\/>/);
   assert.match(sheet, /<c r="A18"[^>]*><v>1<\/v><\/c>/);
   assert.match(sheet, /<c r="B18"[^>]*>.*?Ana Reyes/s);
   assert.match(sheet, /<c r="A19"[^>]*><v>2<\/v><\/c>/);
   assert.match(sheet, /<c r="D18"[^>]*>.*?8 \/ 10/s);
   assert.match(sheet, /<c r="E18"[^>]*>.*?27\.00%/s);
-  assert.match(sheet, /<c r="G18"[^>]*>.*?46\.00%/s);
-  assert.match(sheet, /<c r="H18"[^>]*>.*?90\.00%/s);
-  assert.match(sheet, /<c r="I18"[^>]*>.*?2\.00/s);
-  assert.match(sheet, /<c r="J18"[^>]*>.*?PASSED/s);
+  assert.match(sheet, /<c r="I18"[^>]*>.*?46\.00%/s);
+  assert.match(sheet, /<c r="L18"[^>]*>.*?90\.00%/s);
+  assert.match(sheet, /<c r="M18"[^>]*>.*?2\.00/s);
+  assert.match(sheet, /<c r="N18"[^>]*>.*?PASSED/s);
   assert.match(sheet, /TEACHER ONE/);
   assert.match(sheet, /DEAN TWO/);
   assert.match(sheet, /<c r="A21"[^>]*>.*?Submitted by:/s);
-  assert.match(sheet, /<c r="F21"[^>]*>.*?Noted:/s);
+  assert.match(sheet, /<c r="H21"[^>]*>.*?Noted:/s);
   for (let rowNumber = 21; rowNumber <= 26; rowNumber++) {
-    assert.ok(sheet.includes('<mergeCell ref="A' + rowNumber + ':E' + rowNumber + '"/>'));
-    assert.ok(sheet.includes('<mergeCell ref="F' + rowNumber + ':J' + rowNumber + '"/>'));
+    assert.ok(sheet.includes('<mergeCell ref="A' + rowNumber + ':G' + rowNumber + '"/>'));
+    assert.ok(sheet.includes('<mergeCell ref="H' + rowNumber + ':N' + rowNumber + '"/>'));
   }
-  for (const cell of ["A25", "F25", "A26", "F26"]) {
+  for (const cell of ["A25", "H25", "A26", "H26"]) {
     assert.match(sheet, new RegExp('<c r="' + cell + '" s="17"'));
   }
   assert.match(sheet, /<c r="A25"[^>]*>.*?TEACHER ONE/s);
-  assert.match(sheet, /<c r="F25"[^>]*>.*?DEAN TWO/s);
+  assert.match(sheet, /<c r="H25"[^>]*>.*?DEAN TWO/s);
   assert.match(sheet, /<c r="A26"[^>]*>.*?Instructor/s);
-  assert.match(sheet, /<c r="F26"[^>]*>.*?Dean/s);
+  assert.match(sheet, /<c r="H26"[^>]*>.*?Dean/s);
   assert.doesNotMatch(sheet, /SIGNATURE OVER PRINTED NAME \/ DATE/);
   assert.doesNotMatch(sheet, /Teacher&apos;s Signature over Printed Name|Dean&apos;s Signature over Printed Name/);
   assert.match(sheet, /orientation="landscape" fitToWidth="1"/);
@@ -719,7 +719,7 @@ test("Record Scores export dynamically merges institutional, metadata, category,
   const sheet = files["xl/worksheets/sheet1.xml"];
   const styles = files["xl/styles.xml"];
 
-  for (const row of [1, 2, 3]) assert.match(sheet, new RegExp('<mergeCell ref="A' + row + ':V' + row + '"/>'));
+  for (const row of [1, 2, 3]) assert.match(sheet, new RegExp('<mergeCell ref="A' + row + ':Z' + row + '"/>'));
   assert.match(sheet, /FILAMER CHRISTIAN UNIVERSITY, INC\./);
   assert.match(sheet, /Roxas Avenue, Roxas City, Capiz, Philippines/);
   assert.match(sheet, /COLLEGE OF ENGINEERING/);
