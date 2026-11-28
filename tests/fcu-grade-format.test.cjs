@@ -462,8 +462,8 @@ test("ISO Excel export uses dynamic class metadata and omits student-number colu
   assert.match(route, /\.\.\.parsed\.data\.componentNames\.map\(\(\) => ""\)/);
   assert.match(route, /enrollment\.finalGradeOverride \?\? ""/);
   assert.match(route, /cleanComponentName\(name\) \+ "\\nEQ"/);
-  assert.match(route, /gradeRemarkExportCode\(remark\)/);
-  assert.match(route, /sortedGradeBands/);
+  assert.match(route, /gradeRemarkExportCode\(enrollment\.remarks\)/);
+  assert.doesNotMatch(route, /enrollment\.finalPercent|calculateGradeBreakdown/);
 });
 
 test("ISO Excel export uses the authenticated Python openpyxl generator", () => {
