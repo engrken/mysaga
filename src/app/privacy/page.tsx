@@ -198,12 +198,14 @@ export default async function PrivacyPage({ searchParams }: PrivacyPageProps) {
         <h2>5. Assignments, uploaded files, and Google Drive links</h2>
         <p>
           For assignment submissions, files up to 5 MB per file may be uploaded
-          directly to the service's configured Cloudflare R2 object storage. The
+          directly to the service's private Cloudflare R2 object storage. The
           service stores file details such as the name, size, type, storage reference,
-          and submission relationship. R2 file links use the configured file domain;
-          anyone who obtains a publicly accessible file URL may be able to open that
-          file. Do not upload confidential or highly sensitive material unless your
-          school has approved that storage and sharing arrangement.
+          and submission relationship. R2 objects are not exposed as public file
+          URLs. When a student or teacher downloads an attachment, SAGA verifies
+          the user's sign-in, school, and submission ownership or assigned-class
+          access, then redirects to a short-lived download URL. The temporary
+          download URL expires after approximately three minutes. Do not share a
+          temporary download URL with anyone else.
         </p>
         <p>
           For larger files, a student may provide a Google Drive share link instead
@@ -246,10 +248,21 @@ export default async function PrivacyPage({ searchParams }: PrivacyPageProps) {
         </ul>
         <p>
           The service's current technical providers may include Vercel for application
-          hosting, Neon for the PostgreSQL database, Cloudflare R2 for assignment
-          file storage, the SMTP provider configured by the operator for email
-          delivery, and Google for the optional Google integrations. Provider
-          services and configurations may change as the platform evolves.
+          hosting, Neon for the PostgreSQL database, Cloudflare R2 for private
+          assignment file storage, the SMTP provider configured by the operator for
+          email delivery, Google for the optional Google integrations, and Cognix
+          for limited operational health-event reporting. Provider services and
+          configurations may change as the platform evolves.
+        </p>
+        <p>
+          When SAGA's database readiness check fails, SAGA may send Cognix a fixed
+          technical event containing a generated event identifier, timestamp,
+          application name, fixed database-unavailable category and severity,
+          component and operation codes, HTTP status, dependency code, and deployment
+          environment. This report does not include user or tenant identity, student
+          or teacher information, request contents, SQL, database error text, grades,
+          submissions, or other academic records. The report is best-effort and does
+          not change the health response shown by SAGA.
         </p>
         <p>
           SAGA Portal is not designed to sell personal information or use student
