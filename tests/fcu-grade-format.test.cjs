@@ -269,7 +269,7 @@ test("Generic Excel keeps primary domains before additional saved subcomponents"
   assert.match(sheet, /<c r="I17"[^>]*><v>78\.63<\/v>/);
 });
 
-test("non-passing grade remarks hide numerical rows and resolve the correct shorthand", () => {
+test("grade remarks normalize status shorthands and masking stays scoped to dropped Final Grades", () => {
   const helperStart = source.indexOf("function normalizeGradeRemark(");
   const helperEnd = source.indexOf("\nfunction gradeSheetRootDomainSummary(", helperStart);
   assert.ok(helperStart >= 0 && helperEnd > helperStart, "shared status helpers are defined");
@@ -295,14 +295,23 @@ test("non-passing grade remarks hide numerical rows and resolve the correct shor
   assert.equal(h.gradeRemarkSelectionValue("DRP"), "DROPPED");
   assert.equal(h.gradeRemarkSelectionValue("INCOMPLETE"), "INC");
 
-  assert.match(source, /if \(hasSpecialRemark\) return <td className="score-sheet-score score-sheet-score-hidden"/);
-  assert.match(source, /hasSpecialRemark \? "" : enrollment\.finalPercent/);
-  assert.match(source, /hasSpecialRemark \? <span className="score-sheet-status-indicator"/);
-  assert.match(source, /mobile-score-status-only/);
-  assert.match(source, /const passed=isPassedGradeRemark\(en\.remarks,band\?\.remarks\)/);
-  assert.match(source, /!passed\?""/);
-  assert.match(source, /!isPassedGradeRemark\(enrollment\.remarks,band\?\.remarks\)/);
-  assert.match(source, /gradeRemarkIndicator\(enrollment\.remarks,band\?\.remarks\)/);
+  const recordStart = source.indexOf('{classSection === "record" && <section id="class-section-record"');
+  const recordEnd = source.indexOf('{classSection === "analytics" && <section className="class-analytics"', recordStart);
+  const recordSection = source.slice(recordStart, recordEnd);
+  assert.ok(recordStart >= 0 && recordEnd > recordStart, "Record Scores section is isolated");
+  assert.doesNotMatch(recordSection, /hasSpecialRemark|isPassedGradeRemark|mobile-score-status-only/);
+  assert.match(recordSection, /className="score-sheet-input"/);
+  assert.match(recordSection, /className="score-sheet-category-equivalent"/);
+  assert.match(recordSection, /showWeightBreakdown && <tr className="score-sheet-breakdown-row"/);
+
+  const finalStart = source.indexOf('{classSection === "final" && <section id="class-section-final"');
+  const finalEnd = source.indexOf(String.fromCharCode(10) + "        </>}", finalStart);
+  const finalSection = source.slice(finalStart, finalEnd);
+  assert.ok(finalStart >= 0 && finalEnd > finalStart, "Final Grades section is isolated");
+  assert.match(source, /const isFinalGradesTab = classSection === "final"/);
+  assert.match(finalSection, /isDroppedStatus=isFinalGradesTab && resolvedGradeRemark\(en\.remarks,band\?\.remarks\)==="DROPPED"/);
+  assert.doesNotMatch(finalSection, /!passed|passed\?/);
+  assert.match(finalSection, /isDroppedStatus\?<span className="score-sheet-status-indicator"/);
 });
 
 test("FCU Excel renders non-passing statuses in the grade cell and leaves numeric columns blank", async () => {
