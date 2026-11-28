@@ -243,7 +243,7 @@ test("mobile panel presentation is a full-width bottom sheet with a touch backdr
   assert.match(css, /inset:0;[\s\S]*?z-index:48/);
   assert.match(css, /pointer-events:auto/);
   assert.match(css, /backdrop-filter:blur\(5px\)/);
-  assert.match(css, /width:100vw!important/);
+  assert.match(css, /width:100%!important/);
   assert.match(css, /max-height:min\(88dvh/);
   assert.match(css, /border-radius:22px 22px 0 0/);
   assert.match(css, /student-floating-window-head\{[\s\S]*?position:sticky/);
