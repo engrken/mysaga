@@ -8,6 +8,7 @@ from xml.etree import ElementTree
 
 from PIL import Image as PillowImage, ImageDraw
 from openpyxl import load_workbook
+from openpyxl.utils.units import pixels_to_EMU
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -148,8 +149,10 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertEqual(sheet.page_setup.fitToHeight, 0)
         self.assertTrue(sheet.sheet_properties.pageSetUpPr.fitToPage)
         self.assertEqual(len(sheet._images), 1)
-        self.assertEqual(sheet._images[0].width, 80)
-        self.assertEqual(sheet._images[0].height, 80)
+        # openpyxl reports the source PNG size as image.width/height.
+        # The drawing anchor extent is the actual displayed size in Excel.
+        self.assertEqual(sheet._images[0].anchor.ext.cx, 80 * 9525)
+        self.assertEqual(sheet._images[0].anchor.ext.cy, 80 * 9525)
         self.assertEqual(sheet._images[0].anchor._from.col, 0)
         self.assertEqual(sheet._images[0].anchor._from.row, 0)
         self.assertGreater(sheet._images[0].anchor._from.colOff, 0)
