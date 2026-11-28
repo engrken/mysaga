@@ -118,8 +118,8 @@ export default function OverviewDashboard({
         </section>
     </DraggableGlassModule>}
 
+    <div id="student-appearance-window-host" className="student-appearance-window-host">
     <DraggableGlassWindow
-      key={`${preferences.panelPosition.x}:${preferences.panelPosition.y}`}
       title="Student quick panel"
       minimized={panelMinimized && !customizerRequested}
       onMinimize={() => setPanelMinimized(true)}
@@ -140,6 +140,7 @@ export default function OverviewDashboard({
         {!demoMode && <p className="student-glass-demo-note">SAGA shows recorded class and assessment information here. It does not infer a live meeting from a timetable.</p>}
       </div> : <PortalCustomizer preferences={preferences} onChange={onPreferencesChange} onReset={onReset}/>}
     </DraggableGlassWindow>
+    </div>
     <div className="student-glass-dashboard-footer"><span>{storageReady && !demoMode ? "Preferences saved in this browser" : "Changes stay in this session"}</span><button type="button" onClick={() => { setPanelTab("customizer"); setPanelMinimized(false); if (customizerRequested) onCustomizerOpened(); }}>Customize portal</button></div>
   </div>;
 }
