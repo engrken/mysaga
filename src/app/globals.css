@@ -2825,8 +2825,9 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
   .portal-top-brand{min-width:0;max-width:100%}
   .portal-top-actions{grid-column:2;grid-row:1;min-width:0;max-width:100%;margin:0}
   .portal-top-links{
-    display:grid;
-    grid-template-columns:repeat(2,minmax(0,1fr));
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
     grid-column:1/-1;
     grid-row:2;
     width:100%;
@@ -2839,6 +2840,7 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
   .portal-top-link{
     display:flex;
     justify-content:flex-start;
+    align-self:stretch;
     width:100%;
     min-width:0;
     min-height:40px;
