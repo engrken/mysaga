@@ -1171,7 +1171,7 @@ async function downloadFcuGradeXlsx(
     { name: "xl/worksheets/sheet1.xml", content: worksheet },
     { name: "xl/styles.xml", content: styles },
     { name: "xl/worksheets/_rels/sheet1.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>' },
-    { name: "xl/drawings/drawing1.xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="7040000" cy="1755000"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="1" name="Official grading sheet header"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>' },
+    { name: "xl/drawings/drawing1.xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="7040000" cy="1755000"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="1" name="Official grading sheet header"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>' },
     { name: "xl/drawings/_rels/drawing1.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/></Relationships>' },
     { name: "xl/media/image1.png", content: headerPng }
   ];
@@ -1396,12 +1396,6 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const activeGradeSheetComponents = gradeSheetComponents.length ? gradeSheetComponents : defaultGradeSheetComponents;
   const gradeSheetPrimaryDomains = (detail?.categories ?? []).filter(category => !category.parentId)
     .slice().sort((a, b) => a.sortOrder - b.sortOrder);
-  const gradeSheetPrimaryDomainNames = new Set(gradeSheetPrimaryDomains.map(category =>
-    categoryPath(category, detail?.categories ?? []).trim().toLocaleLowerCase()
-  ));
-  const gradeSheetAdditionalComponents = activeGradeSheetComponents.filter(component =>
-    !gradeSheetPrimaryDomainNames.has(component.name.trim().toLocaleLowerCase())
-  );
   const [componentDraft, setComponentDraft] = useState<GradeSheetComponent[]>(defaultGradeSheetComponents);
   const [componentEditorOpen, setComponentEditorOpen] = useState(false);
   const [classesMenuOpen, setClassesMenuOpen] = useState(false); const [onboardingOpen, setOnboardingOpen] = useState(false); const [helpOpen, setHelpOpen] = useState(false); const [helpInitialTab, setHelpInitialTab] = useState<"quick" | "faq" | "student" | "faculty">("quick"); const [subjectPage, setSubjectPage] = useState(1); const [classPage, setClassPage] = useState(1); const [rosterPage, setRosterPage] = useState(1);
