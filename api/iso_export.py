@@ -51,10 +51,7 @@ def _normalize_export_remark(value: object) -> str:
     remark = _safe_text(value).strip().upper()
     if remark == "INCOMPLETE":
         return "INC"
-    if (
-        re.match(r"^NO\s+(?:(?:EXAM(?:INATION)?|EXAMINATION)\s+)?PERMIT(?:\s*\(NP\))?$", remark)
-        or re.match(r"^NO\s+PRIVILEGE(?:\s*\(NP\))?$", remark)
-    ):
+    if re.match(r"^NO\s+(?:(?:EXAM(?:INATION)?|EXAMINATION)\s+)?PERMIT(?:\s*\(NP\))?$", remark):
         return "NP"
     if remark in {"DROPPED", "DRP", "DROP"}:
         return "DRP"
