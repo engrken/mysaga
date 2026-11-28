@@ -750,7 +750,8 @@ function downloadGradeSheetXlsx(
       const descendants = categoryDescendantIds(root.category.id, detail.categories);
       equivalentColumnsByRoot.set(root.category.id, scoreColumns.flatMap((column, columnIndex) =>
         column.kind === "equivalent" && descendants.has(column.category.id) &&
-          contributionByCategory.get(column.category.id)?.earnedWithinRoot !== null
+          column.category.id !== root.category.id &&
+          contributionByCategory.get(column.category.id)?.earnedWithinRoot != null
           ? [3 + columnIndex] : []
       ));
     }
@@ -771,7 +772,7 @@ function downloadGradeSheetXlsx(
       } else {
         const domain = domainSummaryByCategory.get(column.category.id);
         const score = column.kind === "domain-total" ? domain?.rawEquivalentPercent : domain?.parentWeightedScore;
-        const value = specialRemark || score == null ? "—" : score.toFixed(2) + "%";
+        const value = specialRemark || score == null ? "—" : score;
         const rawFormulaColumns = column.kind === "domain-total" ? equivalentColumnsByRoot.get(column.category.id) ?? [] : [];
         const formula = !specialRemark && rawFormulaColumns.length
           ? "SUM(" + rawFormulaColumns.map(col => excelColumn(col) + currentRow).join(",") + ")"
@@ -784,7 +785,7 @@ function downloadGradeSheetXlsx(
       ? "SUM(" + weightedDomainColumns.map(col => excelColumn(col) + currentRow).join(",") + ")"
       : undefined;
     values.push(
-      { col: totalColumn, value: enrollment.finalPercent === null ? "—" : enrollment.finalPercent.toFixed(2) + "%", style: 7, formula: totalFormula },
+      { col: totalColumn, value: specialRemark || enrollment.finalPercent === null ? "—" : enrollment.finalPercent, style: 7, formula: totalFormula },
       { col: finalColumn, value: specialRemark ? enrollment.remarks : enrollment.finalGradeOverride || band?.finalGrade || "—", style: 7 },
       { col: remarksColumn, value: specialRemark ? enrollment.remarks : band?.remarks || "Not yet graded", style: 7 }
     );
@@ -871,6 +872,7 @@ function downloadGradeSheetXlsx(
     '<pageSetup paperSize="256" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
   const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<numFmts count="1"><numFmt numFmtId="164" formatCode="0.00&quot;%&quot;"/></numFmts>' +
     '<fonts count="8"><font><sz val="9"/><name val="Arial"/></font><font><b/><sz val="14"/><name val="Arial"/></font><font><sz val="8.5"/><name val="Arial"/><color rgb="FF5B6573"/></font><font><b/><sz val="11"/><name val="Arial"/></font><font><b/><sz val="9"/><name val="Arial"/></font><font><b/><sz val="12"/><name val="Arial"/></font><font><i/><sz val="9"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts>' +
     '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF0F8"/><bgColor indexed="64"/></patternFill></fill></fills>' +
     '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD4DCE7"/></left><right style="thin"><color rgb="FFD4DCE7"/></right><top style="thin"><color rgb="FFD4DCE7"/></top><bottom style="thin"><color rgb="FFD4DCE7"/></bottom><diagonal/></border></borders>' +
@@ -883,7 +885,7 @@ function downloadGradeSheetXlsx(
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>' +
     '<xf numFmtId="0" fontId="4" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>' +
-    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
     '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
     '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
