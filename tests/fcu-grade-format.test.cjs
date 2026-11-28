@@ -410,14 +410,20 @@ test("FCU Excel renders non-passing statuses in the grade cell and leaves numeri
   const categories = [{ id: "EXAM", name: "EXAM", weight: 100 }];
   const files = await generate(categories, [
     student("Dropped Student", { EXAM: 83 }, 83, "DRP"),
-    student("Incomplete Student", { EXAM: 79 }, 79, "INCOMPLETE")
+    student("Incomplete Student", { EXAM: 79 }, 79, "INCOMPLETE"),
+    student("No Permit Student", { EXAM: 74 }, 74, "NO EXAMINATION PERMIT"),
+    student("No Privilege Student", { EXAM: 70 }, 70, "NO PRIVILEGE")
   ], components);
   const sheet = files["xl/worksheets/sheet1.xml"];
   assert.match(sheet, /<c r="F17"[^>]*><is><t xml:space="preserve">DRP<\/t><\/is><\/c>/);
   assert.match(sheet, /<c r="G17"[^>]*><is><t xml:space="preserve">DRP<\/t><\/is><\/c>/);
   assert.match(sheet, /<c r="F18"[^>]*><is><t xml:space="preserve">INC<\/t><\/is><\/c>/);
   assert.match(sheet, /<c r="G18"[^>]*><is><t xml:space="preserve">INC<\/t><\/is><\/c>/);
-  for (const cell of ["C17", "D17", "E17", "C18", "D18", "E18"]) {
+  assert.match(sheet, /<c r="F19"[^>]*><is><t xml:space="preserve">NP<\/t><\/is><\/c>/);
+  assert.match(sheet, /<c r="G19"[^>]*><is><t xml:space="preserve">NP<\/t><\/is><\/c>/);
+  assert.match(sheet, /<c r="F20"[^>]*><is><t xml:space="preserve">NP<\/t><\/is><\/c>/);
+  assert.match(sheet, /<c r="G20"[^>]*><is><t xml:space="preserve">NP<\/t><\/is><\/c>/);
+  for (const cell of ["C17", "D17", "E17", "C18", "D18", "E18", "C19", "D19", "E19", "C20", "D20", "E20"]) {
     assert.doesNotMatch(sheet, new RegExp('<c r="' + cell + '"[^>]*><v>'));
   }
 });
