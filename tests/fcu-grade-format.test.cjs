@@ -311,7 +311,19 @@ test("grade remarks normalize status shorthands and masking stays scoped to drop
   assert.match(source, /const isFinalGradesTab = classSection === "final"/);
   assert.match(finalSection, /isDroppedStatus=isFinalGradesTab && resolvedGradeRemark\(en\.remarks,band\?\.remarks\)==="DROPPED"/);
   assert.doesNotMatch(finalSection, /!passed|passed\?/);
-  assert.match(finalSection, /isDroppedStatus\?<span className="score-sheet-status-indicator"/);
+  assert.match(finalSection, /isDroppedStatus[\s\S]*?<span className="score-sheet-status-indicator"[^>]*>DRP<\/span>/);
+  assert.match(finalSection, /<table className="w-full min-w-max table-fixed border-collapse shrink-0">/);
+  assert.match(finalSection, /<col className="w-\[180px\] min-w-\[180px\]" \/>/);
+  assert.match(finalSection, /<col className="w-\[95px\]" \/>/);
+  assert.match(finalSection, /<col className="w-\[105px\]" \/>/);
+  assert.match(finalSection, /<col className="w-\[100px\]" \/>/);
+  assert.match(finalSection, /<div className="w-\[95px\] mx-auto whitespace-normal break-words leading-tight uppercase">/);
+  assert.match(finalSection, /<div className="w-\[105px\] mx-auto whitespace-normal break-words leading-tight uppercase">/);
+  assert.match(finalSection, /className="block text-\[10px\] text-gray-500 font-normal leading-snug mt-0\.5"/);
+  assert.match(finalSection, /font-mono tabular-nums align-middle/);
+  assert.match(finalSection, /score-sheet-remark-select w-full max-w-\[92px\]/);
+  assert.ok(recordSection.includes("<PendingGradeDash />"), "unentered calculated values render as centered gray dashes");
+  assert.doesNotMatch(recordSection, /isDroppedStatus|hasSpecialRemark|mobile-score-status-only/, "Record Scores is not masked by Final Grades status rules");
 });
 
 test("FCU Excel renders non-passing statuses in the grade cell and leaves numeric columns blank", async () => {
