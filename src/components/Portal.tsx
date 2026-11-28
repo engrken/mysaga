@@ -1187,8 +1187,11 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     try { window.localStorage.setItem(studentPortalPreferencesKey, JSON.stringify(studentPortalPreferences)); }
     catch { /* Private browsing or storage limits must not block portal use. */ }
   }, [studentPortalPreferences, studentPortalPreferencesReady, studentPortalPreferencesKey, teacher, user.isDemo]);
-  function resetStudentPortalPreferences() {
-    setStudentPortalPreferences(STUDENT_PORTAL_DEFAULTS);
+  function resetStudentPortalPreferences(preserveOverviewLayout = false) {
+    const resetPreferences = preserveOverviewLayout
+      ? { ...STUDENT_PORTAL_DEFAULTS, layout: studentPortalPreferences.layout }
+      : STUDENT_PORTAL_DEFAULTS;
+    setStudentPortalPreferences(resetPreferences);
     setStudentCustomizerRequestedRoute(null);
     setStudentLayoutResetVersion(version => version + 1);
     setNotice("Student portal settings restored to the default layout.");
@@ -3026,11 +3029,11 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       {tab === "chats" && (teacher
         ? <ClassChatsHub role="TEACHER" isDemo={user.isDemo} academicYear={academicYear} term={activeTerm} periodReady={academicPeriodReady} />
         : <div className="student-theme-page">
-            <StudentAppearanceWindow preferences={studentPortalPreferences} onChange={setStudentPortalPreferences} onReset={resetStudentPortalPreferences} requested={studentCustomizerRequested} onRequestHandled={() => setStudentCustomizerRequestedRoute(null)} demoMode={user.isDemo}/>
+            <StudentAppearanceWindow preferences={studentPortalPreferences} onChange={setStudentPortalPreferences} onReset={() => resetStudentPortalPreferences(true)} requested={studentCustomizerRequested} onRequestHandled={() => setStudentCustomizerRequestedRoute(null)} demoMode={user.isDemo}/>
             <ClassChatsHub role="STUDENT" isDemo={user.isDemo} academicYear={academicYear} term={activeTerm} periodReady={academicPeriodReady}/>
           </div>)}
       {tab === "announcements" && !teacher && <div className="student-theme-page">
-        <StudentAppearanceWindow preferences={studentPortalPreferences} onChange={setStudentPortalPreferences} onReset={resetStudentPortalPreferences} requested={studentCustomizerRequested} onRequestHandled={() => setStudentCustomizerRequestedRoute(null)} demoMode={user.isDemo}/>
+        <StudentAppearanceWindow preferences={studentPortalPreferences} onChange={setStudentPortalPreferences} onReset={() => resetStudentPortalPreferences(true)} requested={studentCustomizerRequested} onRequestHandled={() => setStudentCustomizerRequestedRoute(null)} demoMode={user.isDemo}/>
         <StudentAnnouncements readOnly={user.isDemo}/>
       </div>}
       {tab === "simulator" && <section className="section-block student-simulator-page">
