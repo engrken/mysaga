@@ -43,6 +43,16 @@ jobs:
           cache: npm
       - name: Install dependencies and generate Prisma client
         run: npm ci
+      - name: Set up Python for ISO workbook tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install ISO workbook test dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Run ISO workbook generator tests
+        run: python -m unittest discover -s tests -p "test_fcu_iso_export.py"
       - name: Validate Prisma schema
         run: npx prisma validate
       - name: Build the existing main-branch schema baseline
