@@ -16,10 +16,9 @@ type Props = {
   categories: GradeCategory[];
   assessments: GradeAssessment[];
   scores: RecordedScore[];
-  remark: string | null;
 };
 
-export default function GradeContributionPanel({ categories, assessments, scores, remark }: Props) {
+export default function GradeContributionPanel({ categories, assessments, scores }: Props) {
   const breakdown = useMemo(() => calculateGradeBreakdown(categories.map(category => ({
     id: category.id,
     parentId: category.parentId,
@@ -53,10 +52,6 @@ export default function GradeContributionPanel({ categories, assessments, scores
     }
     return root;
   };
-
-  if (["INC", "NP", "DROPPED"].includes(remark || "")) {
-    return <div className="earned-course-summary"><strong>Earned course weight</strong><span>Not displayed for {remark} class remarks.</span></div>;
-  }
 
   return <div className="earned-course-summary">
     <div className="earned-course-title">
