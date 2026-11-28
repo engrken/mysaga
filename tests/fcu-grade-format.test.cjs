@@ -706,7 +706,7 @@ test("Final Grades print summary uses root-domain weighted contributions", () =>
   vm.runInNewContext(compiledContribution + "\nthis.contribution = gradeSheetComponentContribution;", context);
   assert.equal(context.contribution({ categories: [{ id: "quiz", parentId: "lecture", name: "Quiz" }] }, {}, { name: "Quiz", percentage: 70 }), 63);
   assert.equal(context.contribution({ categories: [{ id: "exam", parentId: "lecture", name: "Exam" }] }, {}, { name: "Exam", percentage: 40 }), 36);
-  assert.match(source, /gradeSheetRootDomainSummary\(detail,enrollment,domain\)/);
+  assert.match(source, /gradeSheetRootDomainSummary\(detail, enrollment, domain\)/);
   const printStart = source.indexOf('<table className="print-grade-table generic-print-grade-table">');
   const printEnd = source.indexOf("</table>", printStart);
   const printTable = source.slice(printStart, printEnd);
