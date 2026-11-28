@@ -2786,6 +2786,7 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
 .portal-layout[data-student-layout="snapped"] .student-module-drag-handle{display:none!important}
 
 @media(max-width:767px), (pointer:coarse){
+  .portal-top-nav{z-index:30!important}
   html:has(.portal-layout),
   body:has(.portal-layout){
     width:100%;
