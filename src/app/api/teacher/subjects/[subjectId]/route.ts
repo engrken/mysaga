@@ -266,6 +266,14 @@ export async function PATCH(request: Request, context: Context) {
     if (subject.assessments.length > 0) return NextResponse.json({ error: "Copy the grading setup before adding assessments; this class already has assessments." }, { status: 409 });
     const source = await ownedSubject(parsed.data.copyGradingFromSubjectId, teacher.id, teacher.schoolId);
     if (!source) return NextResponse.json({ error: "Source class not found." }, { status: 404 });
+    if (
+      source.academicYear !== subject.academicYear ||
+      !["1st Semester", "2nd Semester"].includes(source.term)
+    ) {
+      return NextResponse.json({
+        error: "Choose a source class from the same academic year in the 1st or 2nd Semester."
+      }, { status: 403 });
+    }
     await prisma.$transaction(async tx => {
       await tx.gradeCategory.deleteMany({ where: { subjectId } });
       await tx.gradeBand.deleteMany({ where: { subjectId } });
