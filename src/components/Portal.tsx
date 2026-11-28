@@ -546,7 +546,6 @@ function downloadGradeSheetXlsx(
 
   const scoreColumns: ScoreColumn[] = [];
   const domainWeightedColumnByRoot = new Map<string, number>();
-  const domainTotalColumnByRoot = new Map<string, number>();
   let nextColumn = 3;
   const assignColumns = (node: ExportCategoryNode) => {
     node.startColumn = nextColumn;
@@ -554,7 +553,6 @@ function downloadGradeSheetXlsx(
     if (node.items.length) { scoreColumns.push({ kind: "equivalent", category: node.category }); nextColumn++; }
     node.children.forEach(assignColumns);
     if (node.depth === 0) {
-      domainTotalColumnByRoot.set(node.category.id, nextColumn);
       scoreColumns.push({ kind: "domain-total", category: node.category });
       nextColumn++;
       domainWeightedColumnByRoot.set(node.category.id, nextColumn);
