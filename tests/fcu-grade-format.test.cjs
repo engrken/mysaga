@@ -625,7 +625,7 @@ test("Record Scores Excel export mirrors the full grouped scorebook and saved si
   assert.match(sheet, /<c r="D18"[^>]*>.*?8 \/ 10/s);
   assert.match(sheet, /<c r="E18"[^>]*><v>27<\/v>/);
   assert.match(sheet, /<c r="I18"[^>]*><v>46<\/v>/);
-  assert.match(sheet, /<c r="L18"[^>]*>.*?90\.00%/s);
+  assert.match(sheet, /<c r="L18"[^>]*><v>90<\/v>/);
   assert.match(sheet, /<c r="M18"[^>]*>.*?2\.00/s);
   assert.match(sheet, /<c r="N18"[^>]*>.*?PASSED/s);
   assert.match(sheet, /TEACHER ONE/);
