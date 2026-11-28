@@ -33,7 +33,9 @@ export default function DraggableGlassWindow({
     if (minimized || window.matchMedia("(max-width: 767px)").matches) return;
     if ((event.target as HTMLElement).closest("button[data-window-action]")) return;
     const currentX = currentPositionRef.current.x || Math.max(12, window.innerWidth - 356);
-    const currentY = currentPositionRef.current.y || 116;
+    const layoutRoot = document.querySelector(".portal-layout");
+    const configuredTop = layoutRoot ? Number.parseFloat(getComputedStyle(layoutRoot).getPropertyValue("--student-panel-default-top")) : Number.NaN;
+    const currentY = currentPositionRef.current.y || (Number.isFinite(configuredTop) ? configuredTop : 116);
     dragOffset.current = { x: event.clientX - currentX, y: event.clientY - currentY };
     dragPointer.current = event.pointerId;
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -72,7 +74,7 @@ export default function DraggableGlassWindow({
 
   return <section
     className={`student-floating-window${dragging ? " is-dragging" : ""}`}
-    style={{ left: currentPosition.x > 0 ? currentPosition.x : "auto", right: currentPosition.x > 0 ? "auto" : 18, top: currentPosition.y || 116 }}
+    style={{ left: currentPosition.x > 0 ? currentPosition.x : "auto", right: currentPosition.x > 0 ? "auto" : 18, top: currentPosition.y > 0 ? currentPosition.y : "var(--student-panel-default-top, 116px)" }}
     aria-label={title}
     onPointerDownCapture={onActivate}
   >
