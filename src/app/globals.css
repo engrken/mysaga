@@ -2616,3 +2616,90 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
 @media(max-width:767px){
   .student-appearance-window-note{font-size:.6rem}
 }
+
+
+/* SAGA portal overlay contract · route-aware student glass panel
+   Page content < compact panel/backdrop < sticky navigation < modal < toast < blocking loader. */
+.portal-layout{
+  position:relative;
+  isolation:isolate;
+  min-height:100vh;
+  min-height:100dvh;
+}
+.portal-layout > .main-area{
+  position:relative;
+  z-index:0;
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  min-height:100vh;
+  min-height:100dvh;
+  overflow-x:clip;
+}
+.portal-layout > .main-area > .content-wrap{
+  flex:1 0 auto;
+  width:min(100%,1680px);
+  min-width:0;
+  box-sizing:border-box;
+}
+.portal-top-nav{z-index:90!important}
+.portal-nav-class-menu .portal-top-class-list{z-index:110}
+.student-appearance-window-host{position:relative;z-index:0}
+.student-floating-window{z-index:var(--student-panel-z,42)!important}
+.student-glass-dock-pill{z-index:43!important}
+.student-floating-window-backdrop{
+  display:none;
+  position:fixed;
+  inset:76px 0 0;
+  z-index:38;
+  width:100%;
+  min-height:0;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:rgba(13,27,45,.24);
+  backdrop-filter:blur(2px);
+  cursor:default;
+}
+.modal-backdrop-custom{z-index:1000!important}
+.portal-toast-stack{z-index:1200!important}
+.portal-waiting{z-index:10000!important}
+
+/* Structured Student pages always occupy the full content stream; the customization
+   control is docked until explicitly opened, so no empty side column is reserved. */
+.portal-layout[data-saga-role="student"] .student-theme-page{
+  display:block;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+}
+.portal-layout[data-saga-role="student"] .student-theme-page > .section-block{
+  width:100%;
+  max-width:none;
+  min-width:0;
+}
+.portal-layout[data-saga-role="student"] .student-announcements,
+.portal-layout[data-saga-role="student"] .class-chats-page{
+  width:100%;
+  max-width:none;
+  min-width:0;
+  margin-inline:0;
+}
+.portal-layout[data-saga-role="student"] .student-theme-page .empty-state{width:100%}
+.portal-layout[data-saga-role="student"] .student-customizer-choice-list button:disabled{
+  cursor:not-allowed;
+  opacity:.46;
+  filter:saturate(.55);
+}
+
+@media(min-width:1181px){
+  .portal-layout[data-saga-role="student"] .content-wrap:has(.student-floating-window:not(.is-minimized)){
+    padding-right:370px;
+  }
+}
+@media(min-width:768px) and (max-width:1180px){
+  .student-floating-window-backdrop{display:block}
+}
+@media(max-width:767px){
+  .student-floating-window-backdrop{display:block}
+}
