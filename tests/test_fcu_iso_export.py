@@ -278,6 +278,31 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertEqual(sheet["G3"].value, "REGISTRAR'S OFFICE")
         self.assertFalse(sheet["G3"].alignment.wrap_text)
 
+    def test_component_headers_use_eq_and_percentage_only_and_remarks_use_short_codes(self):
+        payload = dict(self.payload)
+        payload["headers"] = [
+            "NO.",
+            "NAME OF STUDENTS",
+            "MAJOR EXAM / MIDTERM EXAM\nEQ",
+            "MAJOR EXAM / MIDTERM EXAM\n40.00%",
+            "TOTAL GRADE (%)",
+            "FINAL GRADE",
+            "REMARKS",
+        ]
+        payload["rows"] = [
+            [1, "Permit Student", 0.5, 0.2, 0.7, "1.00", "NO EXAMINATION PERMIT"],
+            [2, "Privilege Student", 0.5, 0.2, 0.7, "1.00", "NO PRIVILEGE"],
+            [3, "Incomplete Student", 0.5, 0.2, 0.7, "INC", "INCOMPLETE"],
+            [4, "Dropped Student", 0.5, 0.2, 0.7, "DRP", "DROPPED"],
+        ]
+
+        sheet = load_workbook(BytesIO(build_iso_workbook(payload))).active
+        self.assertEqual(sheet["C11"].value, "MIDTERM EXAM\nEQ")
+        self.assertEqual(sheet["D11"].value, "MIDTERM EXAM\n40.00%")
+        self.assertEqual([sheet[f"G{row}"].value for row in range(12, 16)], ["NP", "NP", "INC", "DRP"])
+        self.assertTrue(sheet["C11"].alignment.wrap_text)
+        self.assertTrue(sheet["D11"].alignment.wrap_text)
+
     def test_activity_and_subtotal_headers_are_shortened_without_parent_paths(self):
         self.assertEqual(_short_assessment_header("Final Design / Design (%)"), "Design (%)")
         self.assertEqual(
@@ -288,6 +313,8 @@ class FcuIsoExportTests(unittest.TestCase):
             _short_assessment_header("Lecture / Quizzes/Assignments · Quiz 1 (Max 20)"),
             "Quiz 1 (20)",
         )
+        self.assertEqual(_short_assessment_header("MAJOR EXAM / MIDTERM EXAM\nEQ"), "MIDTERM EXAM\nEQ")
+        self.assertEqual(_short_assessment_header("MAJOR EXAM / MIDTERM EXAM\n40.00%"), "MIDTERM EXAM\n40.00%")
 
     def test_migration_slug_is_never_written_as_the_human_readable_section_name(self):
         payload = dict(self.payload)
