@@ -2565,17 +2565,7 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
 .portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-glass-schedule-card{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.19)}
 .portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-glass-schedule-card>strong{color:#eaf2fc}
 
-/* Shared appearance controls and theme-aware surfaces on Announcements and Class Chats. */
-.student-page-customizer{display:flex;justify-content:flex-end;position:relative;margin:0 0 14px}
-.student-page-customizer-trigger{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(124,148,181,.3);border-radius:999px;background:rgba(255,255,255,.58);padding:9px 14px;color:var(--student-accent,#3985e8);font-size:.7rem;font-weight:850;box-shadow:0 5px 16px rgba(31,55,87,.06);backdrop-filter:blur(15px)}
-.student-page-customizer-trigger>span{font-size:.9rem}
-.student-page-customizer-panel{width:min(100%,960px);margin:0 0 15px auto;padding:19px;border:1px solid rgba(255,255,255,.68);border-radius:18px;background:rgba(255,255,255,.72);box-shadow:0 15px 38px rgba(29,52,83,.09);backdrop-filter:blur(22px) saturate(135%)}
-.student-page-customizer-panel>header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin:0 0 15px}
-.student-page-customizer-panel>header h2{margin:4px 0;font-size:1rem;font-weight:850;color:#263c59}
-.student-page-customizer-panel>header p{margin:0;color:#7b8ba0;font-size:.72rem}
-.student-page-customizer-close{width:30px;height:30px;flex:none;border:1px solid rgba(113,137,170,.22);border-radius:9px;background:rgba(255,255,255,.7);color:#71839b;font-size:1.15rem}
-.student-page-customizer-panel .student-portal-customizer{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:15px}
-.student-page-customizer-note{margin:12px 0 0;color:#8492a6;font-size:.62rem}
+/* Announcements and Class Chats use the same floating appearance window as Overview. */
 .student-theme-page{min-width:0;color:#273a55}
 .portal-layout[data-saga-role="student"][data-student-glass-theme="light-glass"] .student-theme-page .surface,
 .portal-layout[data-saga-role="student"][data-student-glass-theme="light-glass"] .student-theme-page .empty-state{
@@ -2584,11 +2574,9 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
   box-shadow:0 12px 30px rgba(35,59,91,.055);
   backdrop-filter:blur(17px) saturate(130%);
 }
-.portal-layout[data-saga-role="student"][data-student-glass-theme="light-glass"] .student-theme-page .student-page-customizer-panel{background:rgba(255,255,255,.78)}
 .portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page{color:#eff5fc}
 .portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .surface,
-.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .empty-state,
-.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .student-page-customizer-panel{
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .empty-state{
   color:#eef4fc;
   background:rgba(54,76,100,.78);
   border-color:rgba(239,246,255,.22);
@@ -2597,23 +2585,34 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
 }
 .portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page h2,
 .portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page h3,
-.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page b,
-.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .student-page-customizer-panel>header h2{color:#f1f6fc}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page b{color:#f1f6fc}
 .portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page p,
 .portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .muted,
 .portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page small,
 .portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .text-body-secondary{color:#c0cee0!important}
 .portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .border-top{border-color:rgba(239,246,255,.17)!important}
-.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .student-page-customizer-trigger{background:rgba(53,76,100,.78);border-color:rgba(239,246,255,.24);color:#dcecff}
-.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-page-customizer-panel .student-customizer-label{color:#f0f5fc}
-.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-page-customizer-panel .student-customizer-choice-list button,
-.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-page-customizer-panel .student-wallpaper-option{background:rgba(255,255,255,.1);border-color:rgba(239,246,255,.2);color:#dbe7f5}
-.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-page-customizer-panel .student-customizer-field{color:#c6d4e5}
-.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-page-customizer-panel .student-customizer-field input{background:rgba(255,255,255,.12);border-color:rgba(239,246,255,.2);color:#f1f6fc}
-.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-page-customizer-panel .student-customizer-help,
-.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-page-customizer-note{color:#bfcee0}
-.portal-layout[data-saga-role="student"][data-student-glass-theme="classic"] .student-page-customizer-panel{background:#fff;border-color:#e3e9f2;backdrop-filter:none}
-@media(max-width:760px){
-  .student-page-customizer-panel{padding:14px}
-  .student-page-customizer-panel .student-portal-customizer{grid-template-columns:1fr}
+.portal-layout[data-saga-role="student"][data-student-glass-theme="dark-glass"] .student-theme-page .student-appearance-window-note{color:#bfcee0!important}
+.student-appearance-window-note{margin:9px 3px 1px;color:#8290a4;font-size:.57rem;line-height:1.45}
+
+/* The floating side window owns a right-hand layout column on wide desktop screens. */
+@media(min-width:1181px){
+  .portal-layout[data-saga-role="student"]:has(.student-floating-window) .student-portal-topbar-inner{padding-right:370px}
+  .portal-layout[data-saga-role="student"] .content-wrap:has(.student-floating-window:not(.is-minimized)){padding-right:370px}
+}
+/* Tablet widths retain the floating control, but reposition it as a compact bottom-side panel
+   so it never squeezes or covers the page's primary content column. */
+@media(min-width:768px) and (max-width:1180px){
+  .student-floating-window{
+    top:auto!important;
+    right:16px!important;
+    bottom:16px;
+    left:auto!important;
+    width:min(400px,calc(100vw - 32px));
+    max-height:min(66vh,620px);
+  }
+  .student-floating-window-body{max-height:calc(min(66vh,620px) - 48px)}
+}
+/* On phones the same window becomes a full-width bottom drawer; dragging is disabled in JS. */
+@media(max-width:767px){
+  .student-appearance-window-note{font-size:.6rem}
 }
