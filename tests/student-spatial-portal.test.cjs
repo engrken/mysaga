@@ -272,12 +272,14 @@ test("mobile navigation, demo alert actions, and long page titles wrap without h
 test("student app and Practice Demo use dynamic viewport sizing and touch-safe structured scrolling", () => {
   const css = read("src/app/globals.css");
   const demoCss = read("src/components/DemoWorkspace.module.css");
+  const layout = read("src/app/layout.tsx");
   assert.match(css, /min-height:100dvh/);
   assert.match(css, /max-height:min\(88dvh/);
   assert.match(css, /overscroll-behavior:contain/);
   assert.match(css, /touch-action:pan-y/);
   assert.match(demoCss, /min-height:100dvh/);
   assert.match(demoCss, /overflow-x:auto/);
+  assert.match(layout, /viewportFit: "cover"/);
 });
 
 
