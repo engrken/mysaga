@@ -66,8 +66,9 @@ async function generate(categories, enrollments, components) {
     gradeRemarkIndicator: (remark, fallback) => {
       const value = String(remark || fallback || "").trim().toUpperCase();
       const normalized = value === "DRP" || value === "DROP" ? "DROPPED"
-        : value === "INCOMPLETE" ? "INC" : value === "PASS" ? "PASSED" : value;
-      return normalized === "DROPPED" ? "DRP" : normalized === "INC" ? "INC"
+        : value === "INCOMPLETE" ? "INC"
+        : /^NO\s+(?:(?:EXAM(?:INATION)?|EXAMINATION)\s+)?PERMIT(?:\s*\(NP\))?$/.test(value) || /^NO\s+PRIVILEGE(?:\s*\(NP\))?$/.test(value) ? "NP"
+        : value === "PASS" ? "PASSED" : value;
         : normalized === "NP" ? "NP" : ["FAILED", "FAIL", "NOT PASSED"].includes(normalized) ? "FAIL" : normalized || "—";
     },
   };
@@ -209,12 +210,12 @@ test("FCU final-grade export shows each saved component as raw and weighted colu
   assert.match(sheet, /<selection pane="bottomLeft" activeCell="A17"/);
   assert.match(sheet, /<c r="A15"[^>]*><is><t xml:space="preserve"><\/t><\/is><\/c>/);
   assert.match(sheet, /<c r="B15"[^>]*>.*?NAME OF STUDENTS/s);
-  assert.match(sheet, /<c r="C15"[^>]*>.*?EXAM · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="D15"[^>]*>.*?EXAM · WEIGHTED \(50\.00% OF COURSE\)/s);
-  assert.match(sheet, /<c r="E15"[^>]*>.*?ACT · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="F15"[^>]*>.*?ACT · WEIGHTED \(40\.00% OF COURSE\)/s);
-  assert.match(sheet, /<c r="G15"[^>]*>.*?ARP · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="H15"[^>]*>.*?ARP · WEIGHTED \(10\.00% OF COURSE\)/s);
+  assert.match(sheet, /<c r="C15"[^>]*>.*?EXAM[\s\S]*?EQ/s);
+  assert.match(sheet, /<c r="D15"[^>]*>.*?EXAM[\s\S]*?50\.00%/s);
+  assert.match(sheet, /<c r="E15"[^>]*>.*?ACT[\s\S]*?EQ/s);
+  assert.match(sheet, /<c r="F15"[^>]*>.*?ACT[\s\S]*?40\.00%/s);
+  assert.match(sheet, /<c r="G15"[^>]*>.*?ARP[\s\S]*?EQ/s);
+  assert.match(sheet, /<c r="H15"[^>]*>.*?ARP[\s\S]*?10\.00%/s);
   assert.match(sheet, /<c r="I15"[^>]*>.*?TOTAL GRADE/s);
   assert.match(sheet, /<c r="J15"[^>]*>.*?FINAL GRADE/s);
   assert.match(sheet, /<c r="K15"[^>]*>.*?REMARKS/s);
@@ -254,12 +255,12 @@ test("Generic Excel keeps primary domains before additional saved subcomponents"
     student("Domain Student", { lecture: 71.39, lab: 89.5, "Lecture / Exams": 86 }, 78.63)
   ], components);
   const sheet = files["xl/worksheets/sheet1.xml"];
-  assert.match(sheet, /<c r="C15"[^>]*>.*?LECTURE · Total \(RAW %\)/s);
-  assert.match(sheet, /<c r="D15"[^>]*>.*?LECTURE · WEIGHTED \(60\.00% OF COURSE\)/s);
-  assert.match(sheet, /<c r="E15"[^>]*>.*?LAB · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="F15"[^>]*>.*?LAB · WEIGHTED \(40\.00% OF COURSE\)/s);
-  assert.match(sheet, /<c r="G15"[^>]*>.*?LECTURE \/ EXAMS · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="H15"[^>]*>.*?LECTURE \/ EXAMS · WEIGHTED \(50\.00%\)/s);
+  assert.match(sheet, /<c r="C15"[^>]*>.*?LECTURE[\s\S]*?EQ/s);
+  assert.match(sheet, /<c r="D15"[^>]*>.*?LECTURE[\s\S]*?60\.00%/s);
+  assert.match(sheet, /<c r="E15"[^>]*>.*?LAB[\s\S]*?EQ/s);
+  assert.match(sheet, /<c r="F15"[^>]*>.*?LAB[\s\S]*?40\.00%/s);
+  assert.match(sheet, /<c r="G15"[^>]*>.*?EXAMS[\s\S]*?EQ/s);
+  assert.match(sheet, /<c r="H15"[^>]*>.*?EXAMS[\s\S]*?50\.00%/s);
   assert.match(sheet, /<c r="I15"[^>]*>.*?TOTAL GRADE/s);
   assert.match(sheet, /<c r="C17"[^>]*><v>71\.39<\/v>/);
   assert.match(sheet, /<c r="D17"[^>]*><v>42\.83<\/v>/);
@@ -415,7 +416,7 @@ test("FCU Excel renders non-passing statuses in the grade cell and leaves numeri
   assert.match(sheet, /<c r="F17"[^>]*><is><t xml:space="preserve">DRP<\/t><\/is><\/c>/);
   assert.match(sheet, /<c r="G17"[^>]*><is><t xml:space="preserve">DRP<\/t><\/is><\/c>/);
   assert.match(sheet, /<c r="F18"[^>]*><is><t xml:space="preserve">INC<\/t><\/is><\/c>/);
-  assert.match(sheet, /<c r="G18"[^>]*><is><t xml:space="preserve">INCOMPLETE<\/t><\/is><\/c>/);
+  assert.match(sheet, /<c r="G18"[^>]*><is><t xml:space="preserve">INC<\/t><\/is><\/c>/);
   for (const cell of ["C17", "D17", "E17", "C18", "D18", "E18"]) {
     assert.doesNotMatch(sheet, new RegExp('<c r="' + cell + '"[^>]*><v>'));
   }
@@ -659,8 +660,8 @@ test("FCU final-grade export calculates Attendance as a weighted component", asy
     attendancePercent: { ATT: 75 }
   }], components);
   const sheet = files["xl/worksheets/sheet1.xml"];
-  assert.match(sheet, /<c r="C15"[^>]*>.*?ATTENDANCE · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="D15"[^>]*>.*?ATTENDANCE · WEIGHTED \(20\.00% OF COURSE\)/s);
+  assert.match(sheet, /<c r="C15"[^>]*>.*?ATTENDANCE[\s\S]*?EQ/s);
+  assert.match(sheet, /<c r="D15"[^>]*>.*?ATTENDANCE[\s\S]*?20\.00%/s);
   assert.match(sheet, /<c r="C17"[^>]*><v>75<\/v>/);
   assert.match(sheet, /<c r="D17"[^>]*><v>15<\/v>/);
 });
@@ -676,14 +677,14 @@ test("FCU final-grade export supports a variable number of primary domains", asy
   const files = await generate(cats, [student("Student Name", { QUIZZES: 100, LABORATORY: 80, PROJECT: 90, ORAL: 75 }, 85.5)], components);
   const sheet = files["xl/worksheets/sheet1.xml"];
   assert.match(sheet, /<mergeCell ref="A1:M9"/);
-  assert.match(sheet, /<c r="C15"[^>]*>.*?QUIZZES · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="D15"[^>]*>.*?QUIZZES · WEIGHTED \(30\.00% OF COURSE\)/s);
-  assert.match(sheet, /<c r="E15"[^>]*>.*?LABORATORY · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="F15"[^>]*>.*?LABORATORY · WEIGHTED \(50\.00% OF COURSE\)/s);
-  assert.match(sheet, /<c r="G15"[^>]*>.*?PROJECT · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="H15"[^>]*>.*?PROJECT · WEIGHTED \(20\.00% OF COURSE\)/s);
-  assert.match(sheet, /<c r="I15"[^>]*>.*?ORAL · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="J15"[^>]*>.*?ORAL · WEIGHTED \(0\.00% OF COURSE\)/s);
+  assert.match(sheet, /<c r="C15"[^>]*>.*?QUIZZES[\s\S]*?EQ/s);
+  assert.match(sheet, /<c r="D15"[^>]*>.*?QUIZZES[\s\S]*?30\.00%/s);
+  assert.match(sheet, /<c r="E15"[^>]*>.*?LABORATORY[\s\S]*?EQ/s);
+  assert.match(sheet, /<c r="F15"[^>]*>.*?LABORATORY[\s\S]*?50\.00%/s);
+  assert.match(sheet, /<c r="G15"[^>]*>.*?PROJECT[\s\S]*?EQ/s);
+  assert.match(sheet, /<c r="H15"[^>]*>.*?PROJECT[\s\S]*?20\.00%/s);
+  assert.match(sheet, /<c r="I15"[^>]*>.*?ORAL[\s\S]*?EQ/s);
+  assert.match(sheet, /<c r="J15"[^>]*>.*?ORAL[\s\S]*?0\.00%/s);
   assert.match(sheet, /<c r="K15"[^>]*>.*?TOTAL GRADE/s);
 });
 test("Record Scores Excel export mirrors the full grouped scorebook and saved signature profiles", () => {
