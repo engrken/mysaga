@@ -144,3 +144,53 @@ test("Announcements and Class Chats reuse the same draggable floating appearance
   assert.ok(css.includes("@media(max-width:767px)"));
   assert.doesNotMatch(css, /student-page-customizer-panel|student-page-customizer-trigger/);
 });
+
+
+test("student appearance requests are route-scoped and freeform is limited to Academic Overview", () => {
+  const portal = read("src/components/Portal.tsx");
+  const appearance = read("src/components/student-portal/StudentAppearanceWindow.tsx");
+  const customizer = read("src/components/student-portal/PortalCustomizer.tsx");
+  assert.match(portal, /studentCustomizerRequestedRoute, setStudentCustomizerRequestedRoute/);
+  assert.match(portal, /studentCustomizerRequestedRoute === tab/);
+  assert.match(portal, /setStudentCustomizerRequestedRoute\(null\)/);
+  assert.match(portal, /const targetPage = tab === "overview" \|\| tab === "chats" \|\| tab === "announcements"/);
+  assert.match(portal, /data-student-layout=\{!teacher \? \(tab === "overview" \? studentPortalPreferences\.layout : "snapped"\) : undefined\}/);
+  assert.match(appearance, /useState\(true\)/);
+  assert.match(appearance, /layout: "snapped"/);
+  assert.match(appearance, /allowFreeform=\{false\}/);
+  assert.match(appearance, /onChange=\{updatePagePreferences\}/);
+  assert.match(customizer, /allowFreeform = true/);
+  assert.match(customizer, /disabled=\{!allowFreeform && value === "freeform"\}/);
+  assert.match(customizer, /Freeform window positioning is available only on Academic Overview/);
+});
+
+test("student floating panels obey the portal overlay hierarchy and responsive backdrop", () => {
+  const window = read("src/components/student-portal/DraggableGlassWindow.tsx");
+  const css = read("src/app/globals.css");
+  assert.match(window, /student-floating-window-backdrop/);
+  assert.ok(window.includes('aria-label={\`Close \${title.toLowerCase()}\`}'));
+  assert.match(window, /clampPanelX/);
+  assert.match(window, /clampPanelY/);
+  assert.match(css, /isolation:isolate/);
+  assert.match(css, /portal-top-nav\{z-index:90!important\}/);
+  assert.match(css, /student-floating-window\{z-index:var\(--student-panel-z,42\)!important\}/);
+  assert.match(css, /student-glass-dock-pill\{z-index:43!important\}/);
+  assert.match(css, /student-floating-window-backdrop\{[\s\S]*?z-index:38/);
+  assert.match(css, /modal-backdrop-custom\{z-index:1000!important\}/);
+  assert.match(css, /portal-toast-stack\{z-index:1200!important\}/);
+  assert.match(css, /portal-waiting\{z-index:10000!important\}/);
+  assert.match(css, /content-wrap:has\(\.student-floating-window:not\(\.is-minimized\)\)/);
+});
+
+test("structured student pages use the complete content width without a persistent side panel column", () => {
+  const portal = read("src/components/Portal.tsx");
+  const appearance = read("src/components/student-portal/StudentAppearanceWindow.tsx");
+  const css = read("src/app/globals.css");
+  assert.match(portal, /tab === "chats"[\s\S]*?<StudentAppearanceWindow/);
+  assert.match(portal, /tab === "announcements"[\s\S]*?<StudentAppearanceWindow/);
+  assert.match(appearance, /useState\(true\)/);
+  assert.match(css, /\.student-theme-page\{[\s\S]*?width:100%/);
+  assert.match(css, /\.student-announcements,[\s\S]*?\.class-chats-page\{[\s\S]*?width:100%/);
+  assert.match(css, /\.portal-layout > \.main-area\{[\s\S]*?min-height:100dvh/);
+  assert.match(css, /\.portal-layout > \.main-area > \.content-wrap\{[\s\S]*?width:min\(100%,1680px\)/);
+});
