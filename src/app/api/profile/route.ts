@@ -21,8 +21,10 @@ const schema = z.object({
     revisionNo: z.string().trim().max(40),
     eomsTitle: z.string().trim().max(160),
     isoStandard: z.string().trim().max(80),
-    affiliationLine1: z.string().trim().max(240),
-    affiliationLine2: z.string().trim().max(240)
+    affiliationLine1: z.string().trim().max(240).optional(),
+    affiliationLine2: z.string().trim().max(240).optional(),
+    accreditationAffiliations: z.array(z.string().trim().min(1).max(240)).max(10).optional(),
+    pageNo: z.string().trim().max(20).optional()
   }).optional(),
   defaultGradeSheetComponents: z.array(z.object({ name: z.string().trim().min(1).max(40), percentage: z.number().min(0).max(100) })).min(1).max(30).optional()
 });
