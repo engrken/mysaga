@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { calculateGradeBreakdown, normalizeRemark } from "@/lib/grades";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -17,7 +18,6 @@ type CategoryLike = {
 };
 
 const requestSchema = z.object({
-  componentNames: z.array(z.string().trim().min(1).max(120)).max(40),
   logoPngBase64: z.string().min(8).max(500_000)
 });
 
@@ -33,6 +33,20 @@ const FCU_DEFAULTS = {
   affiliationLine1: "Member: Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)",
   affiliationLine2: "Member: Association of Christian Schools, Colleges in Asia (ACUCA)"
 };
+
+function cleanComponentName(name: string) {
+  const parts = name.split("/");
+  return (parts.length > 1 ? parts[parts.length - 1] : name).trim().toUpperCase();
+}
+function domainHeaderName(name: string) {
+  const clean = cleanComponentName(name);
+  if (/^LECTURE\b|^LECT\./i.test(clean)) return "LECT.";
+  if (/^LABORATORY\b|^LAB\b|^LAB\./i.test(clean)) return "LAB.";
+  return clean;
+}
+function domainWeightLabel(weight: number) {
+  return Number(weight.toFixed(2)).toFixed(2) + "%";
+}
 
 function categoryPath(category: CategoryLike, categories: CategoryLike[]) {
   const names = [category.name];
@@ -140,38 +154,67 @@ export async function POST(request: Request, context: Context) {
     return NextResponse.json({ error: configuredHeader.error }, { status: 409 });
   }
 
-  const academicAssessments = subject.assessments.filter(item =>
-    !item.title.toLocaleLowerCase().startsWith("attendance ·")
-  );
-  const assessmentHeaders = academicAssessments.map(item => {
-    const category = subject.categories.find(value => value.id === item.categoryId);
-    return (category ? categoryPath(category, subject.categories) + " · " : "") +
-      item.title + " (Max " + item.maxScore + ")";
-  });
+  const rootDomains = subject.categories.filter(category => !category.parentId)
+    .slice().sort((a, b) => a.sortOrder - b.sortOrder);
   const headers = [
     "NO.",
     "NAME OF STUDENTS",
-    ...assessmentHeaders,
-    ...parsed.data.componentNames.map(name => name + " (%)"),
-    "TOTAL GRADE (%)",
-    "FINAL GRADE",
+    ...rootDomains.flatMap(domain => ["EQ", domainWeightLabel(domain.weight)]),
+    "TG",
+    "FG",
     "REMARKS"
   ];
+  const headerGroups = rootDomains.map((domain, index) => ({
+    startColumn: 3 + index * 2,
+    endColumn: 4 + index * 2,
+    title: domainHeaderName(domain.name) + " " + domainWeightLabel(domain.weight)
+  }));
+  const rowSpanColumns = [1, 2, 3 + rootDomains.length * 2, 4 + rootDomains.length * 2, 5 + rootDomains.length * 2];
+  const numericColumns = rootDomains.flatMap((_, index) => [3 + index * 2, 4 + index * 2])
+    .concat([3 + rootDomains.length * 2]);
 
-  // Export persisted score records as-is. No exporter-side grade calculations.
+  const groupedAssessments = new Map<string, typeof subject.assessments>();
+  for (const assessment of subject.assessments) {
+    const items = groupedAssessments.get(assessment.categoryId) ?? [];
+    items.push(assessment);
+    groupedAssessments.set(assessment.categoryId, items);
+  }
+  const gradeBands = subject.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent);
   const rows: unknown[][] = subject.enrollments.map((enrollment, index) => {
-    const scores = academicAssessments.map(item => {
-      const score = enrollment.scores.find(value => value.assessmentId === item.id);
-      return score?.points ?? score?.remark ?? "";
+    const breakdown = calculateGradeBreakdown(subject.categories.map(category => ({
+      id: category.id,
+      parentId: category.parentId,
+      weight: category.weight,
+      conversionBase: category.conversionBase,
+      assessments: (groupedAssessments.get(category.id) ?? []).map(assessment => {
+        const score = enrollment.scores.find(value => value.assessmentId === assessment.id);
+        return {
+          title: assessment.title,
+          dueDate: assessment.dueDate,
+          maxScore: assessment.maxScore,
+          weight: assessment.weight,
+          scores: score ? [score] : []
+        };
+      })
+    })));
+    const domainById = new Map(breakdown.domains.map(item => [item.categoryId, item]));
+    const domainValues = rootDomains.flatMap(domain => {
+      const summary = domainById.get(domain.id);
+      return [summary?.rawEquivalentPercent ?? "", summary?.parentWeightedScore ?? ""];
     });
+    const shares = domainValues.filter((_, columnIndex) => columnIndex % 2 === 1)
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+    const total = shares.length ? Number(shares.reduce((sum, value) => sum + value, 0).toFixed(2)) : null;
+    const band = gradeBands.find(item => total !== null && total >= item.minPercent);
+    const remark = normalizeRemark(enrollment.remarks?.trim() ? enrollment.remarks : band?.remarks);
+    const dropped = remark === "DROPPED";
     return [
       index + 1,
       enrollment.studentName || "",
-      ...scores,
-      ...parsed.data.componentNames.map(() => ""),
-      "",
-      enrollment.finalGradeOverride ?? "",
-      enrollment.remarks ?? ""
+      ...domainValues,
+      dropped || total === null ? "" : total,
+      dropped ? "" : enrollment.finalGradeOverride ?? band?.finalGrade ?? "",
+      remark
     ];
   });
 
@@ -199,6 +242,9 @@ export async function POST(request: Request, context: Context) {
     },
     headers,
     rows,
+    headerGroups,
+    rowSpanColumns,
+    numericColumns,
     logoPngBase64: parsed.data.logoPngBase64
   };
   const body = JSON.stringify(payload);

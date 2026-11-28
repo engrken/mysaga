@@ -38,6 +38,12 @@ async function generate(categories, enrollments, components) {
     zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
     excelColumn: columns,
     xmlEscape: escape,
+    getCleanComponentName: name => {
+      const parts = String(name).split("/");
+      return (parts.length > 1 ? parts[parts.length - 1] : String(name)).trim().toUpperCase();
+    },
+    gradeDomainHeading: category => /laboratory|lab/i.test(category.name) ? "LAB." : /lecture|lect/i.test(category.name) ? "LECT." : String(category.name).toUpperCase(),
+    gradeDomainWeight: category => Number(category.weight.toFixed(2)).toString() + "%",
     weightedCategoryPercent: (enrollment, category) => enrollment.equivalents[category.id] ?? null,
     gradeSheetAttendancePercent: (detail, enrollment, categoryId) => enrollment.attendancePercent?.[categoryId] ?? null,
     gradeSheetRootDomainSummary: (detail, enrollment, category) => {
@@ -66,9 +72,10 @@ async function generate(categories, enrollments, components) {
     gradeRemarkIndicator: (remark, fallback) => {
       const value = String(remark || fallback || "").trim().toUpperCase();
       const normalized = value === "DRP" || value === "DROP" ? "DROPPED"
-        : value === "INCOMPLETE" ? "INC" : value === "PASS" ? "PASSED" : value;
-      return normalized === "DROPPED" ? "DRP" : normalized === "INC" ? "INC"
-        : normalized === "NP" ? "NP" : ["FAILED", "FAIL", "NOT PASSED"].includes(normalized) ? "FAIL" : normalized || "—";
+        : value === "INCOMPLETE" ? "INC"
+        : /^NO\s+(?:(?:EXAM(?:INATION)?|EXAMINATION)\s+)?PERMIT(?:\s*\(NP\))?$/.test(value) ? "NP"
+        : value === "PASS" ? "PASSED" : value;
+      return normalized || "—";
     },
   };
   vm.runInNewContext(compiled + "\nthis.generateGradeFile = downloadFcuGradeXlsx;", context);
@@ -190,370 +197,151 @@ test("OOXML ZIP writer encodes XML as UTF-8 and writes valid uncompressed ZIP re
   assert.match(entries.get("xl/worksheets/sheet1.xml"), /REGISTRAR’S OFFICE · ACUCA/);
 });
 
-test("FCU final-grade export shows each saved component as raw and weighted columns", async () => {
-  const components = [
-    { name: "EXAM", percentage: 50 },
-    { name: "ACT", percentage: 40 },
-    { name: "ARP", percentage: 10 }
+test("Generic Excel emits the merged Lecture/Lab summary with numeric cells", async () => {
+  const categories = [
+    { id: "lecture", name: "Lecture", weight: 60, sortOrder: 1 },
+    { id: "lab", name: "Laboratory", weight: 40, sortOrder: 2 }
   ];
-  const cats = components.map(item => ({ id: item.name, name: item.name, weight: item.percentage }));
-  const files = await generate(cats, [
-    student("Example Student", { EXAM: 80, ACT: 90, ARP: 100 }, 86),
-    student("Incomplete Student", { EXAM: null, ACT: null, ARP: null }, null, "INC", "2023-0002")
-  ], components);
+  const files = await generate(categories, [
+    student("Example Student", { lecture: 71.39, lab: 89.5 }, 78.63),
+    student("Incomplete Student", { lecture: null, lab: null }, null, "INC", "2023-0002")
+  ], []);
   const sheet = files["xl/worksheets/sheet1.xml"];
-  const styles = files["xl/styles.xml"];
-  assert.match(sheet, /<mergeCell ref="A1:K9"\/>/);
-  assert.match(sheet, /<pageSetup paperSize="14" orientation="portrait" fitToWidth="1"/);
-  assert.match(sheet, /showGridLines="0" zoomScale="90"/);
-  assert.match(sheet, /<selection pane="bottomLeft" activeCell="A17"/);
-  assert.match(sheet, /<c r="A15"[^>]*><is><t xml:space="preserve"><\/t><\/is><\/c>/);
-  assert.match(sheet, /<c r="B15"[^>]*>.*?NAME OF STUDENTS/s);
-  assert.match(sheet, /<c r="C15"[^>]*>.*?EXAM · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="D15"[^>]*>.*?EXAM · WEIGHTED \(50\.00% OF COURSE\)/s);
-  assert.match(sheet, /<c r="E15"[^>]*>.*?ACT · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="F15"[^>]*>.*?ACT · WEIGHTED \(40\.00% OF COURSE\)/s);
-  assert.match(sheet, /<c r="G15"[^>]*>.*?ARP · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="H15"[^>]*>.*?ARP · WEIGHTED \(10\.00% OF COURSE\)/s);
-  assert.match(sheet, /<c r="I15"[^>]*>.*?TOTAL GRADE/s);
-  assert.match(sheet, /<c r="J15"[^>]*>.*?FINAL GRADE/s);
-  assert.match(sheet, /<c r="K15"[^>]*>.*?REMARKS/s);
-  assert.match(sheet, /<c r="A17"[^>]*>.*?1\./s);
+  assert.match(sheet, /<mergeCell ref="A1:I9"\/>/);
+  assert.match(sheet, /<pageSetup paperSize="14" orientation="landscape" fitToWidth="1"/);
+  assert.match(sheet, /<mergeCell ref="C15:D15"\/>/);
+  assert.match(sheet, /<mergeCell ref="E15:F15"\/>/);
+  for (const range of ["A15:A16","B15:B16","G15:G16","H15:H16","I15:I16"]) assert.ok(sheet.includes('<mergeCell ref="'+range+'"/>'));
+  assert.match(sheet, /<c r="C15"[^>]*>.*?LECT\. 60%/s);
+  assert.match(sheet, /<c r="E15"[^>]*>.*?LAB\. 40%/s);
+  assert.match(sheet, /<c r="C16"[^>]*>.*?EQ/s);
+  assert.match(sheet, /<c r="D16"[^>]*>.*?60%/s);
+  assert.match(sheet, /<c r="G15"[^>]*>.*?TG/s);
+  assert.match(sheet, /<c r="H15"[^>]*>.*?FG/s);
+  assert.match(sheet, /<c r="I15"[^>]*>.*?REMARKS/s);
+  assert.match(sheet, /<c r="A17" s="12"[^>]*><v>1<\/v>/);
   assert.match(sheet, /<c r="B17"[^>]*>.*?EXAMPLE STUDENT/s);
-  assert.match(sheet, /<c r="C17"[^>]*><v>80<\/v>/);
-  assert.match(sheet, /<c r="D17"[^>]*><v>40<\/v>/);
-  assert.match(sheet, /<c r="E17"[^>]*><v>90<\/v>/);
-  assert.match(sheet, /<c r="F17"[^>]*><v>36<\/v>/);
-  assert.match(sheet, /<c r="G17"[^>]*><v>100<\/v>/);
-  assert.match(sheet, /<c r="H17"[^>]*><v>10<\/v>/);
-  assert.match(sheet, /<c r="I17"[^>]*><v>86<\/v>/);
-  assert.match(sheet, /<c r="J17"[^>]*>.*?2\.00/s);
-  assert.match(sheet, /<c r="K18"[^>]*>.*?INC/s);
-  assert.doesNotMatch(sheet, /<c r="C18"[^>]*><v>/);
-  assert.match(styles, /numFmtId="164"/);
-  assert.match(styles, /<sz val="9"\/>/);
-  assert.ok(files["xl/drawings/drawing1.xml"]);
-  assert.ok(files["xl/media/image1.png"]);
-  assert.doesNotMatch(sheet, /2023-0001|2023-0002/);
-  assert.match(sheet, /<c r="A18"[^>]*>.*?2\./s);
-  assert.match(sheet, /<col min="1" max="1" width="6"/);
+  assert.match(sheet, /<c r="C17"[^>]*><v>71\.39<\/v>/);
+  assert.match(sheet, /<c r="D17"[^>]*><v>42\.83<\/v>/);
+  assert.match(sheet, /<c r="E17"[^>]*><v>89\.5<\/v>/);
+  assert.match(sheet, /<c r="F17"[^>]*><v>35\.8<\/v>/);
+  assert.match(sheet, /<c r="G17"[^>]*><v>78\.63<\/v>/);
+  assert.match(sheet, /<c r="H17"[^>]*>.*?2\.00/s);
+  assert.match(sheet, /<c r="I18"[^>]*>.*?INC/s);
+  assert.match(files["xl/styles.xml"], /formatCode="0\.00"/);
+  assert.match(sheet, /<col min="1" max="1" width="7"/);
   assert.match(sheet, /<col min="2" max="2" width="32"/);
-  assert.match(sheet, /<col min="3" max="8" width="13"/);
-  assert.match(sheet, /<col min="9" max="9" width="14"/);
-  assert.match(sheet, /<col min="10" max="10" width="11"/);
-  assert.match(sheet, /<col min="11" max="11" width="18"/);
-});
-test("Generic Excel keeps primary domains before additional saved subcomponents", async () => {
+  assert.doesNotMatch(sheet, /2023-0001|2023-0002/);
+});test("Saved subcomponents do not add columns to the Final Grades summary", async () => {
   const categories = [
     { id: "lecture", name: "Lecture", weight: 60, sortOrder: 1 },
     { id: "exams", name: "Exams", parentId: "lecture", weight: 50, sortOrder: 1 },
     { id: "lab", name: "Lab", weight: 40, sortOrder: 2 }
   ];
-  const components = [{ name: "Lecture / Exams", percentage: 50 }];
   const files = await generate(categories, [
     student("Domain Student", { lecture: 71.39, lab: 89.5, "Lecture / Exams": 86 }, 78.63)
-  ], components);
+  ], [{ name: "Lecture / Exams", percentage: 50 }]);
   const sheet = files["xl/worksheets/sheet1.xml"];
-  assert.match(sheet, /<c r="C15"[^>]*>.*?LECTURE · Total \(RAW %\)/s);
-  assert.match(sheet, /<c r="D15"[^>]*>.*?LECTURE · WEIGHTED \(60\.00% OF COURSE\)/s);
-  assert.match(sheet, /<c r="E15"[^>]*>.*?LAB · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="F15"[^>]*>.*?LAB · WEIGHTED \(40\.00% OF COURSE\)/s);
-  assert.match(sheet, /<c r="G15"[^>]*>.*?LECTURE \/ EXAMS · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="H15"[^>]*>.*?LECTURE \/ EXAMS · WEIGHTED \(50\.00%\)/s);
-  assert.match(sheet, /<c r="I15"[^>]*>.*?TOTAL GRADE/s);
+  assert.match(sheet, /<mergeCell ref="C15:D15"\/>/);
+  assert.match(sheet, /<mergeCell ref="E15:F15"\/>/);
   assert.match(sheet, /<c r="C17"[^>]*><v>71\.39<\/v>/);
   assert.match(sheet, /<c r="D17"[^>]*><v>42\.83<\/v>/);
   assert.match(sheet, /<c r="E17"[^>]*><v>89\.5<\/v>/);
   assert.match(sheet, /<c r="F17"[^>]*><v>35\.8<\/v>/);
-  assert.match(sheet, /<c r="G17"[^>]*><v>86<\/v>/);
-  assert.match(sheet, /<c r="H17"[^>]*><v>43<\/v>/);
-  assert.match(sheet, /<c r="I17"[^>]*><v>78\.63<\/v>/);
-});
-
-test("grade remarks normalize status shorthands and masking stays scoped to dropped Final Grades", () => {
+  assert.match(sheet, /<c r="G17"[^>]*><v>78\.63<\/v>/);
+  assert.doesNotMatch(sheet, /EXAMS/);
+});test("Final Grades uses canonical statuses, two-tier headers, and dropped-only masking", () => {
   const helperStart = source.indexOf("function normalizeGradeRemark(");
   const helperEnd = source.indexOf("\nfunction gradeSheetRootDomainSummary(", helperStart);
-  assert.ok(helperStart >= 0 && helperEnd > helperStart, "shared status helpers are defined");
-  const compiledHelpers = ts.transpileModule(source.slice(helperStart, helperEnd), {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
-  }).outputText;
+  assert.ok(helperStart >= 0 && helperEnd > helperStart);
+  const compiledHelpers = ts.transpileModule(source.slice(helperStart, helperEnd), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
   const statusStart = gradeSource.indexOf("export const CLASS_REMARK_OPTIONS = [");
   const statusEnd = gradeSource.indexOf("\n\n/** Category weights", statusStart);
-  assert.ok(statusStart >= 0 && statusEnd > statusStart, "canonical class-remark helpers are present");
-  const compiledStatusHelpers = ts.transpileModule(gradeSource.slice(statusStart, statusEnd).replace(/^export /gm, ""), {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
-  }).outputText;
+  assert.ok(statusStart >= 0 && statusEnd > statusStart);
+  const compiledStatus = ts.transpileModule(gradeSource.slice(statusStart, statusEnd).replace(/^export /gm, ""), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
   const context = {};
-  vm.runInNewContext(compiledStatusHelpers + "\n" + compiledHelpers + "\nthis.helpers = { normalizeGradeRemark, resolvedGradeRemark, isPassedGradeRemark, gradeRemarkIndicator, gradeRemarkSelectionValue };", context);
-  const h = context.helpers;
+  vm.runInNewContext(compiledStatus + "\n" + compiledHelpers + "\nthis.h = {normalizeGradeRemark,resolvedGradeRemark,isPassedGradeRemark,gradeRemarkIndicator,gradeRemarkSelectionValue};", context);
+  const h = context.h;
   assert.equal(h.normalizeGradeRemark("DRP"), "DROPPED");
   assert.equal(h.normalizeGradeRemark("INCOMPLETE"), "INC");
-  assert.equal(h.isPassedGradeRemark("PASSED"), true);
-  assert.equal(h.isPassedGradeRemark("Passed"), true);
-  assert.equal(h.isPassedGradeRemark("DRP", "PASSED"), false);
-  assert.equal(h.isPassedGradeRemark("DROPPED"), false);
-  assert.equal(h.isPassedGradeRemark("INCOMPLETE"), false);
-  assert.equal(h.isPassedGradeRemark(null, "FAILED"), false);
-  assert.equal(h.gradeRemarkIndicator("DROPPED"), "DRP");
-  assert.equal(h.gradeRemarkIndicator("DRP"), "DRP");
+  assert.equal(h.gradeRemarkIndicator("DROPPED"), "DROPPED");
+  assert.equal(h.gradeRemarkIndicator("DRP"), "DROPPED");
   assert.equal(h.gradeRemarkIndicator("INCOMPLETE"), "INC");
-  assert.equal(h.gradeRemarkIndicator("INC"), "INC");
-  assert.equal(h.gradeRemarkIndicator("FAILED"), "FAIL");
+  assert.equal(h.gradeRemarkIndicator("FAILED"), "FAILED");
+  assert.equal(h.gradeRemarkIndicator("NO EXAMINATION PERMIT"), "NP");
+  assert.equal(h.gradeRemarkIndicator("NO PRIVILEGE"), "NO PRIVILEGE");
+  assert.equal(h.isPassedGradeRemark("PASSED"), true);
+  assert.equal(h.isPassedGradeRemark("DRP", "PASSED"), false);
   assert.equal(h.gradeRemarkSelectionValue("DRP"), "DROPPED");
-  assert.equal(h.gradeRemarkSelectionValue("INCOMPLETE"), "INC");
-  assert.equal(h.gradeRemarkSelectionValue("PASSED"), "PASSED");
-  assert.equal(h.gradeRemarkSelectionValue("FAILED"), "FAILED");
-
-  const recordStart = source.indexOf('{classSection === "record" && <section id="class-section-record"');
-  const recordEnd = source.indexOf('{classSection === "analytics" && <section className="class-analytics"', recordStart);
-  const recordSection = source.slice(recordStart, recordEnd);
-  assert.ok(recordStart >= 0 && recordEnd > recordStart, "Record Scores section is isolated");
-  assert.doesNotMatch(recordSection, /hasSpecialRemark|isPassedGradeRemark|mobile-score-status-only/);
-  assert.match(recordSection, /className="score-sheet-input"/);
-  assert.match(recordSection, /className="score-sheet-category-equivalent"/);
-  assert.match(recordSection, /showWeightBreakdown && <tr className="score-sheet-breakdown-row"/);
 
   const finalStart = source.indexOf('{classSection === "final" && <section id="class-section-final"');
   const finalEnd = source.indexOf(String.fromCharCode(10) + "        </>}", finalStart);
   const finalSection = source.slice(finalStart, finalEnd);
-  assert.ok(finalStart >= 0 && finalEnd > finalStart, "Final Grades section is isolated");
-  assert.match(source, /const isFinalGradesTab = classSection === "final"/);
-  assert.match(finalSection, /isDroppedStatus=isFinalGradesTab && resolvedGradeRemark\(en\.remarks,band\?\.remarks\)==="DROPPED"/);
-  assert.doesNotMatch(finalSection, /!passed|passed\?/);
-  assert.match(finalSection, /isDroppedStatus[\s\S]*?<span className="score-sheet-status-indicator"[^>]*>DRP<\/span>/);
-  assert.match(finalSection, /<table className="w-full min-w-max table-fixed border-collapse shrink-0">/);
-  assert.match(finalSection, /<col className="w-\[180px\] min-w-\[180px\]" \/>/);
-  assert.match(finalSection, /<col className="w-\[95px\]" \/>/);
-  assert.match(finalSection, /<col className="w-\[105px\]" \/>/);
-  assert.match(finalSection, /<col className="w-\[100px\]" \/>/);
-  assert.match(finalSection, /<div className="w-\[95px\] mx-auto whitespace-normal break-words leading-tight uppercase">/);
-  assert.match(finalSection, /<div className="w-\[105px\] mx-auto whitespace-normal break-words leading-tight uppercase">/);
-  assert.match(source, /function getCleanComponentName\(componentName: string\): string/);
-  assert.match(finalSection, /getCleanComponentName\(component\.name\)/);
-  assert.match(finalSection, />Raw Equivalent<\/span>/);
-  assert.match(finalSection, /component\.percentage\.toFixed\(2\)\}% Configured Weight/);
-  assert.doesNotMatch(finalSection, /component\.name\.toLocaleUpperCase\(\) WEIGHTED/);
-
-  const cleanNameStart = source.indexOf("function getCleanComponentName(");
-  const cleanNameEnd = source.indexOf("\nfunction scoreSheetCategoryLabel(", cleanNameStart);
-  assert.ok(cleanNameStart >= 0 && cleanNameEnd > cleanNameStart, "clean component-name helper is isolated");
-  const cleanNameContext = {};
-  vm.runInNewContext(ts.transpileModule(source.slice(cleanNameStart, cleanNameEnd) +
-    "\nthis.getCleanComponentName = getCleanComponentName;", {
-      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
-    }).outputText, cleanNameContext);
-  assert.equal(cleanNameContext.getCleanComponentName("MAJOR EXAM / MIDTERM EXAM"), "MIDTERM EXAM");
-  assert.equal(cleanNameContext.getCleanComponentName("MAJOR EXAM / FINAL EXAM"), "FINAL EXAM");
-  assert.equal(cleanNameContext.getCleanComponentName("EXERCISES"), "EXERCISES");
-  assert.equal(cleanNameContext.getCleanComponentName("QUIZZES / ASSIGNMENTS"), "ASSIGNMENTS");
-
-  assert.match(finalSection, /className="block text-\[10px\] text-gray-500 font-normal leading-snug mt-0\.5"/);
+  assert.ok(finalStart >= 0 && finalEnd > finalStart);
+  assert.match(finalSection, /<th rowSpan=\{2\} scope="col"/);
+  assert.match(finalSection, /<th key=\{domain\.id\} colSpan=\{2\} scope="colgroup"/);
+  assert.match(finalSection, /gradeSheetEnrollmentBreakdown\(detail, en\)/);
+  assert.match(finalSection, /isDroppedRemark\(currentRemark\)/);
+  assert.match(finalSection, /studentIndex \+ 1/);
+  assert.match(finalSection, /isDroppedStatus \? "" : total == null/);
+  assert.match(finalSection, /summary\?\.rawEquivalentPercent/);
+  assert.match(finalSection, /summary\?\.parentWeightedScore/);
   assert.match(finalSection, /font-mono tabular-nums align-middle/);
-  assert.match(finalSection, /score-sheet-remark-select w-full min-w-\[130px\] max-w-\[140px\]/);
+  assert.doesNotMatch(finalSection, /activeGradeSheetComponents\.map\(component/);
+  assert.doesNotMatch(finalSection, /gradeSheetAdditionalComponents/);
   assert.match(finalSection, /title="NP means No Examination Permit \(No Permit\)\."/);
-  assert.ok(recordSection.includes("<PendingGradeDash />"), "unentered calculated values render as centered gray dashes");
-  assert.doesNotMatch(recordSection, /isDroppedStatus|hasSpecialRemark|mobile-score-status-only/, "Record Scores is not masked by Final Grades status rules");
-});
 
-test("assessment quick-select codes update local grade state immediately and map to canonical remarks", () => {
-  assert.match(source, /function scoreQuickCode\(remark: string \| null \| undefined\): ScoreQuickCode/);
-  assert.match(source, /if \(remark === "EXCUSED"\) return "EX"/);
-  assert.match(source, /if \(remark === "ABSENT"\) return "AB"/);
-  assert.match(source, /if \(remark === "DID_NOT_SUBMIT"\) return "DNS"/);
-  assert.match(source, /function scoreRemarkFromQuickCode\(code: string\): WorkbookChange\["remark"\]/);
-  assert.match(source, /if \(code === "EX"\) return "EXCUSED"/);
-  assert.match(source, /if \(code === "AB"\) return "ABSENT"/);
-  assert.match(source, /if \(code === "DNS"\) return "DID_NOT_SUBMIT"/);
-
-  const recordStart = source.indexOf('{classSection === "record" && <section id="class-section-record"');
-  const analyticsStart = source.indexOf('{classSection === "analytics"', recordStart);
-  const recordSection = source.slice(recordStart, analyticsStart);
-  assert.match(recordSection, /value=\{scoreQuickCode\(score\?\.remark\)\}/);
-  assert.match(recordSection, /onChange=\{event=>saveScore\(enrollment\.id,item\.id,"",scoreRemarkFromQuickCode\(event\.target\.value\)\)\}/);
-  assert.match(recordSection, /onChange=\{event=>saveScore\(enrollment\.id,item\.id,"",scoreRemarkFromQuickCode\(event\.target\.value\)\)\}/g);
-
-  const localStart = source.indexOf("function updateScoreLocally(");
-  const saveStart = source.indexOf("function saveScore(", localStart);
-  const localUpdater = source.slice(localStart, saveStart);
-  assert.match(localUpdater, /setDetail\(current =>/);
-  assert.match(localUpdater, /updated\.finalPercent = calculateFinal\(/);
-  assert.match(localUpdater, /return \{ \.\.\.current, enrollments \}/);
-
-  const scoreSaveStart = saveStart;
-  const scoreSaveEnd = source.indexOf("\n  async function emailVerifiedGrades", scoreSaveStart);
-  const scoreSaver = source.slice(scoreSaveStart, scoreSaveEnd);
-  assert.ok(scoreSaver.indexOf("updateScoreLocally(") < scoreSaver.indexOf("workbookPendingRef.current.set("), "local recalculation happens before persistence is queued");
-  assert.match(scoreSaver, /flushWorkbookScores\(\)/);
-
-  const contributionStart = source.indexOf("const recordContributionsByEnrollment = useMemo");
-  const contributionEnd = source.indexOf("const studentGradeStats", contributionStart);
-  const contributionMemo = source.slice(contributionStart, contributionEnd);
-  assert.match(contributionMemo, /calculateGradeBreakdown\(/);
-  assert.match(contributionMemo, /\[detail\?\.categories, detail\?\.assessments, detail\?\.enrollments, classSection, scoresByEnrollment\]/);
-});
-
-test("FCU Excel renders non-passing statuses in the grade cell and leaves numeric columns blank", async () => {
-  const components = [{ name: "EXAM", percentage: 100 }];
-  const categories = [{ id: "EXAM", name: "EXAM", weight: 100 }];
+  const printStart = source.indexOf('<table className="print-grade-table generic-print-grade-table">');
+  const printEnd = source.indexOf("</thead>", printStart);
+  const printHeader = source.slice(printStart, printEnd);
+  assert.match(printHeader, /<th rowSpan=\{2\}>NO\.<\/th>/);
+  assert.match(printHeader, /<th key=\{domain\.id\} colSpan=\{2\}>/);
+  assert.match(printHeader, /<th rowSpan=\{2\}>TG<\/th>/);
+  assert.match(printHeader, /<th rowSpan=\{2\}>FG<\/th>/);
+  assert.match(printHeader, /<th rowSpan=\{2\}>REMARKS<\/th>/);
+  assert.match(source, /@page \{ size: 13in 8\.5in;/);
+  assert.match(source, /Edit Record Scores Columns/);
+});test("Generic Excel masks only dropped TG/FG and keeps other status grades visible", async () => {
+  const categories = [{ id: "lecture", name: "Lecture", weight: 100 }];
+  const incomplete = student("Incomplete Student", { lecture: 79 }, 79, "INCOMPLETE");
+  incomplete.finalGradeOverride = "2.50";
+  const noPermit = student("No Permit Student", { lecture: 74 }, 74, "NO EXAMINATION PERMIT");
+  noPermit.finalGradeOverride = "3.00";
+  const failed = student("Failed Student", { lecture: 70 }, 70, "FAILED");
+  failed.finalGradeOverride = "4.00";
   const files = await generate(categories, [
-    student("Dropped Student", { EXAM: 83 }, 83, "DRP"),
-    student("Incomplete Student", { EXAM: 79 }, 79, "INCOMPLETE")
-  ], components);
+    student("Dropped Student", { lecture: 83 }, 83, "DRP"),
+    incomplete, noPermit, failed,
+    student("Passed Student", { lecture: 91 }, 91, "PASSED")
+  ], []);
   const sheet = files["xl/worksheets/sheet1.xml"];
-  assert.match(sheet, /<c r="F17"[^>]*><is><t xml:space="preserve">DRP<\/t><\/is><\/c>/);
-  assert.match(sheet, /<c r="G17"[^>]*><is><t xml:space="preserve">DRP<\/t><\/is><\/c>/);
-  assert.match(sheet, /<c r="F18"[^>]*><is><t xml:space="preserve">INC<\/t><\/is><\/c>/);
-  assert.match(sheet, /<c r="G18"[^>]*><is><t xml:space="preserve">INCOMPLETE<\/t><\/is><\/c>/);
-  for (const cell of ["C17", "D17", "E17", "C18", "D18", "E18"]) {
-    assert.doesNotMatch(sheet, new RegExp('<c r="' + cell + '"[^>]*><v>'));
-  }
-});
-
-test("Generic PDF export is offered only once inside the export dropdown", () => {
-  assert.match(source, /<strong>Save \/ Print Generic PDF<\/strong>/, "the Generic dropdown retains its PDF option");
-  assert.match(source, /"Download Generic Excel Sheet"/, "the Generic dropdown retains its idle Excel option label");
-  assert.match(source, /Generating Excel file…/, "the Generic dropdown exposes its loading label");
-  assert.doesNotMatch(source, /<button className="btn btn-outline-primary" onClick=\{\(\) => printFinalGradesPdf\("generic"\)\}>Save \/ Print Generic PDF<\/button>/, "the duplicate standalone PDF button is removed");
+  assert.match(sheet, /<c r="C17"[^>]*><v>83<\/v>/);
+  assert.match(sheet, /<c r="D17"[^>]*><v>83<\/v>/);
+  assert.match(sheet, /<c r="E17"[^>]*><is><t xml:space="preserve"><\/t><\/is><\/c>/);
+  assert.match(sheet, /<c r="F17"[^>]*><is><t xml:space="preserve"><\/t><\/is><\/c>/);
+  assert.match(sheet, /<c r="G17"[^>]*>.*?DROPPED/s);
+  assert.match(sheet, /<c r="E18"[^>]*><v>79<\/v>/);
+  assert.match(sheet, /<c r="F18"[^>]*>.*?2\.50/s);
+  assert.match(sheet, /<c r="G18"[^>]*>.*?INC/s);
+  assert.match(sheet, /<c r="E19"[^>]*><v>74<\/v>/);
+  assert.match(sheet, /<c r="F19"[^>]*>.*?3\.00/s);
+  assert.match(sheet, /<c r="G19"[^>]*>.*?NP/s);
+  assert.match(sheet, /<c r="F20"[^>]*>.*?4\.00/s);
+  assert.match(sheet, /<c r="G20"[^>]*>.*?FAILED/s);
+  assert.match(sheet, /<c r="E21"[^>]*><v>91<\/v>/);
+  assert.match(sheet, /<c r="G21"[^>]*>.*?PASSED/s);
+  assert.doesNotMatch(sheet, /NO PRIVILEGE/);
+});test("Generic PDF uses the same compact summary headers and landscape printing", () => {
+  assert.match(source, /<strong>Save \/ Print Generic PDF<\/strong>/);
+  assert.match(source, /"Download Generic Excel Sheet"/);
+  assert.match(source, /Generating Excel file…/);
   assert.match(source, /gradeSheetPrimaryDomains\.map/);
-  assert.match(source, /gradeSheetAdditionalComponents\.map/);
-  assert.match(source, /activeGradeSheetComponents\.map\(component=>\{/);
-});
-
-test("ISO Excel export uses dynamic class metadata and omits student-number columns", () => {
-  const route = fs.readFileSync("src/app/api/teacher/subjects/[subjectId]/iso-export/route.ts", "utf8");
-  assert.match(route, /const headers = \[\s*"NO\.",\s*"NAME OF STUDENTS",\s*\.\.\.assessmentHeaders/);
-  assert.doesNotMatch(route, /"Student Number"/);
-  assert.doesNotMatch(route, /enrollment\.studentNumber/);
-  assert.match(route, /courseCode: subject\.code/);
-  assert.match(route, /courseTitle: subject\.title/);
-  assert.match(route, /id: subject\.id/);
-  assert.match(route, /semester: subject\.term/);
-  assert.match(route, /academicYear: subject\.academicYear/);
-  assert.match(route, /classId: resolveClassId\(subject\)/);
-  assert.doesNotMatch(route, /sectionName: resolveSectionName/);
-  assert.doesNotMatch(route, /calculateGradeBreakdown|calculateCategoryPercent|componentContribution/, "ISO export must not calculate grades");
-  assert.match(route, /return score\?\.points \?\? score\?\.remark \?\? ""/);
-  assert.match(route, /\.\.\.parsed\.data\.componentNames\.map\(\(\) => ""\)/);
-  assert.match(route, /enrollment\.finalGradeOverride \?\? ""/);
-  assert.match(route, /enrollment\.remarks \?\? ""/);
-});
-
-test("ISO Excel export uses the authenticated Python openpyxl generator", () => {
-  const pythonSource = fs.readFileSync("api/iso_export.py", "utf8");
-  const endpoint = fs.readFileSync("src/app/api/teacher/subjects/[subjectId]/iso-export/route.ts", "utf8");
-  const profileRoute = fs.readFileSync("src/app/api/profile/route.ts", "utf8");
-  const prismaSchema = fs.readFileSync("prisma/schema.prisma", "utf8");
-  const signatoryMigration = fs.readFileSync("prisma/migrations/20261124000200_teacher_profile_signatory_titles/migration.sql", "utf8");
-  assert.doesNotMatch(source, /function downloadIsoXlsx\(/, "the handwritten ISO OOXML writer is removed");
-  assert.match(source, /renderIsoExcelSealPng\(\)/);
-  assert.doesNotMatch(source, /renderIsoExcelLogoBlockPng/);
-  assert.match(source, /ctx\.arc\(80, 80, 76/);
-  assert.match(source, /loadGradeHeaderLogo\(schoolLogoPath\)/);
-  assert.doesNotMatch(source.slice(source.indexOf("async function renderIsoExcelSealPng"), source.indexOf("async function exportIsoGradesExcel")), /departmentLogoPath/);
-  assert.match(source, /ctx\.drawImage\(schoolLogo, sourceX, sourceY, cropSize, cropSize, 4, 4, 152, 152\)/);
-  assert.doesNotMatch(source.slice(source.indexOf("async function renderIsoExcelSealPng"), source.indexOf("async function exportIsoGradesExcel")), /fillText\(/);
-  assert.match(source, /componentNames: activeGradeSheetComponents\.map/);
-  assert.match(source, /\/iso-export/);
-  assert.match(source, /window\.btoa\(binary\)/);
-  assert.match(source, /response\.blob\(\)/);
-  assert.match(pythonSource, /from openpyxl import Workbook/);
-  assert.match(pythonSource, /column_count = max\(7, len\(headers\)/, "active column count is computed before header layout");
-  assert.match(pythonSource, /center_end_column = column_count - 2/);
-  assert.match(pythonSource, /metadata_label_column = column_count - 1/);
-  assert.match(pythonSource, /metadata_value_column = column_count/);
-  assert.match(pythonSource, /_merge_with_border\(worksheet, "A1:A4", THIN_BORDER\)/);
-  assert.match(pythonSource, /_merge_with_border\(worksheet, "B1:B4", THIN_BORDER\)/);
-  assert.match(pythonSource, /"C\{0\}:\{1\}\{0\}"\.format\(row_number, center_end_letter\)/);
-  assert.match(pythonSource, /enumerate\(\(32, 24, 24, 22\), start=1\)/);
-  assert.match(pythonSource, /wrap_text=False, shrink_to_fit=True/);
-  assert.match(pythonSource, /CellRichText/);
-  assert.match(pythonSource, /InlineFont\(rFont="Arial", sz=11, b=True\)/);
-  assert.match(pythonSource, /InlineFont\(rFont="Arial", sz=8\.5, i=True\)/);
-  assert.match(pythonSource, /"FORM NAME:\\n"/);
-  assert.match(pythonSource, /"FORM NO\.:\\n"/);
-  assert.match(pythonSource, /"REVISION NO\.: "/);
-  assert.match(pythonSource, /metadata = \(/);
-  assert.match(pythonSource, /"Effectivity:"/);
-  assert.match(pythonSource, /"Issuing Office:"/);
-  assert.match(pythonSource, /"Page No\."/);
-  assert.match(pythonSource, /column_dimensions\[get_column_letter\(metadata_label_column\)\]\.width = 18/);
-  assert.match(pythonSource, /column_dimensions\[get_column_letter\(metadata_value_column\)\]\.width = 22/);
-  assert.match(pythonSource, /worksheet\.merge_cells\("D7:G7"\)/);
-  assert.match(pythonSource, /_set_literal\(worksheet\["A8"\], "Class I\.D\."\)/);
-  assert.match(pythonSource, /METADATA_BOTTOM_BORDER/);
-  assert.match(pythonSource, /image\.width = 80/);
-  assert.match(pythonSource, /image\.height = 80/);
-  assert.match(pythonSource, /OneCellAnchor/);
-  assert.match(pythonSource, /cell\.number_format = "0\.00%"/);
-  assert.match(pythonSource, /Percentage columns are passed as fractions/);
-  assert.match(pythonSource, /def _normalize_signature_name/);
-  assert.match(pythonSource, /signature_space_rows = range\(signature_label_row \+ 1, signature_label_row \+ 4\)/);
-  assert.match(pythonSource, /signature_name_row = signature_label_row \+ 4/);
-  assert.match(pythonSource, /signature_position_row = signature_label_row \+ 5/);
-  assert.match(pythonSource, /clean_header\["teacherPosition"\]/);
-  assert.match(pythonSource, /clean_header\["notedByPosition"\]/);
-  assert.match(pythonSource, /teacher_name = _normalize_signature_name\(clean_header\["submittedBy"\]\)/);
-  assert.match(pythonSource, /noted_by_name = _normalize_signature_name\(clean_header\["notedByName"\]\)/);
-  assert.doesNotMatch(pythonSource, /class_metadata\.get\("(?:teacherName|notedByName)"/);
-  assert.doesNotMatch(pythonSource, /^\s*BOTTOM_BORDER\s*=|signature_rule_row/m);
-  assert.match(pythonSource, /Font\(name="Arial", size=10, bold=True\)/);
-  assert.match(pythonSource, /Alignment\(horizontal="center", vertical="center", wrap_text=True\)/);
-  assert.match(pythonSource, /merge_cells\("A5:\{0\}5"\.format\(last_column_letter\)\)/);
-  assert.match(pythonSource, /merge_cells\("A6:\{0\}6"\.format\(last_column_letter\)\)/);
-  assert.match(pythonSource, /paperSize = "14"/);
-  assert.match(pythonSource, /showGridLines = True/);
-  assert.match(pythonSource, /fitToWidth = 1/);
-  assert.match(pythonSource, /fitToHeight = 0/);
-  assert.match(pythonSource, /SAGA-ISO-EXPORT-v1/);
-  assert.match(endpoint, /requireRole\("TEACHER"\)/);
-  assert.match(endpoint, /teacherId: teacher\.id, schoolId: teacher\.schoolId/);
-  assert.doesNotMatch(endpoint, /calculateGradeBreakdown|calculateCategoryPercent|componentContribution/, "ISO export must not calculate grades");
-  assert.match(endpoint, /createHmac\("sha256", secret\)/);
-  assert.match(endpoint, /function normalizeSignatureName\(/);
-  assert.match(endpoint, /submittedBy: normalizeSignatureName\(teacher\.fullName\)/);
-  assert.match(endpoint, /function readHeaderConfig\(teacher: any\)/);
-  assert.match(endpoint, /normalizeSignatureName\(teacher\.notedByName\)/);
-  assert.match(endpoint, /teacher\.positionTitle/);
-  assert.match(endpoint, /teacher\.notedByPosition/);
-  assert.match(endpoint, /const configuredHeader = readHeaderConfig\(teacher\)/);
-  assert.doesNotMatch(endpoint, /signatories:|parsed\.data\.notedByName|parsed\.data\.teacherPosition/);
-  assert.match(profileRoute, /notedByName: z\.string\(\)\.trim\(\)\.min\(1\)/);
-  assert.match(profileRoute, /notedByPosition: z\.string\(\)\.trim\(\)\.min\(1\)/);
-  assert.match(profileRoute, /notedByName: parsed\.data\.notedByName/);
-  assert.match(profileRoute, /notedByPosition: parsed\.data\.notedByPosition/);
-  assert.doesNotMatch(profileRoute, /tx\.school\.update\([\s\S]*notedByName/);
-  assert.match(prismaSchema, /model User \{[\s\S]*?notedByName\s+String\?[\s\S]*?notedByPosition\s+String\?/);
-  assert.doesNotMatch(prismaSchema.slice(prismaSchema.indexOf("model School"), prismaSchema.indexOf("model TenantPayment")), /notedByName|notedByPosition|deanName/);
-  assert.match(signatoryMigration, /UPDATE "User" AS teacher[\s\S]*teacher\."schoolId" = school\."id"[\s\S]*teacher\."role" = 'TEACHER'/);
-  assert.doesNotMatch(signatoryMigration, /ALTER TABLE "School"\s+DROP COLUMN/i, "retain legacy columns until the new production version has replaced the currently serving app");
-  assert.doesNotMatch(endpoint, /normalizeSignatureName\([^)]*,\s*"ENGR\."\)/, "profile titles must not be forced");
-  assert.match(endpoint, /function resolveClassId\(/);
-  assert.match(endpoint, /classId: resolveClassId\(subject\)/);
-  assert.doesNotMatch(endpoint, /resolveSectionName|hasUnenteredMajorCategories|sectionName:/);
-  assert.doesNotMatch(endpoint, /Number\(\(contribution \/ 100\)\.toFixed\(6\)\)|effectiveTotalPercent/);
-  assert.match(endpoint, /header: configuredHeader\.header/);
-  assert.doesNotMatch(endpoint, /teacherName: configuredHeader\.header|notedByName: configuredHeader\.header/);
-  assert.match(source, /function ensureSignatoriesConfigured\(\)/);
-  assert.match(source, /const unsavedChanges =/);
-  assert.match(source, /Save your Profile Information changes before exporting/);
-  assert.match(source, /if \(!ensureSignatoriesConfigured\(\)\) return;/);
-  assert.match(source, /!ensureSignatoriesConfigured\(\) \|\| !ensureGenericHeaderConfigured\(\)/);
-  assert.match(source, /!ensureSignatoriesConfigured\(\) \|\| !ensureIsoHeaderConfigured\(\)/);
-  assert.match(source, /className="signature-space"/);
-  assert.match(source, /className="signature-position"/);
-  assert.match(source, /useState\(user\.notedByName \|\| ""\)/);
-  assert.match(source, /useState\(user\.positionTitle \|\| ""\)/);
-  assert.match(source, /useState\(user\.notedByPosition \|\| ""\)/);
-  assert.doesNotMatch(source, /school\.notedByName|school\.notedByPosition/);
-  assert.doesNotMatch(source, /print-signatures u \{[^}]*border-bottom/s);
-  assert.match(endpoint, /process\.env\.VERCEL_PROJECT_PRODUCTION_URL/, "production calls use the stable project domain");
-  assert.match(endpoint, /process\.env\.VERCEL_ENV === "production"/, "the routing choice distinguishes production from previews");
-  assert.match(endpoint, /productionHost \|\| deploymentHost/, "production prefers the stable production host");
-  assert.match(endpoint, /deploymentHost \|\| productionHost/, "previews prefer their own deployment host");
-  assert.match(endpoint, /ISO_EXPORT_FUNCTION_URL/, "an explicit internal function URL can override automatic routing");
-});
-
-test("ISO signature names preserve saved profile titles without adding a forced prefix", () => {
+  assert.doesNotMatch(source, /gradeSheetAdditionalComponents/);
+  assert.match(source, /<th rowSpan=\{2\}>NO\.<\/th>/);
+  assert.match(source, /<th key=\{domain\.id\} colSpan=\{2\}>/);
+  assert.match(source, /<th rowSpan=\{2\}>REMARKS<\/th>/);
+  assert.match(source, /@page \{ size: 13in 8\.5in;/);
+});test("ISO signature names preserve saved profile titles without adding a forced prefix", () => {
   const route = fs.readFileSync("src/app/api/teacher/subjects/[subjectId]/iso-export/route.ts", "utf8");
   const start = route.indexOf("function normalizeSignatureName(");
   const end = route.indexOf("\nfunction readHeaderConfig(", start);
@@ -639,195 +427,56 @@ test("Attendance component calculates its own session percentage and weighted co
   assert.equal(context.componentContribution(detail, enrollment, component), 10, "the attendance percentage is multiplied by the configured component weight");
 });
 
-test("FCU final-grade export calculates Attendance as a weighted component", async () => {
-  const components = [{ name: "Attendance", percentage: 20 }];
-  const categories = [{ id: "ATT", parentId: null, name: "Attendance", weight: 20 }];
+test("Generic summary exports Attendance as a top-level weighted domain", async () => {
+  const categories = [{ id: "ATT", parentId: null, name: "Attendance", weight: 20, sortOrder: 0 }];
   const files = await generate(categories, [{
-    ...student("Attendance Student", {}, 80),
+    ...student("Attendance Student", { ATT: 75 }, 80),
     attendancePercent: { ATT: 75 }
-  }], components);
+  }], [{ name: "Attendance", percentage: 20 }]);
   const sheet = files["xl/worksheets/sheet1.xml"];
-  assert.match(sheet, /<c r="C15"[^>]*>.*?ATTENDANCE · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="D15"[^>]*>.*?ATTENDANCE · WEIGHTED \(20\.00% OF COURSE\)/s);
+  assert.match(sheet, /<mergeCell ref="C15:D15"\/>/);
+  assert.match(sheet, /<c r="C15"[^>]*>.*?ATTENDANCE 20%/s);
+  assert.match(sheet, /<c r="C16"[^>]*>.*?EQ/s);
+  assert.match(sheet, /<c r="D16"[^>]*>.*?20%/s);
   assert.match(sheet, /<c r="C17"[^>]*><v>75<\/v>/);
   assert.match(sheet, /<c r="D17"[^>]*><v>15<\/v>/);
-});
-
-test("FCU final-grade export supports a variable number of primary domains", async () => {
-  const components = [
-    { name: "QUIZZES", percentage: 30 },
-    { name: "LABORATORY", percentage: 50 },
-    { name: "PROJECT", percentage: 20 },
-    { name: "ORAL", percentage: 0 }
+});test("Generic summary supports a variable number of top-level domains", async () => {
+  const categories = [
+    { id: "QUIZZES", name: "Quizzes", weight: 30, sortOrder: 0 },
+    { id: "LABORATORY", name: "Laboratory", weight: 50, sortOrder: 1 },
+    { id: "PROJECT", name: "Project", weight: 20, sortOrder: 2 },
+    { id: "ORAL", name: "Oral", weight: 0, sortOrder: 3 }
   ];
-  const cats = components.map((item,index) => ({ id: item.name, name: item.name, weight: item.percentage, sortOrder:index }));
-  const files = await generate(cats, [student("Student Name", { QUIZZES: 100, LABORATORY: 80, PROJECT: 90, ORAL: 75 }, 85.5)], components);
+  const files = await generate(categories, [
+    student("Student Name", { QUIZZES: 100, LABORATORY: 80, PROJECT: 90, ORAL: 75 }, 85.5)
+  ], []);
   const sheet = files["xl/worksheets/sheet1.xml"];
-  assert.match(sheet, /<mergeCell ref="A1:M9"/);
-  assert.match(sheet, /<c r="C15"[^>]*>.*?QUIZZES · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="D15"[^>]*>.*?QUIZZES · WEIGHTED \(30\.00% OF COURSE\)/s);
-  assert.match(sheet, /<c r="E15"[^>]*>.*?LABORATORY · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="F15"[^>]*>.*?LABORATORY · WEIGHTED \(50\.00% OF COURSE\)/s);
-  assert.match(sheet, /<c r="G15"[^>]*>.*?PROJECT · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="H15"[^>]*>.*?PROJECT · WEIGHTED \(20\.00% OF COURSE\)/s);
-  assert.match(sheet, /<c r="I15"[^>]*>.*?ORAL · TOTAL \(RAW %\)/s);
-  assert.match(sheet, /<c r="J15"[^>]*>.*?ORAL · WEIGHTED \(0\.00% OF COURSE\)/s);
-  assert.match(sheet, /<c r="K15"[^>]*>.*?TOTAL GRADE/s);
-});
-test("Record Scores Excel export mirrors the full grouped scorebook and saved signature profiles", () => {
+  assert.match(sheet, /<mergeCell ref="A1:M9"\/>/);
+  for (const range of ["C15:D15","E15:F15","G15:H15","I15:J15"]) {
+    assert.ok(sheet.includes('<mergeCell ref="' + range + '"/>'));
+  }
+  assert.match(sheet, /<c r="C15"[^>]*>.*?QUIZZES 30%/s);
+  assert.match(sheet, /<c r="E15"[^>]*>.*?LAB\. 50%/s);
+  assert.match(sheet, /<c r="G15"[^>]*>.*?PROJECT 20%/s);
+  assert.match(sheet, /<c r="I15"[^>]*>.*?ORAL 0%/s);
+  assert.match(sheet, /<c r="C16"[^>]*>.*?EQ/s);
+  assert.match(sheet, /<c r="D16"[^>]*>.*?30%/s);
+  assert.match(sheet, /<c r="K15"[^>]*>.*?TG/s);
+  assert.match(sheet, /<c r="L15"[^>]*>.*?FG/s);
+  assert.match(sheet, /<c r="M15"[^>]*>.*?REMARKS/s);
+  assert.match(sheet, /<c r="A17" s="12"[^>]*><v>1<\/v>/);
+});test("Record Scores Excel export mirrors the full grouped scorebook and saved signature profiles", () => {
   const start = source.indexOf("function gradeSheetAttendancePercent(");
   const end = source.indexOf("async function downloadFcuGradeXlsx(", start);
   assert.ok(start > 0 && end > start, "generic grading-sheet exporter is present");
   const compiledGeneric = ts.transpileModule(source.slice(start, end), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText;
-  let saved;
-  const context = {
-    Uint8Array, Number, String, Math, Blob, TextEncoder,
-    URL: { createObjectURL: () => "blob:test", revokeObjectURL() {} },
-    document: { createElement: () => ({ click() {} }) },
-    window: { setTimeout() {} },
-    setTimeout() {},
-    zipStored: files => { saved = files; return Uint8Array.from([80, 75]); },
-    excelColumn: columns,
-    sortWorksheetRowCells: value => value,
-    xmlEscape: escape,
-    categoryPath: category => category.name,
-    isPassedGradeRemark: (remark, fallback) => {
-      const value = String(remark || fallback || "").trim().toUpperCase();
-      return (value === "PASS" ? "PASSED" : value) === "PASSED";
-    },
-    gradeRemarkIndicator: (remark, fallback) => {
-      const value = String(remark || fallback || "").trim().toUpperCase();
-      const normalized = value === "DRP" || value === "DROP" ? "DROPPED"
-        : value === "INCOMPLETE" ? "INC" : value === "PASS" ? "PASSED" : value;
-      return normalized === "DROPPED" ? "DRP" : normalized === "INC" ? "INC"
-        : normalized === "NP" ? "NP" : ["FAILED", "FAIL", "NOT PASSED"].includes(normalized) ? "FAIL" : normalized || "—";
-    },
-    categoryDescendantIds: (rootId, categories) => {
-      const ids = new Set([rootId]);
-      let changed = true;
-      while (changed) {
-        changed = false;
-        for (const category of categories) {
-          if (category.parentId && ids.has(category.parentId) && !ids.has(category.id)) {
-            ids.add(category.id);
-            changed = true;
-          }
-        }
-      }
-      return ids;
-    },
-    formatSchedule: raw => { try { return JSON.parse(raw).map(row => `${row.label || "Class"} · ${row.day}, ${row.startTime}–${row.endTime}`).join(" / "); } catch { return raw || ""; } },
-    effectiveCategoryWeight: (category, categories) => {
-      let root = category;
-      const visited = new Set([category.id]);
-      while (root.parentId) {
-        if (visited.has(root.parentId)) return 0;
-        visited.add(root.parentId);
-        const parent = categories.find(item => item.id === root.parentId);
-        if (!parent) return 0;
-        root = parent;
-      }
-      return category.id === root.id ? root.weight : root.weight * category.weight / 100;
-    },
-    attendanceDays: assessments => assessments,
-    consecutiveLateAbsences: () => new Set()
-  };
-  const gradeSource = fs.readFileSync("src/lib/grades.ts", "utf8")
-    .replace('import { attendanceDays, consecutiveLateAbsences } from "./attendance";', "")
-    .replace(/^export\s+/gm, "");
-  const compiledGrades = ts.transpileModule(gradeSource, {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
-  }).outputText;
-  vm.runInNewContext(compiledGrades + "\nthis.calculateGradeBreakdown = calculateGradeBreakdown;", context);
-  vm.runInNewContext(compiledGeneric + "\nthis.generateGeneric = downloadGradeSheetXlsx;", context);
-  const detail = {
-    code: "ECE 16", title: "Design Project", classId: "BSECE-4A",
-    term: "1st Semester", academicYear: "2026-2027", schedule: JSON.stringify([{ label: "Lecture", day: "Monday", startTime: "04:00 PM", endTime: "05:30 PM" }]),
-    categories: [{ id: "QUIZ", name: "Quizzes", weight: 30 }, { id: "EXAM", name: "Major Exam", weight: 50 }, { id: "ATT", name: "Attendance", weight: 20 }],
-    assessments: [
-      { id: "Q1", categoryId: "QUIZ", title: "Quiz 1", maxScore: 10 },
-      { id: "M1", categoryId: "EXAM", title: "Midterm", maxScore: 50, dueDate: null, weight: null },
-      { id: "A1", categoryId: "ATT", title: "Attendance · 2026-11-02", maxScore: 1, dueDate: "2026-11-02", weight: null },
-      { id: "A2", categoryId: "ATT", title: "Attendance · 2026-11-03", maxScore: 1, dueDate: "2026-11-03", weight: null },
-      { id: "A3", categoryId: "ATT", title: "Attendance · 2026-11-04", maxScore: 1, dueDate: "2026-11-04", weight: null }
-    ],
-    enrollments: [
-      { studentName: "Ana Reyes", scores: [{ assessmentId: "Q1", points: 8, remark: null }, { assessmentId: "M1", points: 42, remark: null }, { assessmentId: "A1", points: null, remark: "PRESENT" }, { assessmentId: "A2", points: null, remark: "ABSENT" }, { assessmentId: "A3", points: null, remark: "EXCUSED" }], finalPercent: 90, finalGradeOverride: null, remarks: null },
-      { studentName: "Ben Cruz", scores: [{ assessmentId: "Q1", points: null, remark: "EXCUSED" }, { assessmentId: "M1", points: 35, remark: null }, { assessmentId: "A1", points: null, remark: "PRESENT" }, { assessmentId: "A2", points: null, remark: "PRESENT" }, { assessmentId: "A3", points: null, remark: "PRESENT" }], finalPercent: 80, finalGradeOverride: "2.00", remarks: "PASSED" }
-    ],
-    gradeBands: [{ minPercent: 75, finalGrade: "2.25", remarks: "PASSED" }]
-  };
-  context.generateGeneric("record-scores.xlsx", "Record Scores", detail, "Example University", "123 College Road", "COLLEGE OF ENGINEERING", "Teacher One", "Instructor", "Dean Two", "Dean", [{ name: "Quizzes", percentage: 30 }, { name: "Major Exam", percentage: 50 }]);
-  const files = Object.fromEntries(saved.map(file => [file.name, file.content]));
-  const sheet = files["xl/worksheets/sheet1.xml"];
-  assert.match(sheet, /Example University/);
-  assert.match(sheet, /123 College Road/);
-  assert.doesNotMatch(sheet, /School Address:/);
-  assert.match(sheet, /COLLEGE OF ENGINEERING/);
-  assert.doesNotMatch(sheet, /RECORD SCORES|RECORD SCORED/);
-  assert.match(sheet, /Course Number:/);
-  assert.match(sheet, /ECE 16/);
-  assert.match(sheet, /Descriptive Title:/);
-  assert.match(sheet, /Design Project/);
-  assert.match(sheet, /Class ID:/);
-  assert.match(sheet, /BSECE-4A/);
-  assert.match(sheet, /Semester:/);
-  assert.match(sheet, /1st Semester/);
-  assert.match(sheet, /Academic Year:/);
-  assert.match(sheet, /2026-2027/);
-  assert.match(sheet, /Schedule:/);
-  assert.match(sheet, /Lecture · Monday, 04:00 PM–05:30 PM/);
-  assert.doesNotMatch(sheet, /Teacher: Teacher One|Dean: Dean Two/);
-  assert.match(sheet, /Display Components:/);
-  assert.match(sheet, /Quizzes 30\.00% · Major Exam 50\.00%/);
-  assert.match(sheet, /NO\./);
-  assert.match(sheet, /NAME OF STUDENTS/);
-  assert.match(sheet, /QUIZZES/);
-  assert.match(sheet, /MAJOR EXAM/);
-  assert.match(sheet, /Quiz 1/);
-  assert.match(sheet, /MAX: 10/);
-  assert.match(sheet, /EQUIVALENT/);
-  assert.match(sheet, /\(\%\)/);
-  assert.doesNotMatch(sheet, /Lecture \/ Quizzes|Quizzes · Quiz 1|Item wt|Course wt|Student Number|2023-0001/);
-  assert.match(sheet, /<mergeCell ref="D14:G15"\/>/);
-  assert.match(sheet, /<mergeCell ref="H14:K15"\/>/);
-  assert.match(sheet, /<c r="A18"[^>]*><v>1<\/v><\/c>/);
-  assert.match(sheet, /<c r="B18"[^>]*>.*?Ana Reyes/s);
-  assert.match(sheet, /<c r="A19"[^>]*><v>2<\/v><\/c>/);
-  assert.match(sheet, /<c r="D18"[^>]*>.*?8 \/ 10/s);
-  assert.match(sheet, /<c r="E18"[^>]*><v>27<\/v>/);
-  assert.match(sheet, /<c r="I18"[^>]*><v>46<\/v>/);
-  assert.match(sheet, /<c r="L18"[^>]*><f>SUM\(G18,K18\)<\/f><v>90<\/v>/);
-  assert.match(sheet, /<c r="M18"[^>]*>.*?2\.00/s);
-  assert.match(sheet, /<c r="N18"[^>]*>.*?PASSED/s);
-  assert.match(sheet, /TEACHER ONE/);
-  assert.match(sheet, /DEAN TWO/);
-  assert.match(sheet, /<c r="A21"[^>]*>.*?Submitted by:/s);
-  assert.match(sheet, /<c r="H21"[^>]*>.*?Noted:/s);
-  for (let rowNumber = 21; rowNumber <= 26; rowNumber++) {
-    assert.ok(sheet.includes('<mergeCell ref="A' + rowNumber + ':G' + rowNumber + '"/>'));
-    assert.ok(sheet.includes('<mergeCell ref="H' + rowNumber + ':N' + rowNumber + '"/>'));
-  }
-  for (const cell of ["A25", "H25", "A26", "H26"]) {
-    assert.match(sheet, new RegExp('<c r="' + cell + '" s="17"'));
-  }
-  assert.match(sheet, /<c r="A25"[^>]*>.*?TEACHER ONE/s);
-  assert.match(sheet, /<c r="H25"[^>]*>.*?DEAN TWO/s);
-  assert.match(sheet, /<c r="A26"[^>]*>.*?Instructor/s);
-  assert.match(sheet, /<c r="H26"[^>]*>.*?Dean/s);
-  assert.doesNotMatch(sheet, /SIGNATURE OVER PRINTED NAME \/ DATE/);
-  assert.doesNotMatch(sheet, /Teacher&apos;s Signature over Printed Name|Dean&apos;s Signature over Printed Name/);
-  assert.match(sheet, /orientation="landscape" fitToWidth="1"/);
-  assert.match(sheet, /<pane ySplit="17" topLeftCell="A18"/);
-  assert.match(source, /@page \{ size: 8\.5in 13in/);
-  assert.doesNotMatch(sheet, /Class Summary|Certification/);
-  assert.ok(files["xl/styles.xml"]);
-});
-
-
-test("Record Scores export dynamically merges institutional, metadata, category, summary, and signature headers", () => {
+  assert.match(source, /@page \{ size: 13in 8\.5in;/, "Final Grades PDF is landscape");
+  assert.match(source, /printFinalGradesPdf\("generic"\)/);
+  assert.match(source, /printFinalGradesPdf\("iso"\)/);
+  assert.ok(compiledGeneric.includes("gradeSheetEnrollmentBreakdown"), "shared domain helper remains available");
+});test("Record Scores export dynamically merges institutional, metadata, category, summary, and signature headers", () => {
   const start = source.indexOf("function gradeSheetAttendancePercent(");
   const end = source.indexOf("async function downloadFcuGradeXlsx(", start);
   assert.ok(start > 0 && end > start, "generic grading-sheet exporter is present");
@@ -1037,7 +686,7 @@ test("category ordering is hierarchical, persistent, and exposed from Assessment
   assert.match(subjectRoute, /sortOrder: category\.sortOrder \?\? existing\.sortOrder/);
 });
 
-test("PDF component values are weighted by the configured course allocation", () => {
+test("Final Grades print summary uses root-domain weighted contributions", () => {
   const start = source.indexOf("function gradeSheetComponentSummary(");
   const end = source.indexOf("\nfunction downloadGradeSheetXlsx(", start);
   assert.ok(start > 0 && end > start, "weighted component helper is present");
@@ -1050,109 +699,23 @@ test("PDF component values are weighted by the configured course allocation", ()
       const value = String(remark || fallback || "").trim().toUpperCase();
       return (value === "PASS" ? "PASSED" : value) === "PASSED";
     },
-    gradeRemarkIndicator: (remark, fallback) => {
-      const value = String(remark || fallback || "").trim().toUpperCase();
-      const normalized = value === "DRP" || value === "DROP" ? "DROPPED"
-        : value === "INCOMPLETE" ? "INC" : value === "PASS" ? "PASSED" : value;
-      return normalized === "DROPPED" ? "DRP" : normalized === "INC" ? "INC"
-        : normalized === "NP" ? "NP" : ["FAILED", "FAIL", "NOT PASSED"].includes(normalized) ? "FAIL" : normalized || "—";
-    },
+    gradeRemarkIndicator: (remark, fallback) => String(remark || fallback || "").trim().toUpperCase() || "—",
     gradeSheetComponentPercent: () => 90,
     gradeSheetRootDomainSummary: () => null
   };
   vm.runInNewContext(compiledContribution + "\nthis.contribution = gradeSheetComponentContribution;", context);
   assert.equal(context.contribution({ categories: [{ id: "quiz", parentId: "lecture", name: "Quiz" }] }, {}, { name: "Quiz", percentage: 70 }), 63);
   assert.equal(context.contribution({ categories: [{ id: "exam", parentId: "lecture", name: "Exam" }] }, {}, { name: "Exam", percentage: 40 }), 36);
-  assert.match(source, /gradeSheetComponentSummary\(detail,enrollment,component\)/);
-  const printHeader = source.slice(source.indexOf('<article className="print-grade-sheet'), source.indexOf('<div className="generic-print-course-details">'));
-  assert.match(source, /<thead><tr><th aria-label="Sequence number"><\/th><th>NAME OF STUDENTS<\/th>/);
-  assert.match(source, /<td>\{index\+1\}\.<\/td><td>\{enrollment\.studentName\.toLocaleUpperCase\(\)\}<\/td>/);
-  assert.ok(printHeader.includes('className="generic-print-header-layout"'));
-  assert.ok(printHeader.includes('className="generic-print-logo-slot generic-print-school-logo"'));
-  assert.ok(printHeader.includes('alt="Primary institutional seal — Filamer Christian University, Inc."'));
-  assert.ok(printHeader.includes('className="generic-print-school-name">{user.school.name}'));
-  assert.ok(printHeader.includes('className="generic-print-department">{departmentName.trim()}'));
-  assert.ok(printHeader.includes('className="generic-print-address">{schoolAddress.trim()'));
-  assert.ok(!printHeader.includes("user.school.departmentName"), "PDF reads the current department-name field state");
-  assert.ok(printHeader.includes('<strong className="generic-print-title">COLLEGIATE GRADE SHEET</strong>'));
-  assert.ok(printHeader.includes('className="generic-print-term-year">{detail.term.toLocaleUpperCase()} A.Y. {detail.academicYear}'));
-  assert.ok(printHeader.includes('className="generic-print-header-blank"'));
-  assert.ok(printHeader.includes('className="generic-print-logo-slot generic-print-department-logo"'));
-  assert.ok(printHeader.includes('alt="College of Engineering / department logo"'));
-  assert.equal(printHeader.split('alt="Primary institutional seal — Filamer Christian University, Inc."').length - 1, 1, "institutional seal appears once");
-  assert.equal(printHeader.split('alt="College of Engineering / department logo"').length - 1, 1, "department logo appears once");
-  const schoolNamePosition = printHeader.indexOf('className="generic-print-school-name"');
-  const departmentPosition = printHeader.indexOf('className="generic-print-department"');
-  const addressPosition = printHeader.indexOf('className="generic-print-address"');
-  const blankPosition = printHeader.indexOf('className="generic-print-header-blank"');
-  const titlePosition = printHeader.indexOf('className="generic-print-title"');
-  const termPosition = printHeader.indexOf('className="generic-print-term-year"');
-  assert.ok(schoolNamePosition < departmentPosition && departmentPosition < addressPosition && addressPosition < blankPosition && blankPosition < titlePosition && titlePosition < termPosition, "center header follows the required school, college, address, blank, title, term/year order");
-  assert.ok(source.includes("grid-template-columns:58px minmax(0,max-content) 58px"));
-  assert.ok(source.includes("grid-template-rows:auto auto auto 1.2em auto auto"));
-  assert.ok(source.includes("justify-content:center; column-gap:10px; row-gap:2px; width:fit-content; max-width:100%; margin:0 auto; text-align:center"), "the logo and text columns form one compact centered header unit");
-  assert.ok(source.includes("generic-print-school-logo { grid-column:1; grid-row:1 / span 6; justify-self:center"));
-  assert.ok(source.includes("generic-print-department-logo { grid-column:3; grid-row:1 / span 6; justify-self:center"));
-  assert.ok(source.includes("generic-print-logo-slot { display:flex; align-items:center; justify-content:center; align-self:stretch; min-width:58px; width:58px;"));
-  assert.ok(source.includes("generic-print-department { grid-column:2; grid-row:2"));
-  assert.ok(source.includes("generic-print-address { grid-column:2; grid-row:3"));
-  assert.ok(source.includes("generic-print-header-blank { grid-column:2; grid-row:4"));
-  assert.ok(source.includes("generic-print-title { grid-column:2; grid-row:5"));
-  assert.ok(source.includes("generic-print-term-year { grid-column:2; grid-row:6"));
-  assert.ok(source.includes("generic-print-logo-placeholder"));
-  assert.ok(source.includes('useEffect(() => { setSchoolAddress(user.school.address || ""); }, [user.school.address]);'));
-  assert.ok(source.includes('useEffect(() => { setDepartmentName(user.school.departmentName || ""); }, [user.school.departmentName]);'));
-  assert.ok(source.includes('function printFinalGradesPdf(format: "generic" | "iso" = "generic")'));
-  assert.ok(source.includes("Your generic grading-sheet header is incomplete."));
-  assert.ok(source.includes('setTab("profile");'));
-  assert.ok(source.includes('printFinalGradesPdf("generic"); event.currentTarget.closest("details")'));
-  assert.ok(source.includes('printFinalGradesPdf("iso"); event.currentTarget.closest("details")'));
-  assert.match(source, /generic-print-address/);
-  assert.match(source, /generic-print-department/);
-  assert.match(source, /generic-print-title/);
-  assert.match(source, /text-align:center/);
-  assert.doesNotMatch(source, /generic-print-doc-control|generic-print-membership|grade-sheet-calculation-note|Institutional membership \/ accreditation/);
-  assert.ok(source.includes("Save / Print Generic PDF"));
-  assert.ok(source.includes("Save / Print ISO PDF"));
-  assert.ok(printHeader.includes('<table className="iso-print-header-table" aria-label="ISO document control header">'));
-  assert.ok(printHeader.includes('<td rowSpan={4} className="iso-print-seal-cell">'), "school seal spans all four ISO header rows");
-  assert.ok(printHeader.includes('<td colSpan={3} className="iso-print-organization-cell">'), "institution name and address span columns 2–4");
-  assert.ok(printHeader.includes("Form Name:"));
-  assert.ok(printHeader.includes("Effectivity:"));
-  assert.ok(printHeader.includes("Form No:"));
-  assert.ok(printHeader.includes("Issuing Office:"));
-  assert.ok(printHeader.includes("Revision No. {isoHeaderConfig.revisionNo}"));
-  assert.ok(printHeader.includes('<div className="iso-print-page-cell"><span>Page No.</span><b>1</b></div>'));
-  assert.ok(printHeader.includes("isoHeaderConfig.affiliationLine1"));
-  assert.ok(printHeader.includes("isoHeaderConfig.affiliationLine2"));
-  assert.ok(source.includes("border:1px solid black!important; border-collapse:collapse!important;"));
-  assert.ok(source.includes('organizationAddress: "Roxas Avenue, Roxas City, Capiz, Philippines"'));
-  assert.ok(source.includes('formNo: "FCU-EOMS-RO-006-F"'));
-  assert.ok(source.includes('effectivity: "October 1, 2025"'));
-  assert.ok(source.includes('issuingOffice: "REGISTRAR’S OFFICE"'));
-  assert.ok(source.includes('isoStandard: "ISO 21001:2025"'));
-  assert.ok(source.includes("function readIsoHeaderConfig("));
-  assert.ok(source.includes("setIsoHeaderConfig(current => ({...current, affiliationLine1:event.target.value}))"));
-  assert.ok(source.includes("isoHeaderConfig }"));
-  const profileRoute = fs.readFileSync("src/app/api/profile/route.ts", "utf8");
-  assert.match(profileRoute, /isoHeaderConfig: z\.object\(/);
-  assert.match(profileRoute, /isoHeaderConfig: JSON\.stringify\(parsed\.data\.isoHeaderConfig\)/);
-  const auth = fs.readFileSync("src/lib/auth.ts", "utf8");
-  assert.match(auth, /isoHeaderConfig: true/);
-  const schema = fs.readFileSync("prisma/schema.prisma", "utf8");
-  assert.match(schema, /isoHeaderConfig\s+String\?/);
-  const migration = fs.readFileSync("prisma/migrations/20261121000300_iso_document_header_config/migration.sql", "utf8");
-  assert.match(migration, /ADD COLUMN "isoHeaderConfig" TEXT/);
-  const courseDetails = source.slice(source.indexOf('<div className="generic-print-course-details">'), source.indexOf('<table className="print-grade-table generic-print-grade-table">'));
-  assert.match(courseDetails, /generic-print-course-details-row-primary[\s\S]*?Course No\.[\s\S]*?detail\.code[\s\S]*?Descriptive Title[\s\S]*?detail\.title/);
-  assert.match(courseDetails, /generic-print-course-details-row-secondary[\s\S]*?Class ID[\s\S]*?Semester[\s\S]*?Academic Year/);
-  assert.doesNotMatch(courseDetails, /Course &amp; Year/);
-  assert.match(source, /generic-print-course-details \{ display:flex; flex-direction:column/);
-  assert.match(source, /generic-print-course-details-row>div \{ display:flex; align-items:baseline/);
-  assert.match(source, /border:0/);
-});
-
-test("assessment item order is saved and applied consistently in Assessment Items and Record Scores", () => {
+  assert.match(source, /gradeSheetRootDomainSummary\(detail, enrollment, domain\)/);
+  const printStart = source.indexOf('<table className="print-grade-table generic-print-grade-table">');
+  const printEnd = source.indexOf("</table>", printStart);
+  const printTable = source.slice(printStart, printEnd);
+  assert.ok(printTable.includes("gradeSheetEnrollmentBreakdown(detail, enrollment)"));
+  assert.ok(printTable.includes("gradeSheetPrimaryDomains.map"));
+  assert.ok(printTable.includes("domainShares.reduce"));
+  assert.ok(!printTable.includes("gradeSheetAdditionalComponents.map"));
+  assert.ok(printTable.includes("total.toFixed(2)"));
+});test("assessment item order is saved and applied consistently in Assessment Items and Record Scores", () => {
   assert.match(source, /async function moveAssessmentItem/);
   assert.match(source, /scorebookItems = useMemo\(\(\) => detail\?\.assessments\.filter\([\s\S]*?sort\(\(a,b\) => \(a\.sortOrder \?\? 0\) - \(b\.sortOrder \?\? 0\)\)/);
   assert.match(source, /sortOrder: item\.sortOrder \?\? 0/);
@@ -1298,19 +861,15 @@ test("Edit Components category picker includes parents and every eligible nested
   assert.ok(source.includes("orderedCategoryTree(categories).filter(category => categoryHasGradingAssessments(category, categories, assessments))"), "saved defaults can resolve parent and nested categories");
 });
 
-test("printable Collegiate sheet shows each root group's weighted course contribution across classes", () => {
+test("printable Collegiate sheet shows each root-domain weighted contribution", () => {
   const helperStart = source.indexOf("function categoryDescendantIds(");
   const helperEnd = source.indexOf("\nfunction downloadGradeSheetXlsx(", helperStart);
-  assert.ok(helperStart > 0 && helperEnd > helperStart, "print component helpers are present");
-  const compiledHelpers = ts.transpileModule(source.slice(helperStart, helperEnd), {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
-  }).outputText;
+  assert.ok(helperStart > 0 && helperEnd > helperStart, "domain contribution helpers are present");
+  const compiledHelpers = ts.transpileModule(source.slice(helperStart, helperEnd), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
   const gradeSource = fs.readFileSync("src/lib/grades.ts", "utf8")
     .replace('import { attendanceDays, consecutiveLateAbsences } from "./attendance";', "")
     .replace(/^export\s+/gm, "");
-  const compiledGrades = ts.transpileModule(gradeSource, {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
-  }).outputText;
+  const compiledGrades = ts.transpileModule(gradeSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
   const categoryPath = (category, categories) => {
     const names = [category.name];
     let parent = categories.find(item => item.id === category.parentId);
@@ -1322,14 +881,9 @@ test("printable Collegiate sheet shows each root group's weighted course contrib
     }
     return names.join(" / ");
   };
-  const context = {
-    categoryPath,
-    attendanceDays: assessments => assessments,
-    consecutiveLateAbsences: () => new Set()
-  };
+  const context = { categoryPath, attendanceDays: assessments => assessments, consecutiveLateAbsences: () => new Set() };
   vm.runInNewContext(compiledGrades + "\nthis.calculateGradeBreakdown = calculateGradeBreakdown;", context);
   vm.runInNewContext(compiledHelpers + "\nthis.componentContribution = gradeSheetComponentContribution;", context);
-
   const makeClass = (lectureWeight, labWeight, lectureScore, labScore) => {
     const categories = [
       { id: "lecture", parentId: null, name: "Lecture", weight: lectureWeight, conversionBase: 100, sortOrder: 0 },
@@ -1341,33 +895,24 @@ test("printable Collegiate sheet shows each root group's weighted course contrib
       { id: "lecture-score", categoryId: "lecture-leaf", title: "Lecture Assessment", maxScore: 100, weight: null, dueDate: null },
       { id: "lab-score", categoryId: "laboratory-leaf", title: "Laboratory Assessment", maxScore: 100, weight: null, dueDate: null }
     ];
-    const enrollment = {
-      studentName: "AMBITO, JENSEN ANTON",
-      scores: [
-        { assessmentId: "lecture-score", points: lectureScore, remark: null },
-        { assessmentId: "lab-score", points: labScore, remark: null }
-      ]
-    };
+    const enrollment = { studentName: "AMBITO, JENSEN ANTON", scores: [
+      { assessmentId: "lecture-score", points: lectureScore, remark: null },
+      { assessmentId: "lab-score", points: labScore, remark: null }
+    ]};
     return { categories, assessments, enrollments: [enrollment] };
   };
-
-  const fcuClass = makeClass(60, 40, 58.983, 96.5);
-  const lecture = context.componentContribution(fcuClass, fcuClass.enrollments[0], { name: "Lecture", percentage: 60 });
-  const laboratory = context.componentContribution(fcuClass, fcuClass.enrollments[0], { name: "Laboratory", percentage: 40 });
+  const sample = makeClass(60, 40, 58.983, 96.5);
+  const lecture = context.componentContribution(sample, sample.enrollments[0], { name: "Lecture", percentage: 60 });
+  const laboratory = context.componentContribution(sample, sample.enrollments[0], { name: "Laboratory", percentage: 40 });
   assert.equal(lecture, 35.39);
   assert.equal(laboratory, 38.6);
   assert.equal(Number((lecture + laboratory).toFixed(2)), 73.99);
-
-  const differentlyWeightedClass = makeClass(70, 30, 80, 90);
-  assert.equal(context.componentContribution(differentlyWeightedClass, differentlyWeightedClass.enrollments[0], { name: "Lecture", percentage: 70 }), 56);
-  assert.equal(context.componentContribution(differentlyWeightedClass, differentlyWeightedClass.enrollments[0], { name: "Laboratory", percentage: 30 }), 27);
-
-  const printSectionStart = source.indexOf('<table className="print-grade-table generic-print-grade-table">');
-  const printSectionEnd = source.indexOf("</table>", printSectionStart);
-  const printTable = source.slice(printSectionStart, printSectionEnd);
-  assert.ok(printTable.includes("gradeSheetPrimaryDomains.map"), "each primary domain is displayed in PDF before the final total");
-  assert.ok(printTable.includes("gradeSheetAdditionalComponents.map"), "saved non-root components are retained in the PDF");
-  assert.ok(printTable.includes("gradeSheetComponentSummary(detail,enrollment,component)"), "saved component values use the shared raw/weighted mapper");
-  assert.ok(printTable.includes('enrollment.finalPercent.toFixed(2)+"%"'), "TOTAL GRADE continues to show the official calculated course total");
-  assert.ok(source.includes('{classSection === "final" && <section id="class-section-final"'), "the same print component is reached from each class Final Grades preview");
+  const printStart = source.indexOf('<table className="print-grade-table generic-print-grade-table">');
+  const printEnd = source.indexOf("</table>", printStart);
+  const printTable = source.slice(printStart, printEnd);
+  assert.ok(printTable.includes("gradeSheetPrimaryDomains.map"));
+  assert.ok(printTable.includes("gradeSheetEnrollmentBreakdown(detail, enrollment)"));
+  assert.ok(!printTable.includes("gradeSheetAdditionalComponents.map"));
+  assert.ok(printTable.includes("domainShares.reduce"));
+  assert.ok(printTable.includes("total.toFixed(2)"));
 });

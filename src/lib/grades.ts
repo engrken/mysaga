@@ -17,14 +17,28 @@ const CLASS_REMARK_CODES: ReadonlySet<string> = new Set(CLASS_REMARK_OPTIONS.map
 export function normalizeRemark(remark: string | null | undefined): string {
   const value = String(remark ?? "").trim().toUpperCase();
   if (value === "INCOMPLETE") return "INC";
+  if (/^NO\s+(?:(?:EXAM(?:INATION)?|EXAMINATION)\s+)?PERMIT(?:\s*\(NP\))?$/.test(value)) return "NP";
   if (value === "DRP" || value === "DROP") return "DROPPED";
   if (value === "PASS") return "PASSED";
   if (value === "FAIL" || value === "NOT PASSED") return "FAILED";
   return value;
 }
 
+/** Return the compact status representation used in exported grade sheets. */
+export function gradeRemarkExportCode(remark: string | null | undefined): string {
+  const value = normalizeRemark(remark);
+  if (value === "DROPPED") return "DRP";
+  if (value === "FAILED") return "FAIL";
+  return value;
+}
+
 export function isClassRemark(remark: string | null | undefined): boolean {
   return CLASS_REMARK_CODES.has(normalizeRemark(remark));
+}
+
+/** True only for the canonical dropped status; other special remarks retain their numeric grade. */
+export function isDroppedRemark(remark: string | null | undefined): boolean {
+  return normalizeRemark(remark) === "DROPPED";
 }
 
 /** Category weights below the course roots are percentage points within the

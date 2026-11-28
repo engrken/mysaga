@@ -16,7 +16,7 @@ function loadCalculator(name, imports = {}) {
 }
 const attendance = loadCalculator("attendance");
 const calculatorExports = loadCalculator("grades", { "./attendance": attendance });
-const { calculateCategoryPercent, calculateGradeBreakdown, calculateFinal, convertRawPercent, expectedChildAllocation, remainingChildAllocation, firstOverallocatedCategoryGroup, normalizeRemark, isClassRemark, CLASS_REMARK_OPTIONS } = calculatorExports;
+const { calculateCategoryPercent, calculateGradeBreakdown, calculateFinal, convertRawPercent, expectedChildAllocation, remainingChildAllocation, firstOverallocatedCategoryGroup, normalizeRemark, gradeRemarkExportCode, isClassRemark, isDroppedRemark, CLASS_REMARK_OPTIONS } = calculatorExports;
 const scored = (points, maxScore = 100, title = "Exam", remark = null, weight = null) =>
   ({ title, maxScore, weight, scores: [{ points, remark }] });
 const pending = (maxScore = 100, title = "Exam", weight = null) =>
@@ -37,12 +37,26 @@ test("class remarks use one unique canonical dictionary and normalize legacy val
   assert.equal(normalizeRemark("INCOMPLETE"), "INC");
   assert.equal(normalizeRemark(" incomplete "), "INC");
   assert.equal(normalizeRemark("inc"), "INC");
+  assert.equal(normalizeRemark("NO EXAMINATION PERMIT"), "NP");
+  assert.equal(normalizeRemark("NO EXAMINATION PERMIT (NP)"), "NP");
+  assert.equal(normalizeRemark("NO PRIVILEGE"), "NO PRIVILEGE", "unsupported labels must not be silently reclassified");
+  assert.equal(gradeRemarkExportCode("NO PRIVILEGE"), "NO PRIVILEGE");
+  assert.equal(normalizeRemark("NO PERMIT"), "NP");
+  assert.equal(gradeRemarkExportCode("NO EXAMINATION PERMIT"), "NP");
+  assert.equal(gradeRemarkExportCode("INCOMPLETE"), "INC");
+  assert.equal(gradeRemarkExportCode("DROPPED"), "DRP");
+  assert.equal(gradeRemarkExportCode("DRP"), "DRP");
   assert.equal(normalizeRemark("DRP"), "DROPPED");
   assert.equal(normalizeRemark("PASS"), "PASSED");
   assert.equal(normalizeRemark("Failed"), "FAILED");
   assert.equal(isClassRemark("INCOMPLETE"), true);
   assert.equal(isClassRemark("inc"), true);
   assert.equal(isClassRemark("ABSENT"), false);
+  assert.equal(isDroppedRemark("DROPPED"), true);
+  assert.equal(isDroppedRemark("DRP"), true);
+  assert.equal(isDroppedRemark("FAILED"), false);
+  assert.equal(isDroppedRemark("INC"), false);
+  assert.equal(isDroppedRemark("NP"), false);
 });
 
 test("transmutation respects school passing base", () => {

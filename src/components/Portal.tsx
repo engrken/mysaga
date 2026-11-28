@@ -32,7 +32,7 @@ const StudentActivities = dynamic(() => import("./ClassActivities").then(module 
 const ClassChatsHub = dynamic(() => import("./ClassChatsHub"));
 const TeacherClassAnnouncements = dynamic(() => import("./SagaAnnouncements").then(module => module.TeacherClassAnnouncements));
 const StudentAnnouncements = dynamic(() => import("./SagaAnnouncements").then(module => module.StudentAnnouncements));
-import { calculateCategoryPercent, calculateFinal, calculateGradeBreakdown, convertRawPercent, remainingChildAllocation, CLASS_REMARK_OPTIONS, normalizeRemark } from "@/lib/grades";
+import { calculateCategoryPercent, calculateFinal, calculateGradeBreakdown, convertRawPercent, remainingChildAllocation, CLASS_REMARK_OPTIONS, normalizeRemark, isDroppedRemark } from "@/lib/grades";
 import { classWorkspaceHref, resolveClassRoute, parseClassWorkspaceQuery, type ClassSection } from "@/lib/class-navigation";
 import { todayManila } from "@/lib/tenant-operations";
 import { absenceDates, attendanceDays as orderedAttendanceDays, attendanceRiskSummary, consecutiveLateAbsences, CONVERTED_LATE_LABEL, droppingAbsenceStreak, DROPPING_ABSENCE_THRESHOLD, EARLY_ABSENCE_PERCENT, HIGH_RISK_ABSENCE_PERCENT, type AbsenceDate, type AbsenceStreak } from "@/lib/attendance";
@@ -139,6 +139,10 @@ function DroppingWarning({ streak }: { streak: AbsenceStreak }) {
 function getCleanComponentName(componentName: string): string {
   const parts = componentName.split("/");
   return (parts.length > 1 ? parts[parts.length - 1] : componentName).trim().toUpperCase();
+}
+function renderColumnSubtext(isRawEquivalent: boolean, weightPercentage?: number | string) {
+  const subtext = isRawEquivalent ? "EQ" : `${weightPercentage ?? ""}%`;
+  return <span className="block text-[10px] text-gray-500 font-normal leading-snug mt-0.5">{subtext}</span>;
 }
 function scoreSheetCategoryLabel(name: string) {
   const label = name.trim();
@@ -464,12 +468,7 @@ function isPassedGradeRemark(remark: string | null | undefined, fallback?: strin
   return resolvedGradeRemark(remark, fallback) === "PASSED";
 }
 function gradeRemarkIndicator(remark: string | null | undefined, fallback?: string | null) {
-  const status = resolvedGradeRemark(remark, fallback);
-  if (status === "DROPPED") return "DRP";
-  if (status === "INC") return "INC";
-  if (status === "NP") return "NP";
-  if (status === "FAILED" || status === "FAIL" || status === "NOT PASSED") return "FAIL";
-  return status || "—";
+  return resolvedGradeRemark(remark, fallback) || "—";
 }
 function gradeRemarkSelectionValue(remark: string | null | undefined) {
   const status = normalizeGradeRemark(remark);
@@ -492,14 +491,14 @@ function scoreRemarkFromQuickCode(code: string): WorkbookChange["remark"] {
 }
 
 
-function gradeSheetRootDomainSummary(detail: Detail, enrollment: Enrollment, root: Category) {
+function gradeSheetEnrollmentBreakdown(detail: Detail, enrollment: Enrollment) {
   const grouped = new Map<string, Assessment[]>();
   for (const assessment of detail.assessments) {
     const items = grouped.get(assessment.categoryId) ?? [];
     items.push(assessment);
     grouped.set(assessment.categoryId, items);
   }
-  const breakdown = calculateGradeBreakdown(detail.categories.map(category => ({
+  return calculateGradeBreakdown(detail.categories.map(category => ({
     id: category.id,
     parentId: category.parentId,
     weight: category.weight,
@@ -515,7 +514,17 @@ function gradeSheetRootDomainSummary(detail: Detail, enrollment: Enrollment, roo
       };
     })
   })));
-  return breakdown.domains.find(item => item.categoryId === root.id) ?? null;
+}
+function gradeSheetRootDomainSummary(detail: Detail, enrollment: Enrollment, root: Category) {
+  return gradeSheetEnrollmentBreakdown(detail, enrollment).domains.find(item => item.categoryId === root.id) ?? null;
+}
+function gradeDomainHeading(category: Category) {
+  if (/laboratory|lab/i.test(category.name)) return "LAB.";
+  if (/lecture|lect/i.test(category.name)) return "LECT.";
+  return getCleanComponentName(category.name);
+}
+function gradeDomainWeight(category: Category) {
+  return Number(category.weight.toFixed(2)).toString() + "%";
 }
 function gradeSheetRootWeightedContribution(detail: Detail, enrollment: Enrollment, root: Category) {
   return gradeSheetRootDomainSummary(detail, enrollment, root)?.parentWeightedScore ?? null;
@@ -961,159 +970,138 @@ function downloadGradeSheetXlsx(
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail: Detail, categories: Category[], teacherName: string, teacherPosition: string, notedByName: string, notedByPosition: string, components: GradeSheetComponent[], headerPng: Uint8Array) {
-  const componentCategoryPath = (category: Category) => {
-    const names = [category.name];
-    let parent = categories.find(item => item.id === category.parentId);
-    const seen = new Set<string>([category.id]);
-    while (parent && !seen.has(parent.id)) { names.unshift(parent.name); seen.add(parent.id); parent = categories.find(item => item.id === parent!.parentId); }
-    return names.join(" / ");
-  };
-  const logoPng = headerPng;
-
-  const rootDomainColumns = categories.filter(category => !category.parentId).slice()
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((category, index) => ({
-      category,
-      rawCol: index * 2 + 2,
-      weightedCol: index * 2 + 3
-    }));
-  const rootDomainNames = new Set(rootDomainColumns.map(item =>
-    componentCategoryPath(item.category).trim().toLocaleLowerCase()
-  ));
-  const componentColumns = components.filter(component =>
-    !rootDomainNames.has(component.name.trim().toLocaleLowerCase())
-  ).map((component, index) => ({
-    component,
-    category: categories.find(category => componentCategoryPath(category).trim().toLocaleLowerCase() === component.name.trim().toLocaleLowerCase()),
-    rawCol: 2 + rootDomainColumns.length * 2 + index * 2,
-    weightedCol: 2 + rootDomainColumns.length * 2 + index * 2 + 1
-  }));
-  const totalCol = 2 + (rootDomainColumns.length + componentColumns.length) * 2;
-  const columnCount = totalCol + 3;
+async function downloadFcuGradeXlsx(
+  filename: string, sheetName: string, detail: Detail, categories: Category[],
+  teacherName: string, teacherPosition: string, notedByName: string, notedByPosition: string,
+  components: GradeSheetComponent[], headerPng: Uint8Array
+) {
+  // Final Grades is a top-level domain summary. Configurable components apply
+  // only to the detailed Record Scores export.
+  const rootDomains = categories.filter(category => !category.parentId)
+    .slice().sort((a, b) => a.sortOrder - b.sortOrder);
+  const totalCol = 2 + rootDomains.length * 2;
+  const finalCol = totalCol + 1;
+  const remarksCol = totalCol + 2;
+  const columnCount = remarksCol + 1;
   const last = excelColumn(columnCount - 1);
-  const cells: Array<Array<{ value: unknown; style: number }>> = [];
-  const row = (values: Array<{ col: number; value: unknown; style?: number }>) => {
-    const result = Array.from({ length: columnCount }, () => ({ value: "", style: 0 } as { value: unknown; style: number }));
-    for (const item of values) result[item.col] = { value: item.value, style: item.style ?? 1 };
-    cells.push(result);
+  type ExportCell = { value: unknown; style: number };
+  const rows: ExportCell[][] = [];
+  const mergeRanges: string[] = ["A1:" + last + "9"];
+  const addRow = (values: Array<{ col: number; value: unknown; style?: number }> = []) => {
+    const row = Array.from({ length: columnCount }, () => ({ value: "", style: 0 } as ExportCell));
+    for (const item of values) row[item.col] = { value: item.value, style: item.style ?? 0 };
+    rows.push(row);
+  };
+  const addFullRow = (value: unknown, style: number) => {
+    addRow([{ col: 0, value, style }]);
+    mergeRanges.push("A" + rows.length + ":" + last + rows.length);
   };
 
-  for (let i = 0; i < 9; i++) row([]);
-  row([]);
-  row([{ col: 0, value: { runs: [
+  for (let index = 0; index < 10; index++) addRow();
+  addFullRow({ runs: [
     { text: "Course No.  " },
     { text: "  " + detail.code + "     ", underline: true },
     { text: "    Descriptive Title  " },
     { text: "   " + detail.title + "                                      ", underline: true }
-  ] }, style: 2 }]);
-  row([{ col: 0, value: "____________________________________________________________________________________________", style: 2 }]);
-  row([{ col: 0, value: { runs: [
+  ] }, 2);
+  addFullRow("________________________________________________________________________________________________________________", 2);
+  addFullRow({ runs: [
     { text: "Class I.D.  " },
     { text: "  " + (detail.classId || "—") + "    ", underline: true },
     { text: "          Semester  " },
     { text: "  " + detail.term + "    ", underline: true },
     { text: "          Academic Year  " },
     { text: "  " + detail.academicYear + "   ", underline: true }
-  ] }, style: 2 }]);
-  row([{ col: 0, value: "-----------------------------------------------------------------------------------------------------------------------------------------------", style: 6 }]);
-  row([
-    { col: 0, value: "", style: 4 },
-    { col: 1, value: "NAME OF STUDENTS", style: 4 },
-    ...rootDomainColumns.flatMap(item => ([
-      {
-        col: item.rawCol,
-        value: item.category.name.toLocaleUpperCase() + " · " + (/lecture/i.test(item.category.name) ? "Total" : "TOTAL") + " (RAW %)",
-        style: 4
-      },
-      {
-        col: item.weightedCol,
-        value: item.category.name.toLocaleUpperCase() + " · WEIGHTED (" + item.category.weight.toFixed(2) + "% OF COURSE)",
-        style: 4
-      }
-    ])),
-    ...componentColumns.flatMap(item => ([
-      {
-        col: item.rawCol,
-        value: item.component.name.toLocaleUpperCase() + " · TOTAL (RAW %)",
-        style: 4
-      },
-      {
-        col: item.weightedCol,
-        value: item.component.name.toLocaleUpperCase() + " · WEIGHTED (" + item.component.percentage.toFixed(2) + "%)",
-        style: 4
-      }
-    ])),
-    { col: totalCol, value: "TOTAL GRADE", style: 4 },
-    { col: totalCol + 1, value: "FINAL GRADE", style: 4 },
-    { col: totalCol + 2, value: "REMARKS", style: 4 }
-  ]);
-  row([{ col: 0, value: "-----------------------------------------------------------------------------------------------------------------------------------------------", style: 6 }]);
+  ] }, 2);
+  addFullRow("--------------------------------------------------------------------------------------------------------------------------------", 6);
 
-  for (const [index, enrollment] of detail.enrollments.entries()) {
-    const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
-    const special = !isPassedGradeRemark(enrollment.remarks, band?.remarks);
-    const domainValues = rootDomainColumns.flatMap(item => {
-      const summary = gradeSheetRootDomainSummary(detail, enrollment, item.category);
-      return [
-        {
-          col: item.rawCol,
-          value: special || summary?.rawEquivalentPercent == null ? "" : Number(summary.rawEquivalentPercent.toFixed(2)),
-          style: 5
-        },
-        {
-          col: item.weightedCol,
-          value: special || summary?.parentWeightedScore == null ? "" : Number(summary.parentWeightedScore.toFixed(2)),
-          style: 5
-        }
-      ];
-    });
-    const componentValues = componentColumns.flatMap(item => {
-      const summary = gradeSheetComponentSummary(detail, enrollment, item.component);
-      return [
-        {
-          col: item.rawCol,
-          value: special || summary.rawEquivalentPercent === null ? "" : Number(summary.rawEquivalentPercent.toFixed(2)),
-          style: 5
-        },
-        {
-          col: item.weightedCol,
-          value: special || summary.parentWeightedScore === null ? "" : Number(summary.parentWeightedScore.toFixed(2)),
-          style: 5
-        }
-      ];
-    });
-    const gradeString = special ? gradeRemarkIndicator(enrollment.remarks, band?.remarks) : enrollment.finalGradeOverride || band?.finalGrade || "";
-    row([
-      { col: 0, value: String(index + 1) + ".", style: 6 },
-      { col: 1, value: enrollment.studentName.toLocaleUpperCase(), style: 7 },
-      ...domainValues,
-      ...componentValues,
-      { col: totalCol, value: special || enrollment.finalPercent === null ? "" : Number(enrollment.finalPercent.toFixed(2)), style: 5 },
-      { col: totalCol + 1, value: gradeString, style: 6 },
-      { col: totalCol + 2, value: enrollment.remarks || band?.remarks || "", style: 6 }
-    ]);
+  const headerRow = rows.length + 1;
+  const headerValues: Array<{ col: number; value: unknown; style?: number }> = [
+    { col: 0, value: "NO.", style: 4 },
+    { col: 1, value: "NAME OF STUDENTS", style: 4 },
+    { col: totalCol, value: "TG", style: 4 },
+    { col: finalCol, value: "FG", style: 4 },
+    { col: remarksCol, value: "REMARKS", style: 4 }
+  ];
+  rootDomains.forEach((domain, index) => {
+    const startColumn = 2 + index * 2;
+    headerValues.push(
+      { col: startColumn, value: gradeDomainHeading(domain) + " " + gradeDomainWeight(domain), style: 4 },
+      { col: startColumn + 1, value: "", style: 4 }
+    );
+    mergeRanges.push(excelColumn(startColumn) + headerRow + ":" + excelColumn(startColumn + 1) + headerRow);
+  });
+  addRow(headerValues);
+  const subHeaderRow = rows.length + 1;
+  const subHeaderValues: Array<{ col: number; value: unknown; style?: number }> = [];
+  rootDomains.forEach((domain, index) => {
+    const startColumn = 2 + index * 2;
+    subHeaderValues.push(
+      { col: startColumn, value: "EQ", style: 5 },
+      { col: startColumn + 1, value: gradeDomainWeight(domain), style: 5 }
+    );
+  });
+  addRow(subHeaderValues);
+  for (const column of [0, 1, totalCol, finalCol, remarksCol]) {
+    const letter = excelColumn(column);
+    mergeRanges.push(letter + headerRow + ":" + letter + subHeaderRow);
   }
 
-  row([]);
-  const signatureRow = cells.length + 1;
+  for (const [index, enrollment] of detail.enrollments.entries()) {
+    const summaries = rootDomains.map(domain => gradeSheetRootDomainSummary(detail, enrollment, domain));
+    const domainValues = summaries.flatMap(summary => [
+      summary?.rawEquivalentPercent ?? null,
+      summary?.parentWeightedScore ?? null
+    ]);
+    const weightedShares = domainValues.filter((_, position) => position % 2 === 1)
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+    const total = weightedShares.length
+      ? Number(weightedShares.reduce((sum, value) => sum + value, 0).toFixed(2))
+      : null;
+    const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent)
+      .find(item => total !== null && total >= item.minPercent);
+    const status = gradeRemarkIndicator(enrollment.remarks, band?.remarks);
+    const dropped = status === "DROPPED" || status === "DRP";
+    const values: Array<{ col: number; value: unknown; style?: number }> = [
+      { col: 0, value: index + 1, style: 12 },
+      { col: 1, value: enrollment.studentName.toLocaleUpperCase(), style: 7 }
+    ];
+    domainValues.forEach((value, valueIndex) => values.push({
+      col: 2 + valueIndex,
+      value: value == null ? "" : Number(value.toFixed(2)),
+      style: typeof value === "number" ? 6 : 8
+    }));
+    values.push(
+      { col: totalCol, value: dropped || total === null ? "" : total, style: 6 },
+      { col: finalCol, value: dropped ? "" : enrollment.finalGradeOverride || band?.finalGrade || "", style: 8 },
+      { col: remarksCol, value: status === "—" ? "" : status, style: 8 }
+    );
+    addRow(values);
+  }
+
+  addRow();
+  const signatureRow = rows.length + 1;
   const signatureNameRow = signatureRow + 4;
   const signaturePositionRow = signatureRow + 5;
-  const split = Math.max(1, Math.floor((columnCount - 1) / 2));
-  row([{ col: 0, value: "Submitted by:", style: 2 }, { col: split + 1, value: "Noted:", style: 2 }]);
-  row([]);
-  row([]);
-  row([]);
-  row([
-    { col: 0, value: teacherName.toLocaleUpperCase(), style: 8 },
-    { col: split + 1, value: notedByName.toLocaleUpperCase(), style: 8 }
+  const split = Math.max(1, Math.floor(columnCount / 2));
+  const leftEnd = excelColumn(split - 1);
+  const rightStart = excelColumn(split);
+  addRow([{ col: 0, value: "Submitted by:", style: 9 }, { col: split, value: "Noted:", style: 9 }]);
+  addRow(); addRow(); addRow();
+  addRow([
+    { col: 0, value: teacherName.trim().toLocaleUpperCase(), style: 10 },
+    { col: split, value: notedByName.trim().toLocaleUpperCase(), style: 10 }
   ]);
-  row([
-    { col: 0, value: teacherPosition.trim(), style: 9 },
-    { col: split + 1, value: notedByPosition.trim(), style: 9 }
+  addRow([
+    { col: 0, value: teacherPosition.trim(), style: 11 },
+    { col: split, value: notedByPosition.trim(), style: 11 }
   ]);
+  for (const rowNumber of [signatureRow, signatureNameRow, signaturePositionRow, signatureRow + 1, signatureRow + 2, signatureRow + 3]) {
+    mergeRanges.push("A" + rowNumber + ":" + leftEnd + rowNumber);
+    mergeRanges.push(rightStart + rowNumber + ":" + last + rowNumber);
+  }
 
-  const xmlRows = cells.map((values, rowIndex) => {
+  const xmlRows = rows.map((values, rowIndex) => {
     const rowNumber = rowIndex + 1;
     const xmlCells = sortWorksheetRowCells(values.map((cell, colIndex) => {
       const reference = excelColumn(colIndex) + rowNumber;
@@ -1128,60 +1116,54 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
       }
       return '<c r="' + reference + '" s="' + cell.style + '" t="inlineStr"><is><t xml:space="preserve">' + xmlEscape(cell.value) + '</t></is></c>';
     }).join(""));
-    const height = rowIndex < 9 ? ' ht="15.5" customHeight="1"'
-      : rowIndex === 14 ? ' ht="32" customHeight="1"'
-      : rowIndex >= 16 && rowIndex < 16 + detail.enrollments.length ? ' ht="20" customHeight="1"'
-      : rowIndex + 1 === signatureNameRow || rowIndex + 1 === signaturePositionRow ? ' ht="20" customHeight="1"'
+    const height = rowNumber === headerRow ? ' ht="26" customHeight="1"'
+      : rowNumber === subHeaderRow ? ' ht="20" customHeight="1"'
+      : rowNumber >= subHeaderRow + 1 && rowNumber < signatureRow ? ' ht="21" customHeight="1"'
+      : rowNumber === signatureNameRow ? ' ht="25" customHeight="1"'
+      : rowNumber === signaturePositionRow ? ' ht="22" customHeight="1"'
       : ' ht="18" customHeight="1"';
     return '<row r="' + rowNumber + '"' + height + '>' + xmlCells + '</row>';
   }).join("");
 
-  const signatureRanges = [
-    "A" + signatureRow + ":" + excelColumn(split) + signatureRow,
-    excelColumn(split + 1) + signatureRow + ":" + last + signatureRow,
-    "A" + signatureNameRow + ":" + excelColumn(split) + signatureNameRow,
-    excelColumn(split + 1) + signatureNameRow + ":" + last + signatureNameRow,
-    "A" + signaturePositionRow + ":" + excelColumn(split) + signaturePositionRow,
-    excelColumn(split + 1) + signaturePositionRow + ":" + last + signaturePositionRow
-  ];
-  const merges = ["A1:" + last + "9", "A11:" + last + "11", "A12:" + last + "12", "A13:" + last + "13", "A14:" + last + "14", ...signatureRanges];
-  const mergeXml = merges.map(range => '<mergeCell ref="' + range + '"/>').join("");
   const widths = '<cols>' +
-    '<col min="1" max="1" width="6" customWidth="1"/>' +
+    '<col min="1" max="1" width="7" customWidth="1"/>' +
     '<col min="2" max="2" width="32" customWidth="1"/>' +
-    (rootDomainColumns.length + componentColumns.length ? '<col min="3" max="' + totalCol + '" width="13" customWidth="1"/>' : '') +
-    '<col min="' + (totalCol + 1) + '" max="' + (totalCol + 1) + '" width="14" customWidth="1"/>' +
-    '<col min="' + (totalCol + 2) + '" max="' + (totalCol + 2) + '" width="11" customWidth="1"/>' +
-    '<col min="' + (totalCol + 3) + '" max="' + (totalCol + 3) + '" width="18" customWidth="1"/>' +
+    (rootDomains.length ? '<col min="3" max="' + (2 + rootDomains.length * 2) + '" width="12" customWidth="1"/>' : '') +
+    '<col min="' + (totalCol + 1) + '" max="' + (totalCol + 1) + '" width="12" customWidth="1"/>' +
+    '<col min="' + (finalCol + 1) + '" max="' + (finalCol + 1) + '" width="10" customWidth="1"/>' +
+    '<col min="' + (remarksCol + 1) + '" max="' + (remarksCol + 1) + '" width="15" customWidth="1"/>' +
     '</cols>';
+  const safeSheetName = sheetName.replace(/[\\/?*\\[\\]:]/g, " ").slice(0, 31) || "Final Grades";
   const worksheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
-    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" zoomScale="90" workbookViewId="0"><pane ySplit="16" topLeftCell="A17" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A17" sqref="A17"/></sheetView></sheetViews>' +
+    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" zoomScale="90" workbookViewId="0"><pane ySplit="' + subHeaderRow + '" topLeftCell="A' + (subHeaderRow + 1) + '" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A' + (subHeaderRow + 1) + '" sqref="A' + (subHeaderRow + 1) + '"/></sheetView></sheetViews>' +
     '<sheetFormatPr defaultRowHeight="18"/>' + widths + '<sheetData>' + xmlRows + '</sheetData>' +
-    '<mergeCells count="' + merges.length + '">' + mergeXml + '</mergeCells>' +
-    '<printOptions horizontalCentered="1"/><pageMargins left="0.275" right="0.20" top="0.39" bottom="0.24" header="0.20" footer="0.20"/>' +
-    '<pageSetup paperSize="14" orientation="portrait" fitToWidth="1" fitToHeight="0"/>' +
+    '<mergeCells count="' + mergeRanges.length + '">' + mergeRanges.map(range => '<mergeCell ref="' + range + '"/>').join("") + '</mergeCells>' +
+    '<printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.35" bottom="0.35" header="0.15" footer="0.15"/>' +
+    '<pageSetup paperSize="14" orientation="landscape" fitToWidth="1" fitToHeight="0"/>' +
     '<drawing r:id="rId1"/></worksheet>';
   const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<numFmts count="1"><numFmt numFmtId="164" formatCode="0.00&quot;%&quot;"/></numFmts>' +
-    '<fonts count="5"><font><sz val="9"/><name val="Arial"/></font><font><b/><sz val="9"/><name val="Arial"/></font><font><sz val="8.5"/><name val="Arial"/><color rgb="FF5B6573"/></font><font><b/><sz val="14"/><name val="Arial"/></font><font><b/><sz val="9"/><name val="Arial"/></font></fonts>' +
+    '<numFmts count="1"><numFmt numFmtId="164" formatCode="0.00"/></numFmts>' +
+    '<fonts count="6"><font><sz val="9"/><name val="Arial"/></font><font><b/><sz val="9"/><name val="Arial"/></font><font><sz val="9"/><name val="Arial"/></font><font><b/><sz val="14"/><name val="Arial"/></font><font><b/><sz val="9"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts>' +
     '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF0F8"/><bgColor indexed="64"/></patternFill></fill></fills>' +
-    '<borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="dotted"/><right style="dotted"/><top/><bottom style="dotted"/><diagonal/></border><border><left/><right/><top style="dashed"/><bottom style="dashed"/><diagonal/></border></borders>' +
+    '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD4DCE7"/></left><right style="thin"><color rgb="FFD4DCE7"/></right><top style="thin"><color rgb="FFD4DCE7"/></top><bottom style="thin"><color rgb="FFD4DCE7"/></bottom><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="10">' +
+    '<cellXfs count="13">' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
     '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
     '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
     '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
-    '<xf numFmtId="0" fontId="4" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
     '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
-    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>' +
-    '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
-    '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
+    '<xf numFmtId="0" fontId="5" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
-  const safeSheetName = sheetName.replace(/[\\/?*\[\]:]/g, " ").slice(0, 31) || "FCU Grades";
   const files = [
     { name: "[Content_Types].xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
     { name: "_rels/.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
@@ -1190,17 +1172,18 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     { name: "xl/worksheets/sheet1.xml", content: worksheet },
     { name: "xl/styles.xml", content: styles },
     { name: "xl/worksheets/_rels/sheet1.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>' },
-    { name: "xl/drawings/drawing1.xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="7040000" cy="1755000"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="1" name="Official FCU grading header"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>' },
+    { name: "xl/drawings/drawing1.xml", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="7040000" cy="1755000"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="1" name="Official grading sheet header"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>' },
     { name: "xl/drawings/_rels/drawing1.xml.rels", content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/></Relationships>' },
-    { name: "xl/media/image1.png", content: logoPng }
+    { name: "xl/media/image1.png", content: headerPng }
   ];
   const url = URL.createObjectURL(new Blob([zipStored(files) as BlobPart], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
   link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
 function categoryPercent(enrollment: Enrollment, category: Category, assessments: Assessment[], categories: Category[]) {
   const items = assessments.filter(assessment => assessment.categoryId === category.id);
   if (!items.length) return null;
@@ -1414,12 +1397,6 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   const activeGradeSheetComponents = gradeSheetComponents.length ? gradeSheetComponents : defaultGradeSheetComponents;
   const gradeSheetPrimaryDomains = (detail?.categories ?? []).filter(category => !category.parentId)
     .slice().sort((a, b) => a.sortOrder - b.sortOrder);
-  const gradeSheetPrimaryDomainNames = new Set(gradeSheetPrimaryDomains.map(category =>
-    categoryPath(category, detail?.categories ?? []).trim().toLocaleLowerCase()
-  ));
-  const gradeSheetAdditionalComponents = activeGradeSheetComponents.filter(component =>
-    !gradeSheetPrimaryDomainNames.has(component.name.trim().toLocaleLowerCase())
-  );
   const [componentDraft, setComponentDraft] = useState<GradeSheetComponent[]>(defaultGradeSheetComponents);
   const [componentEditorOpen, setComponentEditorOpen] = useState(false);
   const [classesMenuOpen, setClassesMenuOpen] = useState(false); const [onboardingOpen, setOnboardingOpen] = useState(false); const [helpOpen, setHelpOpen] = useState(false); const [helpInitialTab, setHelpInitialTab] = useState<"quick" | "faq" | "student" | "faculty">("quick"); const [subjectPage, setSubjectPage] = useState(1); const [classPage, setClassPage] = useState(1); const [rosterPage, setRosterPage] = useState(1);
@@ -2400,10 +2377,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
       const response = await fetch("/api/teacher/subjects/" + encodeURIComponent(detail.id) + "/iso-export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          componentNames: activeGradeSheetComponents.map(item => item.name),
-          logoPngBase64
-        })
+        body: JSON.stringify({ logoPngBase64 })
       });
       if (!response.ok) {
         const message = await response.text();
@@ -3158,79 +3132,62 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
             <div className="scorebook-legend"><span><b>Excused</b> removes an item from its category denominator.</span><span><b>Absent / Did not submit</b> records zero raw points (the configured transmutation base still applies to academic assessments).</span><span><b>Blank</b> is pending, not zero. Equivalent columns show weighted percentages within the parent Lecture/Laboratory component; the final grade also applies its course weight.</span><span>Attendance sessions are recorded in the Attendance tab, not as assessment scores.</span></div>
           </section>}
           {classSection === "analytics" && <section className="class-analytics"><div className="surface analytics-heading"><span className="eyebrow">CLASS INSIGHTS</span><h2>{detail.code} performance</h2><p className="muted">{detail.title} · {detail.term} {detail.academicYear}. INC, NP, and DROPPED records are excluded from numeric averages.</p></div><div className="analytics-stat-grid"><article className="surface analytics-stat"><small>CLASS AVERAGE</small><strong>{analytics.average == null ? "—" : analytics.average.toFixed(2)+"%"}</strong><span>{analytics.graded.length} scored students</span></article><article className="surface analytics-stat"><small>PASSING</small><strong>{analytics.passing}</strong><span>75% and above</span></article><article className="surface analytics-stat analytics-warning"><small>AT RISK</small><strong>{analytics.atRisk}</strong><span>60%–74.99%</span></article><article className="surface analytics-stat analytics-danger"><small>BELOW 60%</small><strong>{analytics.failing}</strong><span>Needs follow-up</span></article><article className="surface analytics-stat analytics-danger"><small>ATTENDANCE DANGER OF FAILING</small><strong>{analytics.attendanceDanger}</strong><span>More than 20% absent days</span></article></div><div className="analytics-panels"><section className="surface analytics-panel"><h3>Grade distribution</h3><p className="muted">Current computed course percentages.</p>{analytics.bands.map(band=><div className="distribution-row" key={band.label}><span>{band.label}</span><div className="progress"><div className="progress-bar" style={{width:analytics.graded.length ? (band.count/analytics.graded.length*100)+"%" : "0%"}}/></div><b>{band.count}</b></div>)}</section><section className="surface analytics-panel"><h3>Leading students</h3><p className="muted">Highest computed percentages.</p>{analytics.graded.length ? [...analytics.graded].sort((a,b)=>(b.finalPercent??0)-(a.finalPercent??0)).slice(0,5).map((student,index)=><div className="leader-row" key={student.id}><span>{index+1}</span><b>{student.studentName}</b><strong>{student.finalPercent?.toFixed(2)}%</strong></div>) : <div className="inline-empty">Scores will appear here after they are entered.</div>}</section><section className="surface analytics-panel analytics-risk-list"><h3>Students to review</h3><p className="muted">Students below the 75% passing threshold.</p>{analytics.graded.filter(student=>(student.finalPercent??0)<75).sort((a,b)=>(a.finalPercent??0)-(b.finalPercent??0)).map(student=><div className="leader-row" key={student.id}><span className="risk-dot">!</span><b>{student.studentName}</b><strong>{student.finalPercent?.toFixed(2)}%</strong></div>)}{!analytics.graded.some(student=>(student.finalPercent??0)<75)&&<div className="inline-empty">No scored students are currently below 75%.</div>}</section></div></section>}
-          {classSection === "final" && <section id="class-section-final" className="surface final-grades-page"><span className="print-only">{detail.code}: {detail.title} · {detail.term} {detail.academicYear}</span><div className="section-heading"><div><span className="eyebrow">GRADE SUBMISSION</span><h2>Final grades</h2><p className="muted">Review and submit provisional results. After official school-record submission, confirm the Registrar status.</p></div><div className="final-grade-tools"><button className="btn btn-outline-secondary" onClick={()=>{setComponentDraft(gradeSheetComponents.map(item=>({...item})));setComponentEditorOpen(true);}}>Edit Components</button><details className="iso-export-menu generic-export-menu"><summary className="btn btn-outline-primary" onClick={event => { if (!ensureGenericHeaderConfigured()) event.preventDefault(); }}>Export / Save Generic Grading Sheet <span aria-hidden="true">▾</span></summary><div className="iso-export-options" role="group" aria-label="Generic grading sheet export formats"><button type="button" className="iso-export-option" onClick={event => { printFinalGradesPdf("generic"); event.currentTarget.closest("details")?.removeAttribute("open"); }}><span className="iso-export-option-icon pdf" aria-hidden="true">PDF</span><span><strong>Save / Print Generic PDF</strong><small>Print-ready grading sheet</small></span></button><button type="button" className="iso-export-option" onClick={() => { void exportGrades(); }} disabled={gradeExcelExporting !== null} aria-busy={gradeExcelExporting === "generic"}><span className="iso-export-option-icon xlsx" aria-hidden="true">XLSX</span><span><strong>{gradeExcelExporting === "generic" ? <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"/>Generating Excel file…</> : "Download Generic Excel Sheet"}</strong><small>{gradeExcelExporting === "generic" ? "Building workbook and preparing download" : "Editable spreadsheet"}</small></span></button></div></details><details className="iso-export-menu"><summary className="btn btn-outline-primary" onClick={event => { if (!ensureIsoHeaderConfigured()) event.preventDefault(); }}>Export / Save ISO Grading Sheet <span aria-hidden="true">▾</span></summary><div className="iso-export-options" role="group" aria-label="ISO grading sheet export formats"><button type="button" className="iso-export-option" onClick={event => { printFinalGradesPdf("iso"); event.currentTarget.closest("details")?.removeAttribute("open"); }}><span className="iso-export-option-icon pdf" aria-hidden="true">PDF</span><span><strong>Save / Print ISO PDF</strong><small>Print-ready official record</small></span></button><button type="button" className="iso-export-option" onClick={() => { void exportIsoGradesExcel(); }} disabled={gradeExcelExporting !== null} aria-busy={gradeExcelExporting === "iso"}><span className="iso-export-option-icon xlsx" aria-hidden="true">XLSX</span><span><strong>{gradeExcelExporting === "iso" ? <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"/>Preparing download…</> : "Download ISO Excel Sheet"}</strong><small>{gradeExcelExporting === "iso" ? "Generating workbook and preparing download" : "Editable spreadsheet"}</small></span></button></div></details>{detail.gradeStatus !== "DRAFT" && <button className="btn btn-outline-danger" onClick={recallSubmittedGrades} disabled={busy}>Recall grades</button>}{detail.gradeStatus === "VERIFIED" && <button className="btn btn-primary" onClick={emailVerifiedGrades} disabled={busy}>✉ Email verified grades</button>}</div></div>{componentEditorOpen && <div className="modal-backdrop-custom" onMouseDown={event=>{if(event.target===event.currentTarget&&componentSaving===null)setComponentEditorOpen(false);}}><div className="modal-card component-editor-modal" role="dialog" aria-modal="true" aria-labelledby="component-editor-title" aria-busy={componentSaving!==null}><button className="modal-x" onClick={()=>setComponentEditorOpen(false)} disabled={componentSaving!==null} aria-label="Close Edit Components">×</button><span className="eyebrow">GRADING SHEET LAYOUT</span><h2 id="component-editor-title">Edit Components</h2><p className="muted">Choose the columns to show in the grading sheet. Weights are inherited from Grading Setup and remain display-only; this layout never changes student grade calculations. Saving as your default also applies the selection to this class.</p><div className="component-editor-summary d-flex flex-wrap justify-content-between gap-2 border rounded-3 p-2 mb-3" role="status" aria-live="polite"><span><strong>{componentDraft.length}</strong> component columns selected</span><span className="muted">Display layout only · Grade calculations are unchanged</span></div>{componentDraft.map((item,index)=><div className="row g-2 align-items-center mb-2" key={item.name}><div className="col"><label className="form-label">Component {index+1}</label><input className="form-control" value={item.name} readOnly/></div><div className="col-4"><label className="form-label">Grading Setup weight</label><div className="form-control bg-light">{item.percentage.toFixed(2)}%</div></div><div className="col-auto"><button type="button" className="btn btn-outline-danger btn-sm" onClick={()=>setComponentDraft(current=>current.filter(value=>value.name!==item.name))} aria-label={"Remove "+item.name}>Remove</button></div></div>)}{componentDraft.length===0 && <div className="inline-empty" role="status">No components selected. Add a category or subcategory below to build this grading-sheet layout.</div>}<div className="d-flex flex-wrap gap-2 align-items-end border-top mt-3 pt-3"><label className="form-label flex-grow-1">Add category or subcategory from Grading Setup<select className="form-select" value="" onChange={event=>{const category=detail?.categories.find(value=>value.id===event.target.value);if(category){const component={name:categoryPath(category,detail?.categories||[]),percentage:Number(localCategoryWeight(category).toFixed(2))};setComponentDraft(current=>current.some(item=>item.name.toLocaleLowerCase()===component.name.toLocaleLowerCase())?current:[...current,component]);}}}><option value="">Choose a category or subcategory…</option>{orderedCategoryTree(detail.categories).filter(category=>categoryHasGradingAssessments(category,detail.categories,detail.assessments)&&!componentDraft.some(item=>item.name.toLocaleLowerCase()===categoryPath(category,detail.categories).toLocaleLowerCase())).map(category=><option key={category.id} value={category.id}>{categoryPath(category,detail.categories)} · {localCategoryWeight(category).toFixed(2)}%</option>)}</select></label><b>Selected weight: {componentDraft.reduce((sum,item)=>sum+Number(item.percentage||0),0).toFixed(2)}%</b></div><div className="d-flex flex-wrap justify-content-end gap-2 mt-3"><button className="btn btn-outline-secondary" onClick={()=>setComponentEditorOpen(false)} disabled={componentSaving!==null}>Cancel</button><button className="btn btn-outline-primary" onClick={saveComponentsAsDefault} disabled={busy||componentSaving!==null||componentDraft.length===0} aria-busy={componentSaving==="default"}>{componentSaving==="default"?<><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"/>Saving default…</>:"Save as My Default"}</button><button className="btn btn-primary" onClick={saveComponentsForClass} disabled={busy||componentSaving!==null||!detail||componentDraft.length===0} aria-busy={componentSaving==="class"}>{componentSaving==="class"?<><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"/>Saving class…</>:"Save for This Class"}</button></div></div></div>}<div className={`grade-notice ${detail.gradeStatus === "VERIFIED" ? "final" : detail.gradeStatus === "SUBMITTED" ? "provisional" : "draft"}`}>{detail.gradeStatus === "VERIFIED" ? "The teacher confirmed official submission to the Registrar. This record is final and locked until recalled for correction." : detail.gradeStatus === "SUBMITTED" ? `Submitted ${detail.submittedAt ? new Date(detail.submittedAt).toLocaleString() : ""}. Student visibility is controlled separately; visible grades remain provisional until the teacher confirms submission to the Registrar.` : detail.isPublished ? "This grade record is a draft but student viewing is enabled. Grades have not been submitted or verified to the Registrar and may change." : "This class record is still a draft and is hidden from students."}</div>{submissionProblems.length>0 && detail.gradeStatus!=="VERIFIED" && <div className="alert alert-warning py-2"><b>Before submission:</b><ul className="mb-0 mt-1">{submissionProblems.map(problem=><li key={problem}>{problem}</li>)}</ul></div>}<div className="final-grades-summary"><span>Overall weights <b>{detail.categories.filter(c=>!c.parentId).reduce((sum,c)=>sum+c.weight,0).toFixed(2)}%</b></span><span>Students <b>{detail.enrollments.length}</b></span><span>Assessment items <b>{detail.assessments.length}</b></span></div><div className="table-scroll" role="region" aria-label="Final grades table" tabIndex={0}>
+          {classSection === "final" && <section id="class-section-final" className="surface final-grades-page"><span className="print-only">{detail.code}: {detail.title} · {detail.term} {detail.academicYear}</span><div className="section-heading"><div><span className="eyebrow">GRADE SUBMISSION</span><h2>Final grades</h2><p className="muted">Review and submit provisional results. After official school-record submission, confirm the Registrar status.</p></div><div className="final-grade-tools"><button className="btn btn-outline-secondary" onClick={()=>{setComponentDraft(gradeSheetComponents.map(item=>({...item})));setComponentEditorOpen(true);}}>Edit Record Scores Columns</button><details className="iso-export-menu generic-export-menu"><summary className="btn btn-outline-primary" onClick={event => { if (!ensureGenericHeaderConfigured()) event.preventDefault(); }}>Export / Save Generic Grading Sheet <span aria-hidden="true">▾</span></summary><div className="iso-export-options" role="group" aria-label="Generic grading sheet export formats"><button type="button" className="iso-export-option" onClick={event => { printFinalGradesPdf("generic"); event.currentTarget.closest("details")?.removeAttribute("open"); }}><span className="iso-export-option-icon pdf" aria-hidden="true">PDF</span><span><strong>Save / Print Generic PDF</strong><small>Print-ready grading sheet</small></span></button><button type="button" className="iso-export-option" onClick={() => { void exportGrades(); }} disabled={gradeExcelExporting !== null} aria-busy={gradeExcelExporting === "generic"}><span className="iso-export-option-icon xlsx" aria-hidden="true">XLSX</span><span><strong>{gradeExcelExporting === "generic" ? <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"/>Generating Excel file…</> : "Download Generic Excel Sheet"}</strong><small>{gradeExcelExporting === "generic" ? "Building workbook and preparing download" : "Editable spreadsheet"}</small></span></button></div></details><details className="iso-export-menu"><summary className="btn btn-outline-primary" onClick={event => { if (!ensureIsoHeaderConfigured()) event.preventDefault(); }}>Export / Save ISO Grading Sheet <span aria-hidden="true">▾</span></summary><div className="iso-export-options" role="group" aria-label="ISO grading sheet export formats"><button type="button" className="iso-export-option" onClick={event => { printFinalGradesPdf("iso"); event.currentTarget.closest("details")?.removeAttribute("open"); }}><span className="iso-export-option-icon pdf" aria-hidden="true">PDF</span><span><strong>Save / Print ISO PDF</strong><small>Print-ready official record</small></span></button><button type="button" className="iso-export-option" onClick={() => { void exportIsoGradesExcel(); }} disabled={gradeExcelExporting !== null} aria-busy={gradeExcelExporting === "iso"}><span className="iso-export-option-icon xlsx" aria-hidden="true">XLSX</span><span><strong>{gradeExcelExporting === "iso" ? <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"/>Preparing download…</> : "Download ISO Excel Sheet"}</strong><small>{gradeExcelExporting === "iso" ? "Generating workbook and preparing download" : "Editable spreadsheet"}</small></span></button></div></details>{detail.gradeStatus !== "DRAFT" && <button className="btn btn-outline-danger" onClick={recallSubmittedGrades} disabled={busy}>Recall grades</button>}{detail.gradeStatus === "VERIFIED" && <button className="btn btn-primary" onClick={emailVerifiedGrades} disabled={busy}>✉ Email verified grades</button>}</div></div>{componentEditorOpen && <div className="modal-backdrop-custom" onMouseDown={event=>{if(event.target===event.currentTarget&&componentSaving===null)setComponentEditorOpen(false);}}><div className="modal-card component-editor-modal" role="dialog" aria-modal="true" aria-labelledby="component-editor-title" aria-busy={componentSaving!==null}><button className="modal-x" onClick={()=>setComponentEditorOpen(false)} disabled={componentSaving!==null} aria-label="Close Edit Record Scores Columns">×</button><span className="eyebrow">RECORD SCORES EXPORT LAYOUT</span><h2 id="component-editor-title">Edit Record Scores Columns</h2><p className="muted">Choose the columns for the detailed Record Scores export. Final Grades always uses the fixed Lecture/Laboratory domain summary. Weights remain display-only and never change grade calculations.</p><div className="component-editor-summary d-flex flex-wrap justify-content-between gap-2 border rounded-3 p-2 mb-3" role="status" aria-live="polite"><span><strong>{componentDraft.length}</strong> component columns selected</span><span className="muted">Display layout only · Grade calculations are unchanged</span></div>{componentDraft.map((item,index)=><div className="row g-2 align-items-center mb-2" key={item.name}><div className="col"><label className="form-label">Component {index+1}</label><input className="form-control" value={item.name} readOnly/></div><div className="col-4"><label className="form-label">Grading Setup weight</label><div className="form-control bg-light">{item.percentage.toFixed(2)}%</div></div><div className="col-auto"><button type="button" className="btn btn-outline-danger btn-sm" onClick={()=>setComponentDraft(current=>current.filter(value=>value.name!==item.name))} aria-label={"Remove "+item.name}>Remove</button></div></div>)}{componentDraft.length===0 && <div className="inline-empty" role="status">No components selected. Add a category or subcategory below to build this grading-sheet layout.</div>}<div className="d-flex flex-wrap gap-2 align-items-end border-top mt-3 pt-3"><label className="form-label flex-grow-1">Add category or subcategory from Grading Setup<select className="form-select" value="" onChange={event=>{const category=detail?.categories.find(value=>value.id===event.target.value);if(category){const component={name:categoryPath(category,detail?.categories||[]),percentage:Number(localCategoryWeight(category).toFixed(2))};setComponentDraft(current=>current.some(item=>item.name.toLocaleLowerCase()===component.name.toLocaleLowerCase())?current:[...current,component]);}}}><option value="">Choose a category or subcategory…</option>{orderedCategoryTree(detail.categories).filter(category=>categoryHasGradingAssessments(category,detail.categories,detail.assessments)&&!componentDraft.some(item=>item.name.toLocaleLowerCase()===categoryPath(category,detail.categories).toLocaleLowerCase())).map(category=><option key={category.id} value={category.id}>{categoryPath(category,detail.categories)} · {localCategoryWeight(category).toFixed(2)}%</option>)}</select></label><b>Selected weight: {componentDraft.reduce((sum,item)=>sum+Number(item.percentage||0),0).toFixed(2)}%</b></div><div className="d-flex flex-wrap justify-content-end gap-2 mt-3"><button className="btn btn-outline-secondary" onClick={()=>setComponentEditorOpen(false)} disabled={componentSaving!==null}>Cancel</button><button className="btn btn-outline-primary" onClick={saveComponentsAsDefault} disabled={busy||componentSaving!==null||componentDraft.length===0} aria-busy={componentSaving==="default"}>{componentSaving==="default"?<><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"/>Saving default…</>:"Save as My Default"}</button><button className="btn btn-primary" onClick={saveComponentsForClass} disabled={busy||componentSaving!==null||!detail||componentDraft.length===0} aria-busy={componentSaving==="class"}>{componentSaving==="class"?<><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"/>Saving class…</>:"Save for This Class"}</button></div></div></div>}<div className={`grade-notice ${detail.gradeStatus === "VERIFIED" ? "final" : detail.gradeStatus === "SUBMITTED" ? "provisional" : "draft"}`}>{detail.gradeStatus === "VERIFIED" ? "The teacher confirmed official submission to the Registrar. This record is final and locked until recalled for correction." : detail.gradeStatus === "SUBMITTED" ? `Submitted ${detail.submittedAt ? new Date(detail.submittedAt).toLocaleString() : ""}. Student visibility is controlled separately; visible grades remain provisional until the teacher confirms submission to the Registrar.` : detail.isPublished ? "This grade record is a draft but student viewing is enabled. Grades have not been submitted or verified to the Registrar and may change." : "This class record is still a draft and is hidden from students."}</div>{submissionProblems.length>0 && detail.gradeStatus!=="VERIFIED" && <div className="alert alert-warning py-2"><b>Before submission:</b><ul className="mb-0 mt-1">{submissionProblems.map(problem=><li key={problem}>{problem}</li>)}</ul></div>}<div className="final-grades-summary"><span>Overall weights <b>{detail.categories.filter(c=>!c.parentId).reduce((sum,c)=>sum+c.weight,0).toFixed(2)}%</b></span><span>Students <b>{detail.enrollments.length}</b></span><span>Assessment items <b>{detail.assessments.length}</b></span></div><div className="table-scroll" role="region" aria-label="Final grades table" tabIndex={0}>
               <table className="w-full min-w-max table-fixed border-collapse shrink-0">
                 <colgroup>
-                  <col className="w-[180px] min-w-[180px]" />
-                  {activeGradeSheetComponents.map(component=><Fragment key={component.name}><col className="w-[95px]" /><col className="w-[105px]" /></Fragment>)}
-                  <col className="w-[100px]" />
-                  <col className="w-[100px]" />
-                  <col className="w-[150px]" />
-                  {detail.gradeStatus === "VERIFIED" && <col className="w-[140px]" />}
+                  <col className="w-[56px]" /><col className="w-[210px]" />
+                  {gradeSheetPrimaryDomains.map(domain => <Fragment key={domain.id}><col className="w-[96px]" /><col className="w-[96px]" /></Fragment>)}
+                  <col className="w-[88px]" /><col className="w-[82px]" /><col className="w-[150px]" />
                 </colgroup>
                 <thead>
                   <tr>
-                    <th scope="col" className="align-top py-2 px-1.5 text-left text-xs font-semibold text-gray-700 border-b border-gray-200">
-                      <div className="w-[180px] min-w-[180px] truncate">STUDENT NAME</div>
-                    </th>
-                    {activeGradeSheetComponents.map(component=><Fragment key={component.name}>
-                      <th scope="col" className="align-top py-2 px-1 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">
-                        <div className="w-[95px] mx-auto whitespace-normal break-words leading-tight uppercase">{getCleanComponentName(component.name)}</div>
-                        <span className="block text-[10px] text-gray-500 font-normal leading-snug mt-0.5">Raw Equivalent</span>
-                      </th>
-                      <th scope="col" className="align-top py-2 px-1 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">
-                        <div className="w-[105px] mx-auto whitespace-normal break-words leading-tight uppercase">{getCleanComponentName(component.name)}</div>
-                        <span className="block text-[10px] text-gray-500 font-normal leading-snug mt-0.5">{component.percentage.toFixed(2)}% Configured Weight</span>
-                      </th>
-                    </Fragment>)}
-                    <th scope="col" className="align-top py-2 px-1 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">
-                      <div className="w-[100px] mx-auto whitespace-normal break-words leading-tight uppercase">TOTAL GRADE</div>
-                    </th>
-                    <th scope="col" className="align-top py-2 px-1 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">
-                      <div className="w-[100px] mx-auto whitespace-normal break-words leading-tight uppercase">FINAL GRADE</div>
-                    </th>
-                    <th scope="col" className="align-top py-2 px-1 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">
-                      <div className="w-[140px] mx-auto whitespace-normal break-words leading-tight uppercase">REMARKS</div>
-                    </th>
-                    {detail.gradeStatus === "VERIFIED" && <th scope="col" className="align-top py-2 px-1 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">
-                      <div className="w-[140px] mx-auto whitespace-normal break-words leading-tight uppercase">GRADE HISTORY</div>
-                    </th>}
+                    <th rowSpan={2} scope="col" className="px-2 py-2 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">NO.</th>
+                    <th rowSpan={2} scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-b border-gray-200">NAME OF STUDENTS</th>
+                    {gradeSheetPrimaryDomains.map(domain => <th key={domain.id} colSpan={2} scope="colgroup" className="px-2 py-2 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">{gradeDomainHeading(domain)} {gradeDomainWeight(domain)}</th>)}
+                    <th rowSpan={2} scope="col" className="px-2 py-2 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">TG</th>
+                    <th rowSpan={2} scope="col" className="px-2 py-2 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">FG</th>
+                    <th rowSpan={2} scope="col" className="px-2 py-2 text-center text-xs font-semibold text-gray-700 border-b border-gray-200">REMARKS</th>
                   </tr>
+                  <tr>{gradeSheetPrimaryDomains.map(domain => <Fragment key={domain.id}>
+                    <th scope="col" className="px-2 py-2 text-center text-[10px] font-medium text-gray-600 border-b border-gray-200">EQ</th>
+                    <th scope="col" className="px-2 py-2 text-center text-[10px] font-medium text-gray-600 border-b border-gray-200">{gradeDomainWeight(domain)}</th>
+                  </Fragment>)}</tr>
                 </thead>
                 <tbody>
-                  {filteredEnrollments.map(en=>{
-                    const band=detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>en.finalPercent!==null&&en.finalPercent>=item.minPercent);
-                    const isDroppedStatus=isFinalGradesTab && resolvedGradeRemark(en.remarks,band?.remarks)==="DROPPED";
-                    const selection=gradeRemarkSelectionValue(en.remarks);
-                    const currentRemark=resolvedGradeRemark(en.remarks,band?.remarks);
-                    const numericCellClass="px-1.5 py-2 text-center text-xs font-mono tabular-nums align-middle border-b border-gray-100";
+                  {filteredEnrollments.map((en, studentIndex) => {
+                    const breakdown = gradeSheetEnrollmentBreakdown(detail, en);
+                    const domainById = new Map(breakdown.domains.map(item => [item.categoryId, item]));
+                    const domainShares = gradeSheetPrimaryDomains
+                      .map(domain => domainById.get(domain.id)?.parentWeightedScore)
+                      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+                    const total = domainShares.length
+                      ? Number(domainShares.reduce((sum, value) => sum + value, 0).toFixed(2))
+                      : null;
+                    const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent)
+                      .find(item => total !== null && total >= item.minPercent);
+                    const currentRemark = resolvedGradeRemark(en.remarks, band?.remarks);
+                    const isDroppedStatus = isDroppedRemark(currentRemark);
+                    const selection = gradeRemarkSelectionValue(en.remarks);
+                    const numericCellClass = "px-2 py-2 text-center text-xs font-mono tabular-nums align-middle border-b border-gray-100";
                     return <tr key={en.id}>
-                      <td className="px-1.5 py-2 text-left text-xs align-middle border-b border-gray-100">
-                        <div className="w-[180px] min-w-[180px] truncate" title={en.studentName}>{en.studentName}</div>
-                      </td>
-                      {activeGradeSheetComponents.map(component=>{
-                        const summary=gradeSheetComponentSummary(detail,en,component);
-                        return <Fragment key={component.name}>
-                          <td className={numericCellClass}>{isDroppedStatus ? null : summary.rawEquivalentPercent == null ? <PendingGradeDash /> : summary.rawEquivalentPercent.toFixed(2)+"%"}</td>
-                          <td className={numericCellClass}>{isDroppedStatus ? null : summary.parentWeightedScore == null ? <PendingGradeDash /> : summary.parentWeightedScore.toFixed(2)+"%"}</td>
+                      <td className={numericCellClass}>{studentIndex + 1}</td>
+                      <td className="px-3 py-2 text-left text-xs align-middle border-b border-gray-100">{en.studentName.toLocaleUpperCase()}</td>
+                      {gradeSheetPrimaryDomains.map(domain => {
+                        const summary = domainById.get(domain.id);
+                        return <Fragment key={domain.id}>
+                          <td className={numericCellClass}>{summary?.rawEquivalentPercent == null ? <PendingGradeDash /> : summary.rawEquivalentPercent.toFixed(2)}</td>
+                          <td className={numericCellClass}>{summary?.parentWeightedScore == null ? <PendingGradeDash /> : summary.parentWeightedScore.toFixed(2)}</td>
                         </Fragment>;
                       })}
-                      <td className={numericCellClass}>{isDroppedStatus ? null : en.finalPercent == null ? <PendingGradeDash /> : en.finalPercent.toFixed(2)+"%"}</td>
-                      <td className={numericCellClass}>
-                        {isDroppedStatus
-                          ? <span className="score-sheet-status-indicator" aria-label="Dropped status" title="DROPPED">DRP</span>
-                          : en.finalGradeOverride || band?.finalGrade || <PendingGradeDash />}
-                        {!isDroppedStatus && en.finalGradeOverride && <span className="block mt-0.5 text-[10px] font-sans text-blue-600">Manually changed</span>}
-                      </td>
-                      <td className="px-1.5 py-2 text-center text-xs align-middle border-b border-gray-100">
-                        <select className="score-sheet-remark-select w-full min-w-[130px] max-w-[140px] text-[10px] text-center" aria-label={en.studentName + " final status"} title="NP means No Examination Permit (No Permit)." value={selection} onChange={event=>saveRemark(en.id,event.target.value==="__AUTO__"?"":event.target.value)} disabled={busy||detail.gradeStatus==="VERIFIED"}>
+                      <td className={numericCellClass}>{isDroppedStatus ? "" : total == null ? <PendingGradeDash /> : total.toFixed(2)}</td>
+                      <td className={numericCellClass}>{isDroppedStatus ? "" : en.finalGradeOverride || band?.finalGrade || <PendingGradeDash />}</td>
+                      <td className="px-2 py-2 text-center text-xs align-middle border-b border-gray-100">
+                        <select className="score-sheet-remark-select w-full min-w-[116px] max-w-[140px] text-[10px] text-center" aria-label={en.studentName + " final status"} title="NP means No Examination Permit (No Permit)." value={selection} onChange={event => saveRemark(en.id, event.target.value === "__AUTO__" ? "" : event.target.value)} disabled={busy || detail.gradeStatus === "VERIFIED"}>
                           <option value="__AUTO__">{currentRemark || "Not yet graded"}</option>
-                          {CLASS_REMARK_OPTIONS.map(option=> <option key={option.value} value={option.value}>{option.label}</option>)}
+                          {CLASS_REMARK_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                         </select>
+                        {detail.gradeStatus === "VERIFIED" && !isDroppedStatus && <button className="btn btn-outline-primary btn-sm whitespace-normal mt-1" onClick={() => { setGradeChangeEnrollmentId(en.id); setGradeChangeGrade(en.finalGradeOverride || "AUTO"); setGradeChangeRemark(en.remarks ? normalizeGradeRemark(en.remarks) : "AUTO"); setGradeChangeReason(""); }}>Change / history ({en.gradeChangeCount ?? 0})</button>}
                       </td>
-                      {detail.gradeStatus === "VERIFIED" && <td className="px-1.5 py-2 text-center text-xs align-middle border-b border-gray-100">
-                        {!isDroppedStatus ? <button className="btn btn-outline-primary btn-sm whitespace-normal" onClick={()=>{setGradeChangeEnrollmentId(en.id);setGradeChangeGrade(en.finalGradeOverride||"AUTO");setGradeChangeRemark(en.remarks ? normalizeGradeRemark(en.remarks) : "AUTO");setGradeChangeReason("");}}>Change / history ({en.gradeChangeCount ?? 0})</button> : null}
-                      </td>}
                     </tr>;
                   })}
                 </tbody>
@@ -3400,7 +3357,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
         </>}
       </section>}
       </div></main>
-          {(printMode === "grades" || printMode === "iso-grades") && <style media="print">{`@page { size: 8.5in 13in; margin: .35in; }
+          {(printMode === "grades" || printMode === "iso-grades") && <style media="print">{`@page { size: 13in 8.5in; margin: .35in; }
         @media print {
           .generic-print-sheet { display:block!important; width:100%!important; color:#000!important; background:#fff!important; font-family:Arial,Helvetica,sans-serif!important; }
           .generic-print-sheet { font-size:9pt; }
@@ -3515,11 +3472,40 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           </div>
         </div>
         <table className="print-grade-table generic-print-grade-table">
-          <thead><tr><th aria-label="Sequence number"></th><th>NAME OF STUDENTS</th>{gradeSheetPrimaryDomains.map(category=><Fragment key={category.id}><th>{/lecture/i.test(category.name)?"Total":"TOTAL"}<small>{category.name} · raw equivalent (%)</small></th><th>{category.name.toLocaleUpperCase()} WEIGHTED<small>{category.weight.toFixed(2)}% of course</small></th></Fragment>)}{gradeSheetAdditionalComponents.map(component=><Fragment key={component.name}><th>{gradeSheetComponentRawLabel(detail,component)}<small>{component.name} · raw equivalent (%)</small></th><th>{component.name.toLocaleUpperCase()} WEIGHTED<small>{component.percentage.toFixed(2)}% configured weight</small></th></Fragment>)}<th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
-          <tbody>{detail.enrollments.map((enrollment,index)=>{
-            const band = detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>enrollment.finalPercent!==null&&enrollment.finalPercent>=item.minPercent);
-            const special = !isPassedGradeRemark(enrollment.remarks,band?.remarks);
-            return <tr key={enrollment.id}><td>{index+1}.</td><td>{enrollment.studentName.toLocaleUpperCase()}</td>{gradeSheetPrimaryDomains.map(category=>{const summary=gradeSheetRootDomainSummary(detail,enrollment,category);return <Fragment key={category.id}><td>{special?"":summary?.rawEquivalentPercent==null?"":summary.rawEquivalentPercent.toFixed(2)+"%"}</td><td>{special?"":summary?.parentWeightedScore==null?"":summary.parentWeightedScore.toFixed(2)+"%"}</td></Fragment>;})}{gradeSheetAdditionalComponents.map(component=>{const summary=gradeSheetComponentSummary(detail,enrollment,component);return <Fragment key={component.name}><td>{special?"":summary.rawEquivalentPercent===null?"":summary.rawEquivalentPercent.toFixed(2)+"%"}</td><td>{special?"":summary.parentWeightedScore===null?"":summary.parentWeightedScore.toFixed(2)+"%"}</td></Fragment>;})}<td>{special||enrollment.finalPercent===null?"":enrollment.finalPercent.toFixed(2)+"%"}</td><td>{special?gradeRemarkIndicator(enrollment.remarks,band?.remarks):enrollment.finalGradeOverride||band?.finalGrade||""}</td><td>{resolvedGradeRemark(enrollment.remarks,band?.remarks)}</td></tr>;
+          <thead>
+            <tr>
+              <th rowSpan={2}>NO.</th><th rowSpan={2}>NAME OF STUDENTS</th>
+              {gradeSheetPrimaryDomains.map(domain => <th key={domain.id} colSpan={2}>{gradeDomainHeading(domain)} {gradeDomainWeight(domain)}</th>)}
+              <th rowSpan={2}>TG</th><th rowSpan={2}>FG</th><th rowSpan={2}>REMARKS</th>
+            </tr>
+            <tr>{gradeSheetPrimaryDomains.map(domain => <Fragment key={domain.id}><th>EQ</th><th>{gradeDomainWeight(domain)}</th></Fragment>)}</tr>
+          </thead>
+          <tbody>{detail.enrollments.map((enrollment, index) => {
+            const breakdown = gradeSheetEnrollmentBreakdown(detail, enrollment);
+            const domainById = new Map(breakdown.domains.map(item => [item.categoryId, item]));
+            const domainShares = gradeSheetPrimaryDomains
+                      .map(domain => domainById.get(domain.id)?.parentWeightedScore)
+                      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+                    const total = domainShares.length
+                      ? Number(domainShares.reduce((sum, value) => sum + value, 0).toFixed(2))
+                      : null;
+            const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent)
+              .find(item => total !== null && total >= item.minPercent);
+            const status = resolvedGradeRemark(enrollment.remarks, band?.remarks);
+            const dropped = isDroppedRemark(status);
+            return <tr key={enrollment.id}>
+              <td>{index + 1}</td><td>{enrollment.studentName.toLocaleUpperCase()}</td>
+              {gradeSheetPrimaryDomains.map(domain => {
+                const summary = domainById.get(domain.id);
+                return <Fragment key={domain.id}>
+                  <td>{summary?.rawEquivalentPercent == null ? "" : summary.rawEquivalentPercent.toFixed(2)}</td>
+                  <td>{summary?.parentWeightedScore == null ? "" : summary.parentWeightedScore.toFixed(2)}</td>
+                </Fragment>;
+              })}
+              <td>{dropped || total === null ? "" : total.toFixed(2)}</td>
+              <td>{dropped ? "" : enrollment.finalGradeOverride || band?.finalGrade || ""}</td>
+              <td>{status || ""}</td>
+            </tr>;
           })}</tbody>
         </table>
         <div className="print-signatures">

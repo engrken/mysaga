@@ -236,9 +236,12 @@ test("Record Scores never masks score cells for class remarks; only DROPPED is m
   const finalStart = portal.indexOf('{classSection === "final" && <section id="class-section-final"');
   const finalEnd = portal.indexOf(String.fromCharCode(10) + "        </>}", finalStart);
   const finalSection = portal.slice(finalStart, finalEnd);
-  assert.match(finalSection, /isDroppedStatus=isFinalGradesTab && resolvedGradeRemark\(en\.remarks,band\?\.remarks\)==="DROPPED"/);
+  assert.match(finalSection, /const isDroppedStatus = isDroppedRemark\(currentRemark\)/);
+  assert.doesNotMatch(finalSection, /isDroppedStatus=isFinalGradesTab/);
   assert.doesNotMatch(finalSection, /!passed|passed\?/);
-  assert.match(finalSection, /isDroppedStatus[\s\S]*?<span className="score-sheet-status-indicator"[^>]*>DRP<\/span>/);
+  assert.match(finalSection, /isDroppedStatus \? "" : total == null/);
+  assert.match(finalSection, /<option value="__AUTO__">\{currentRemark \|\| "Not yet graded"\}<\/option>/);
+  assert.doesNotMatch(finalSection, /score-sheet-status-indicator/);
   const grades = fs.readFileSync(path.join(__dirname, "../src/lib/grades.ts"), "utf8");
   assert.match(grades, /if \(value === "DRP" \|\| value === "DROP"\) return "DROPPED"/);
 
