@@ -754,8 +754,8 @@ test("Record Scores export dynamically merges institutional, metadata, category,
   assert.match(sheet, /<c r="Y14"[^>]*>.*?FINAL GRADE/s);
   assert.match(sheet, /<c r="Z14"[^>]*>.*?REMARKS/s);
   for (let rowNumber = 19; rowNumber <= 24; rowNumber++) {
-    assert.ok(sheet.includes('<mergeCell ref="A' + rowNumber + ':K' + rowNumber + '"/>'));
-    assert.ok(sheet.includes('<mergeCell ref="L' + rowNumber + ':V' + rowNumber + '"/>'));
+    assert.ok(sheet.includes('<mergeCell ref="A' + rowNumber + ':M' + rowNumber + '"/>'));
+    assert.ok(sheet.includes('<mergeCell ref="N' + rowNumber + ':Z' + rowNumber + '"/>'));
   }
   for (const rowNumber of [20, 21, 22]) {
     const rowXml = sheet.match(new RegExp('<row r="' + rowNumber + '".*?<\\/row>'))?.[0] ?? "";
@@ -850,13 +850,13 @@ test("PDF component values are weighted by the configured course allocation", ()
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText;
   const context = {
-    categoryPath: () => "",
+    categoryPath: category => category.name,
     gradeSheetComponentPercent: () => 90,
     gradeSheetRootDomainSummary: () => null
   };
   vm.runInNewContext(compiledContribution + "\nthis.contribution = gradeSheetComponentContribution;", context);
-  assert.equal(context.contribution({ categories: [] }, {}, { name: "Quiz", percentage: 70 }), 63);
-  assert.equal(context.contribution({ categories: [] }, {}, { name: "Exam", percentage: 40 }), 36);
+  assert.equal(context.contribution({ categories: [{ id: "quiz", parentId: "lecture", name: "Quiz" }] }, {}, { name: "Quiz", percentage: 70 }), 63);
+  assert.equal(context.contribution({ categories: [{ id: "exam", parentId: "lecture", name: "Exam" }] }, {}, { name: "Exam", percentage: 40 }), 36);
   assert.match(source, /gradeSheetComponentContribution\(detail,enrollment,component\)/);
   const printHeader = source.slice(source.indexOf('<article className="print-grade-sheet'), source.indexOf('<div className="generic-print-course-details">'));
   assert.match(source, /<thead><tr><th aria-label="Sequence number"><\/th><th>NAME OF STUDENTS<\/th>/);
