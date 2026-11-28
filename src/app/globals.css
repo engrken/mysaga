@@ -2644,7 +2644,7 @@ body.saga-app-body:has(.portal-layout)>.saga-site-footer{padding-left:0!importan
 }
 .portal-top-nav{z-index:90!important}
 .portal-nav-class-menu .portal-top-class-list{z-index:110}
-.student-appearance-window-host{position:relative;z-index:0}
+.student-appearance-window-host{position:relative;z-index:42}
 .student-floating-window{z-index:var(--student-panel-z,42)!important}
 .student-glass-dock-pill{z-index:43!important}
 .student-floating-window-backdrop{
