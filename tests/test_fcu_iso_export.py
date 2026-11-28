@@ -198,8 +198,9 @@ class FcuIsoExportTests(unittest.TestCase):
         self.assertEqual(sheet.column_dimensions["B"].width, 32)
         self.assertEqual(sheet.column_dimensions["C"].width, 12)
         self.assertEqual(sheet.column_dimensions["G"].width, 12)
-        self.assertEqual(sheet.column_dimensions["H"].width, 10)
-        self.assertEqual(sheet.column_dimensions["I"].width, 15)
+        # The rightmost two columns also host the ISO document-control metadata.
+        self.assertEqual(sheet.column_dimensions["H"].width, 18)
+        self.assertEqual(sheet.column_dimensions["I"].width, 22)
         self.assertEqual(sheet.freeze_panes, "A13")
         self.assertEqual(sheet.print_title_rows, "$11:$12")
     def test_header_and_accreditation_spans_follow_a_wide_active_table(self):
