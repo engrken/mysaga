@@ -212,7 +212,8 @@ test("Record Scores header uses explicit summary subheaders and the same body le
   assert.match(portal, /scorebookBodyColumnCount = scorebookDisplayColumns\.length \+ 5/);
   assert.match(portal, /colSpan=\{scorebookBodyColumnCount\}/);
   const tick = String.fromCharCode(96);
-  assert.ok(portal.includes("width: " + tick + "\${scorebookTableMinWidth}px" + tick));
+  const interpolation = "$" + "{scorebookTableMinWidth}px";
+  assert.ok(portal.includes("width: " + tick + interpolation + tick));
   assert.match(portal, /score-sheet-domain-summary-head/);
   assert.match(portal, /score-sheet-subcategory-placeholder/);
   assert.match(portal, /scope="colgroup"/);
