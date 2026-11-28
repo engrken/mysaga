@@ -10,6 +10,10 @@ import AccountMenu, { type AccountTheme } from "./AccountMenu";
 import { saveSagaTheme } from "./ThemeSync";
 import GradeVisibilityManager from "./GradeVisibilityManager";
 import GradeContributionPanel from "./GradeContributionPanel";
+
+function PendingGradeDash() {
+  return <span className="block text-center text-gray-400" aria-label="Pending score">—</span>;
+}
 import ClassRosterEnrollmentTools from "./ClassRosterEnrollmentTools";
 import GoogleChatControls from "./GoogleChatControls";
 import { DemoGoogleChatControls } from "./DemoClassChats";
@@ -445,9 +449,6 @@ function gradeSheetComponentPercent(detail: Detail, enrollment: Enrollment, comp
   return totalWeight > 0 ? Number((weighted / totalWeight).toFixed(2)) : null;
 }
 
-function PendingGradeDash() {
-  return <span className="block text-center text-gray-400" aria-label="Pending score">—</span>;
-}
 
 function normalizeGradeRemark(remark: string | null | undefined) {
   const value = String(remark ?? "").trim().toLocaleUpperCase();
