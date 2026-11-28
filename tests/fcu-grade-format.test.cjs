@@ -71,7 +71,7 @@ async function generate(categories, enrollments, components) {
       const value = String(remark || fallback || "").trim().toUpperCase();
       const normalized = value === "DRP" || value === "DROP" ? "DROPPED"
         : value === "INCOMPLETE" ? "INC"
-        : /^NO\s+(?:(?:EXAM(?:INATION)?|EXAMINATION)\s+)?PERMIT(?:\s*\(NP\))?$/.test(value) || /^NO\s+PRIVILEGE(?:\s*\(NP\))?$/.test(value) ? "NP"
+        : /^NO\s+(?:(?:EXAM(?:INATION)?|EXAMINATION)\s+)?PERMIT(?:\s*\(NP\))?$/.test(value) ? "NP"
         : value === "PASS" ? "PASSED" : value;
       return normalized === "DROPPED" ? "DRP" : normalized === "INC" ? "INC"
         : normalized === "NP" ? "NP" : ["FAILED", "FAIL", "NOT PASSED"].includes(normalized) ? "FAIL" : normalized || "—";
