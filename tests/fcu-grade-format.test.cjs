@@ -347,7 +347,7 @@ test("grade remarks normalize status shorthands and masking stays scoped to drop
 
 
   const cleanNameStart = source.indexOf("function getCleanComponentName(");
-  const cleanNameEnd = source.indexOf("\nfunction scoreSheetCategoryLabel(", cleanNameStart);
+  const cleanNameEnd = source.indexOf("\nfunction renderColumnSubtext(", cleanNameStart);
   assert.ok(cleanNameStart >= 0 && cleanNameEnd > cleanNameStart, "clean component-name helper is isolated");
   const cleanNameContext = {};
   vm.runInNewContext(ts.transpileModule(source.slice(cleanNameStart, cleanNameEnd) +
