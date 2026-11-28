@@ -33,7 +33,7 @@ import { classWorkspaceHref, resolveClassRoute, parseClassWorkspaceQuery, type C
 import { todayManila } from "@/lib/tenant-operations";
 import { absenceDates, attendanceDays as orderedAttendanceDays, attendanceRiskSummary, consecutiveLateAbsences, CONVERTED_LATE_LABEL, droppingAbsenceStreak, DROPPING_ABSENCE_THRESHOLD, EARLY_ABSENCE_PERCENT, HIGH_RISK_ABSENCE_PERCENT, type AbsenceDate, type AbsenceStreak } from "@/lib/attendance";
 import { scheduleWeekdays, weekdayFromDate } from "@/lib/schedule-days";
-import { buildWorkbookPages, workbookWidths } from "@/lib/scorebook-layout";
+import { buildScorebookHeaderLayout, buildWorkbookPages, workbookWidths } from "@/lib/scorebook-layout";
 
 type User = { id: string; role: string; fullName: string; positionTitle: string | null; notedByName: string | null; notedByPosition: string | null; email: string; isDemo?: boolean; isTenantManager?: boolean; isSchoolAdmin?: boolean; emailDeliveryEnabled?: boolean; profileImagePath: string | null; facultyId?: string | null; defaultGradeSheetComponents?: string | null; courseProgram?: string | null; yearLevel?: string | null; school: { id: string; slug: string; name: string; shortName: string; portalTitle: string; logoText: string; logoPath: string | null; departmentLogoPath: string | null; primaryColor: string; address: string | null; departmentName: string | null; isoHeaderConfig: string | null } };
 type WorkbookChange = { subjectId: string; enrollmentId: string; assessmentId: string; points: number | null; remark: "EXCUSED" | "ABSENT" | "DID_NOT_SUBMIT" | null };
@@ -2619,6 +2619,8 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     scorebookColumnWidths.total + scorebookColumnWidths.final + scorebookColumnWidths.remark +
     scorebookDisplayColumns.reduce((total, column) =>
       total + (column.kind === "assessment" ? scorebookColumnWidths.assessment : scorebookColumnWidths.equivalent), 0);
+  // Two identity columns, all workbook columns, and three final summary columns.
+  const scorebookBodyColumnCount = scorebookDisplayColumns.length + 5;
   useEffect(() => {
     const sheet = scorebookScrollRef.current;
     const region = scorebookRegionRef.current;
@@ -2681,33 +2683,11 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     track.style.width = `${floating.clientWidth + workbookRange}px`;
     syncHorizontalScrollProgress(sheet, floating);
   }, [scorebookFloatingScroll.visible, scorebookFloatingScroll.left, scorebookFloatingScroll.width, scorebookFloatingScroll.scrollWidth, scorebookView]);
-  const scorebookHeaderRows = useMemo(() => {
-    if (!detail || !scorebookVisibleAssessments.length) return { rows: [] as Array<Array<{ category: Category; colSpan: number; rowSpan: number }>>, rowSpan: 1 };
-    const itemCounts = new Map<string, number>();
-    const depthById = new Map<string, number>();
-    const countItems = (category: Category, depth: number): number => {
-      depthById.set(category.id, depth);
-      const own = scorebookVisibleAssessments.filter(item => item.categoryId === category.id).length +
-        (scorebookVisibleCategories.some(leaf => leaf.id === category.id) ? 1 : 0) +
-        (depth === 0 ? 2 : 0);
-      const children = detail.categories.filter(item => item.parentId === category.id).slice().sort((a,b)=>a.sortOrder-b.sortOrder);
-      const count = own + children.reduce((sum, child) => sum + countItems(child, depth + 1), 0);
-      itemCounts.set(category.id, count);
-      return count;
-    };
-    for (const group of scorebookDisplayGroups) countItems(group.parent, 0);
-    const maxDepth = Math.max(0, ...scorebookVisibleAssessments.map(item => depthById.get(item.categoryId) ?? 0));
-    const rows = Array.from({ length: maxDepth + 1 }, () => [] as Array<{ category: Category; colSpan: number; rowSpan: number }>);
-    const append = (category: Category, depth: number) => {
-      const colSpan = itemCounts.get(category.id) ?? 0;
-      if (!colSpan) return;
-      const children = detail.categories.filter(item => item.parentId === category.id && (itemCounts.get(item.id) ?? 0) > 0).slice().sort((a,b)=>a.sortOrder-b.sortOrder);
-      rows[depth].push({ category, colSpan, rowSpan: children.length ? 1 : maxDepth - depth + 1 });
-      children.forEach(child => append(child, depth + 1));
-    };
-    scorebookDisplayGroups.forEach(group => append(group.parent, 0));
-    return { rows, rowSpan: maxDepth + 2 };
-  }, [detail, scorebookDisplayGroups, scorebookVisibleAssessments, scorebookVisibleCategories]);
+  const scorebookHeaderRows = useMemo(() => buildScorebookHeaderLayout(
+    detail?.categories ?? [],
+    scorebookDisplayGroups.map(group => group.parent.id),
+    scorebookDisplayColumns.map(column => ({ categoryId: column.category.id, kind: column.kind }))
+  ), [detail?.categories, scorebookDisplayGroups, scorebookDisplayColumns]);
   // Include intermediate nodes such as Major Examinations in the workbook header.
   const printCategories = useMemo(() => detail ? leafCategories(detail.categories) : [], [detail]);
   const weightGroups = useMemo(() => {
@@ -3021,7 +3001,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
               </div>
             </div>}
             {scorebookAssessments.length === 0 && <div className="inline-empty">The full class roster is shown below. Add assessment items to enable score entry.</div>}
-            {filteredEnrollments.length > 0 && <div id="score-sheet-scroll-viewport" ref={scorebookScrollRef} aria-label="Full class record workbook" onScroll={event => { const floating = scorebookFloatingScrollRef.current; if (floating) syncHorizontalScrollProgress(event.currentTarget, floating); }} className={`score-sheet-wrap ${scorebookView === "all" ? "score-sheet-wrap-full" : "score-sheet-wrap-auto"}`}><table className="score-sheet" style={{minWidth: scorebookView === "all" ? `${scorebookTableMinWidth}px` : undefined}}><colgroup>
+            {filteredEnrollments.length > 0 && <div id="score-sheet-scroll-viewport" ref={scorebookScrollRef} aria-label="Full class record workbook" onScroll={event => { const floating = scorebookFloatingScrollRef.current; if (floating) syncHorizontalScrollProgress(event.currentTarget, floating); }} className={`score-sheet-wrap ${scorebookView === "all" ? "score-sheet-wrap-full" : "score-sheet-wrap-auto"}`}><table className="score-sheet" style={scorebookView === "all" ? {width: `${scorebookTableMinWidth}px`, minWidth: `${scorebookTableMinWidth}px`} : undefined}><colgroup>
   <col style={{width: `${scorebookColumnWidths.student}px`}} />
   <col style={{width: `${scorebookColumnWidths.attendance}px`}} />
   {scorebookDisplayColumns.map((column,i) => <col
@@ -3031,27 +3011,41 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
   <col style={{width: `${scorebookColumnWidths.total}px`}} />
   <col style={{width: `${scorebookColumnWidths.final}px`}} />
   <col style={{width: `${scorebookColumnWidths.remark}px`}} /></colgroup><thead>
-  <tr>
-    <th className="score-sheet-student" rowSpan={scorebookHeaderRows.rowSpan}>STUDENT</th>
-    <th className="score-sheet-summary-head score-sheet-attendance-summary" rowSpan={scorebookHeaderRows.rowSpan}>ATTENDANCE %<small>Present / P + A</small></th>
-    {scorebookHeaderRows.rows[0]?.map(({category,colSpan,rowSpan})=><th className="score-sheet-category score-sheet-parent" key={category.id} colSpan={colSpan} rowSpan={rowSpan}><span title={category.name}>{scoreSheetCategoryLabel(category.name)}</span><small>{categoryWeightLabel(category,detail.categories)}</small></th>)}
-    <th className="score-sheet-summary-head score-sheet-course-total" rowSpan={scorebookHeaderRows.rowSpan}>TOTAL GRADE<small>100%</small></th>
-    <th className="score-sheet-summary-head score-sheet-final-grade" rowSpan={scorebookHeaderRows.rowSpan}>FINAL GRADE</th>
-    <th className="score-sheet-summary-head" rowSpan={scorebookHeaderRows.rowSpan}>CLASS REMARK</th>
-  </tr>
-  {scorebookHeaderRows.rows.slice(1).map((row,index)=><tr key={`category-level-${index+1}`}>{row.map(({category,colSpan,rowSpan})=><th className="score-sheet-subcategory" key={category.id} colSpan={colSpan} rowSpan={rowSpan}><span title={category.name}>{scoreSheetCategoryLabel(category.name)}</span><small>{categoryWeightLabel(category,detail.categories)}</small></th>)}</tr>)}
-  <tr>{scorebookDisplayColumns.map(column => {
-    if (column.kind === "assessment") return <th className="score-sheet-assessment" key={column.item.id} title={`${column.item.title} · Perfect score ${column.item.maxScore}${column.item.dueDate ? " · " + new Date(column.item.dueDate).toLocaleDateString() : ""}`}><span>{column.item.title}</span><small>Max {column.item.maxScore}</small></th>;
-    if (column.kind === "equivalent") return <th className="score-sheet-category-subtotal score-sheet-equiv-head" key={`${column.category.id}-equivalent`} title={`${column.category.name} · Weighted equivalent: ${categoryWeightLabel(column.category,detail.categories)} maximum`}>
-      Equivalent<small>{column.category.weight.toFixed(2)}% max</small>
-    </th>;
-    if (column.kind === "domain-total") return <th className="score-sheet-category-subtotal score-sheet-domain-total" key={`${column.category.id}-domain-total`} title={`${column.category.name} raw equivalent on a 100% scale`}>
-      {/lecture/i.test(column.category.name) ? "Total" : "TOTAL"}<small>Raw equivalent %</small>
-    </th>;
-    return <th className="score-sheet-category-subtotal score-sheet-domain-weighted" key={`${column.category.id}-domain-weighted`} title={`${column.category.name} contribution after applying its course weight`}>
-      Weighted<small>{column.category.weight.toFixed(2)}% of course</small>
-    </th>;
-  })}</tr>
+   <tr>
+     <th className="score-sheet-student" scope="col" rowSpan={scorebookHeaderRows.rowSpan}>STUDENT</th>
+     <th className="score-sheet-summary-head score-sheet-attendance-summary" scope="col" rowSpan={scorebookHeaderRows.rowSpan}>ATTENDANCE %<small>Present / P + A</small></th>
+     {scorebookHeaderRows.rows[0]?.map(cell => {
+       if (cell.kind !== "category") return null;
+       const category = detail.categories.find(item => item.id === cell.categoryId);
+       if (!category) return null;
+       return <th className="score-sheet-category score-sheet-parent" scope="colgroup" key={category.id} colSpan={cell.colSpan} rowSpan={cell.rowSpan}><span title={category.name}>{scoreSheetCategoryLabel(category.name)}</span><small>{categoryWeightLabel(category,detail.categories)}</small></th>;
+     })}
+     <th className="score-sheet-summary-head score-sheet-course-total" scope="col" rowSpan={scorebookHeaderRows.rowSpan}>TOTAL GRADE<small>100%</small></th>
+     <th className="score-sheet-summary-head score-sheet-final-grade" scope="col" rowSpan={scorebookHeaderRows.rowSpan}>FINAL GRADE</th>
+     <th className="score-sheet-summary-head" scope="col" rowSpan={scorebookHeaderRows.rowSpan}>CLASS REMARK</th>
+   </tr>
+   {scorebookHeaderRows.rows.slice(1).map((row,index)=><tr key={"category-level-" + (index+1)}>{row.map(cell => {
+     if (cell.kind === "spacer") return <th className="score-sheet-subcategory-placeholder" key={"placeholder-" + cell.categoryId} colSpan={cell.colSpan} rowSpan={cell.rowSpan} aria-hidden="true"/>;
+     const category = detail.categories.find(item => item.id === cell.categoryId);
+     if (!category) return null;
+     if (cell.kind === "domain-total") return <th className="score-sheet-category-subtotal score-sheet-domain-total score-sheet-domain-summary-head" scope="col" key={"domain-total-" + category.id} colSpan={cell.colSpan} rowSpan={cell.rowSpan} title={category.name + " raw equivalent on a 100% scale"}>{/lecture/i.test(category.name) ? "Total" : "TOTAL"}<small>Raw equivalent %</small></th>;
+     if (cell.kind === "domain-weighted") return <th className="score-sheet-category-subtotal score-sheet-domain-weighted score-sheet-domain-summary-head" scope="col" key={"domain-weighted-" + category.id} colSpan={cell.colSpan} rowSpan={cell.rowSpan} title={category.name + " contribution after applying its course weight"}>Weighted<small>{category.weight.toFixed(2)}% of course</small></th>;
+     return <th className="score-sheet-subcategory" scope="colgroup" key={category.id} colSpan={cell.colSpan} rowSpan={cell.rowSpan}><span title={category.name}>{scoreSheetCategoryLabel(category.name)}</span><small>{categoryWeightLabel(category,detail.categories)}</small></th>;
+   })}</tr>)}
+   {scorebookDisplayColumns.length > 0 && <tr>{scorebookHeaderRows.bottomColumnIndexes.map(columnIndex => {
+     const column = scorebookDisplayColumns[columnIndex];
+     if (!column) return null;
+     if (column.kind === "assessment") return <th className="score-sheet-assessment" scope="col" key={column.item.id} title={column.item.title + " · Perfect score " + column.item.maxScore + (column.item.dueDate ? " · " + new Date(column.item.dueDate).toLocaleDateString() : "")}><span>{column.item.title}</span><small>Max {column.item.maxScore}</small></th>;
+     if (column.kind === "equivalent") return <th className="score-sheet-category-subtotal score-sheet-equiv-head" scope="col" key={column.category.id + "-equivalent"} title={column.category.name + " · Weighted equivalent: " + categoryWeightLabel(column.category,detail.categories) + " maximum"}>
+       Equivalent<small>{column.category.weight.toFixed(2)}% max</small>
+     </th>;
+     if (column.kind === "domain-total") return <th className="score-sheet-category-subtotal score-sheet-domain-total" scope="col" key={column.category.id + "-domain-total"} title={column.category.name + " raw equivalent on a 100% scale"}>
+       {/lecture/i.test(column.category.name) ? "Total" : "TOTAL"}<small>Raw equivalent %</small>
+     </th>;
+     return <th className="score-sheet-category-subtotal score-sheet-domain-weighted" scope="col" key={column.category.id + "-domain-weighted"} title={column.category.name + " contribution after applying its course weight"}>
+       Weighted<small>{column.category.weight.toFixed(2)}% of course</small>
+     </th>;
+   })}</tr>}
 </thead><tbody>{filteredEnrollments.map((enrollment,index)=>{
               const band=detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>enrollment.finalPercent!==null&&enrollment.finalPercent>=item.minPercent);
               const hasSpecialRemark = !isPassedGradeRemark(enrollment.remarks, band?.remarks);
@@ -3065,7 +3059,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
                 const domain=courseWeights.domains.get(column.category.id);
                 const value=column.kind === "domain-total" ? domain?.rawEquivalentPercent : domain?.parentWeightedScore;
                 return <td className={`score-sheet-category-equivalent ${column.kind === "domain-total" ? "score-sheet-domain-total" : "score-sheet-domain-weighted"}`} key={`${column.category.id}-${column.kind}`} title={hasSpecialRemark ? "Numerical grade hidden for a non-passing status" : value == null ? "No domain summary available" : column.kind === "domain-total" ? `${column.category.name} raw equivalent: ${value.toFixed(2)}%` : `${column.category.name} weighted course contribution: ${value.toFixed(2)}% of course`}>{hasSpecialRemark ? "" : value == null ? "—" : `${value.toFixed(2)}%`}</td>;
-              })}<td className="score-sheet-total">{hasSpecialRemark ? "" : enrollment.finalPercent===null?"—":`${enrollment.finalPercent.toFixed(2)}%`}</td><td className="score-sheet-total">{hasSpecialRemark ? <span className="score-sheet-status-indicator" title={resolvedGradeRemark(enrollment.remarks, band?.remarks) || "Non-passing status"}>{statusIndicator}</span> : enrollment.finalGradeOverride||band?.finalGrade||"—"}</td><td className="score-sheet-remark"><select className="score-sheet-remark-select" aria-label={`${enrollment.studentName} final status`} title="Automatically follows the final-grade scale unless a special remark is selected" value={remarkSelection} onChange={event=>saveRemark(enrollment.id,event.target.value==="__AUTO__"?"":event.target.value)} disabled={busy||detail.gradeStatus==="VERIFIED"}><option value="__AUTO__">{resolvedGradeRemark(enrollment.remarks, band?.remarks) || "Not yet graded"}</option><option value="INC">INCOMPLETE</option><option value="NP">NP</option><option value="DROPPED">DROPPED</option></select></td></tr>{showWeightBreakdown && !hasSpecialRemark && <tr className="score-sheet-breakdown-row"><td colSpan={scorebookDisplayColumns.length+5}><GradeContributionPanel categories={detail.categories} assessments={detail.assessments} scores={enrollment.scores} remark={enrollment.remarks} /></td></tr>}</Fragment>})}</tbody></table></div>}
+              })}<td className="score-sheet-total">{hasSpecialRemark ? "" : enrollment.finalPercent===null?"—":`${enrollment.finalPercent.toFixed(2)}%`}</td><td className="score-sheet-total">{hasSpecialRemark ? <span className="score-sheet-status-indicator" title={resolvedGradeRemark(enrollment.remarks, band?.remarks) || "Non-passing status"}>{statusIndicator}</span> : enrollment.finalGradeOverride||band?.finalGrade||"—"}</td><td className="score-sheet-remark"><select className="score-sheet-remark-select" aria-label={`${enrollment.studentName} final status`} title="Automatically follows the final-grade scale unless a special remark is selected" value={remarkSelection} onChange={event=>saveRemark(enrollment.id,event.target.value==="__AUTO__"?"":event.target.value)} disabled={busy||detail.gradeStatus==="VERIFIED"}><option value="__AUTO__">{resolvedGradeRemark(enrollment.remarks, band?.remarks) || "Not yet graded"}</option><option value="INC">INCOMPLETE</option><option value="NP">NP</option><option value="DROPPED">DROPPED</option></select></td></tr>{showWeightBreakdown && !hasSpecialRemark && <tr className="score-sheet-breakdown-row"><td colSpan={scorebookBodyColumnCount}><GradeContributionPanel categories={detail.categories} assessments={detail.assessments} scores={enrollment.scores} remark={enrollment.remarks} /></td></tr>}</Fragment>})}</tbody></table></div>}
             {scorebookFloatingScroll.visible && scorebookView === "all" && typeof document !== "undefined" && createPortal(<div
               ref={scorebookFloatingScrollRef}
               className="score-sheet-floating-scroll"
