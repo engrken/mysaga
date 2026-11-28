@@ -857,7 +857,7 @@ test("PDF component values are weighted by the configured course allocation", ()
   vm.runInNewContext(compiledContribution + "\nthis.contribution = gradeSheetComponentContribution;", context);
   assert.equal(context.contribution({ categories: [{ id: "quiz", parentId: "lecture", name: "Quiz" }] }, {}, { name: "Quiz", percentage: 70 }), 63);
   assert.equal(context.contribution({ categories: [{ id: "exam", parentId: "lecture", name: "Exam" }] }, {}, { name: "Exam", percentage: 40 }), 36);
-  assert.match(source, /gradeSheetComponentContribution\(detail,enrollment,component\)/);
+  assert.match(source, /gradeSheetComponentSummary\(detail,enrollment,component\)/);
   const printHeader = source.slice(source.indexOf('<article className="print-grade-sheet'), source.indexOf('<div className="generic-print-course-details">'));
   assert.match(source, /<thead><tr><th aria-label="Sequence number"><\/th><th>NAME OF STUDENTS<\/th>/);
   assert.match(source, /<td>\{index\+1\}\.<\/td><td>\{enrollment\.studentName\.toLocaleUpperCase\(\)\}<\/td>/);
