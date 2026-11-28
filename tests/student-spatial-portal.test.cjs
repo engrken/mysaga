@@ -95,10 +95,11 @@ test("freeform mode enables independently draggable and persistent overview modu
   const module = read("src/components/student-portal/DraggableGlassModule.tsx");
   const customizer = read("src/components/student-portal/PortalCustomizer.tsx");
   const css = read("src/app/globals.css");
-  assert.match(dashboard, /enabled=\{preferences\.layout === "freeform"\}/);
+  assert.match(dashboard, /enabled=\{activeLayoutMode === "freeform"\}/);
   assert.match(dashboard, /updateModulePosition\("metrics"/);
   assert.match(dashboard, /updateModulePosition\("insights"/);
   assert.match(dashboard, /updateModulePosition\("courses"/);
+  assert.match(dashboard, /const activeLayoutMode = isCompactOrTouchViewport \? "snapped" : preferences\.layout/);
   assert.match(module, /onPointerDown=\{begin\}/);
   assert.match(module, /onPointerMove=\{move\}/);
   assert.match(module, /onKeyDown=\{nudge\}/);
