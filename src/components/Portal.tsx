@@ -2514,6 +2514,7 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
     scorebookGroups.flatMap(group => group.subcategories.map(category => ({
       id: category.id,
       label: category.name,
+      parentId: group.parent.id,
       assessmentIds: group.items.filter(item => item.categoryId === category.id).map(item => item.id)
     }))),
     scorebookWidth
