@@ -219,7 +219,7 @@ test("Generic Excel emits the merged Lecture/Lab summary with numeric cells", as
   assert.match(sheet, /<c r="G15"[^>]*>.*?TG/s);
   assert.match(sheet, /<c r="H15"[^>]*>.*?FG/s);
   assert.match(sheet, /<c r="I15"[^>]*>.*?REMARKS/s);
-  assert.match(sheet, /<c r="A17"[^>]*><v>1<\/v>/);
+  assert.match(sheet, /<c r="A17" s="12"[^>]*><v>1<\/v>/);
   assert.match(sheet, /<c r="B17"[^>]*>.*?EXAMPLE STUDENT/s);
   assert.match(sheet, /<c r="C17"[^>]*><v>71\.39<\/v>/);
   assert.match(sheet, /<c r="D17"[^>]*><v>42\.83<\/v>/);
