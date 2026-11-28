@@ -159,11 +159,11 @@ export async function PATCH(request: Request, context: Context) {
     const calculatedPercent = calculateFinal(subject.categories.map(category => ({ id: category.id, parentId: category.parentId, weight: category.weight, conversionBase: category.conversionBase, assessments: subject.assessments.filter(item => item.categoryId === category.id).map(item => ({ title: item.title, dueDate: item.dueDate, maxScore: item.maxScore, weight: item.weight, scores: enrollment.scores.filter(score => score.assessmentId === item.id) })) })));
     const automatic = equivalentFromBands(calculatedPercent, subject.gradeBands);
     const previousFinalGrade = enrollment.finalGradeOverride ?? automatic.finalGrade;
-    const previousRemarks = enrollment.remarks ?? automatic.remarks;
+    const previousRemarks = normalizeRemark(enrollment.remarks ?? automatic.remarks);
     const finalGradeOverride = change.finalGrade === "AUTO" ? null : change.finalGrade;
     const remarks = normalizedChangeRemark === "AUTO" ? null : normalizedChangeRemark;
     const nextFinalGrade = finalGradeOverride ?? automatic.finalGrade;
-    const nextRemarks = remarks ?? automatic.remarks;
+    const nextRemarks = remarks ?? normalizeRemark(automatic.remarks);
     if (previousFinalGrade === nextFinalGrade && previousRemarks === nextRemarks) return NextResponse.json({ error: "The selected grade and remark match the current record." }, { status: 400 });
     await prisma.$transaction(async tx => {
       await tx.enrollment.update({ where: { id: enrollment.id }, data: { finalGradeOverride, remarks } });

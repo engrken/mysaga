@@ -5,6 +5,7 @@ const vm = require("node:vm");
 const ts = require("typescript");
 
 const source = fs.readFileSync("src/components/Portal.tsx", "utf8");
+const gradeSource = fs.readFileSync("src/lib/grades.ts", "utf8");
 const start = source.indexOf("async function downloadFcuGradeXlsx(");
 const end = source.indexOf("function categoryPercent(", start);
 assert.ok(start > 0 && end > start, "FCU exporter is present");
@@ -276,8 +277,14 @@ test("grade remarks normalize status shorthands and masking stays scoped to drop
   const compiledHelpers = ts.transpileModule(source.slice(helperStart, helperEnd), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText;
+  const statusStart = gradeSource.indexOf("export const CLASS_REMARK_OPTIONS = [");
+  const statusEnd = gradeSource.indexOf("\n\n/** Category weights", statusStart);
+  assert.ok(statusStart >= 0 && statusEnd > statusStart, "canonical class-remark helpers are present");
+  const compiledStatusHelpers = ts.transpileModule(gradeSource.slice(statusStart, statusEnd).replace(/^export /gm, ""), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
+  }).outputText;
   const context = {};
-  vm.runInNewContext(compiledHelpers + "\nthis.helpers = { normalizeGradeRemark, resolvedGradeRemark, isPassedGradeRemark, gradeRemarkIndicator, gradeRemarkSelectionValue };", context);
+  vm.runInNewContext(compiledStatusHelpers + "\n" + compiledHelpers + "\nthis.helpers = { normalizeGradeRemark, resolvedGradeRemark, isPassedGradeRemark, gradeRemarkIndicator, gradeRemarkSelectionValue };", context);
   const h = context.helpers;
   assert.equal(h.normalizeGradeRemark("DRP"), "DROPPED");
   assert.equal(h.normalizeGradeRemark("INCOMPLETE"), "INC");
@@ -294,6 +301,8 @@ test("grade remarks normalize status shorthands and masking stays scoped to drop
   assert.equal(h.gradeRemarkIndicator("FAILED"), "FAIL");
   assert.equal(h.gradeRemarkSelectionValue("DRP"), "DROPPED");
   assert.equal(h.gradeRemarkSelectionValue("INCOMPLETE"), "INC");
+  assert.equal(h.gradeRemarkSelectionValue("PASSED"), "PASSED");
+  assert.equal(h.gradeRemarkSelectionValue("FAILED"), "FAILED");
 
   const recordStart = source.indexOf('{classSection === "record" && <section id="class-section-record"');
   const recordEnd = source.indexOf('{classSection === "analytics" && <section className="class-analytics"', recordStart);
