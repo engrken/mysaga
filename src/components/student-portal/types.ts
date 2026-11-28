@@ -23,7 +23,7 @@ export const STUDENT_PORTAL_DEFAULTS: StudentPortalPreferences = {
   accent: "ocean",
   layout: "snapped",
   modules: { metrics: true, insights: true, courses: true },
-  panelPosition: { x: 0, y: 116 },
+  panelPosition: { x: 0, y: 0 },
   modulePositions: { metrics: { x: 0, y: 0 }, insights: { x: 0, y: 0 }, courses: { x: 0, y: 0 } }
 };
 
@@ -107,7 +107,7 @@ export function mergeStudentPortalPreferences(value: unknown): StudentPortalPref
     },
     panelPosition: {
       x: coordinate(point.x, STUDENT_PORTAL_DEFAULTS.panelPosition.x),
-      y: coordinate(point.y, STUDENT_PORTAL_DEFAULTS.panelPosition.y)
+      y: point.y === 116 ? 0 : coordinate(point.y, STUDENT_PORTAL_DEFAULTS.panelPosition.y)
     },
     modulePositions: {
       metrics: modulePoint("metrics"),
