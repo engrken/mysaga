@@ -359,7 +359,7 @@ test("grade remarks normalize status shorthands and masking stays scoped to drop
   assert.equal(cleanNameContext.getCleanComponentName("EXERCISES"), "EXERCISES");
   assert.equal(cleanNameContext.getCleanComponentName("QUIZZES / ASSIGNMENTS"), "ASSIGNMENTS");
 
-  assert.match(finalSection, /className="block text-\[10px\] text-gray-500 font-normal leading-snug mt-0\.5"/);
+  assert.match(source, /function renderColumnSubtext[\s\S]*?className="block text-\[10px\] text-gray-500 font-normal leading-snug mt-0\.5"/);
   assert.match(finalSection, /font-mono tabular-nums align-middle/);
   assert.match(finalSection, /score-sheet-remark-select w-full min-w-\[130px\] max-w-\[140px\]/);
   assert.match(finalSection, /title="NP means No Examination Permit \(No Permit\)\."/);
