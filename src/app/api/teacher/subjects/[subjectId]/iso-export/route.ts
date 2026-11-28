@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { gradeRemarkExportCode } from "@/lib/grades";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -33,6 +34,11 @@ const FCU_DEFAULTS = {
   affiliationLine1: "Member: Association of Christian Schools, Colleges and Universities-Accrediting Council, Inc. (ACSCU-ACI)",
   affiliationLine2: "Member: Association of Christian Schools, Colleges in Asia (ACUCA)"
 };
+
+function cleanComponentName(name: string) {
+  const parts = name.split("/");
+  return (parts.length > 1 ? parts[parts.length - 1] : name).trim().toUpperCase();
+}
 
 function categoryPath(category: CategoryLike, categories: CategoryLike[]) {
   const names = [category.name];
@@ -152,18 +158,24 @@ export async function POST(request: Request, context: Context) {
     "NO.",
     "NAME OF STUDENTS",
     ...assessmentHeaders,
-    ...parsed.data.componentNames.map(name => name + " (%)"),
+    // ISO exports keep one raw-equivalent summary column per selected component.
+    ...parsed.data.componentNames.map(name => cleanComponentName(name) + "\nEQ"),
     "TOTAL GRADE (%)",
     "FINAL GRADE",
     "REMARKS"
   ];
 
-  // Export persisted score records as-is. No exporter-side grade calculations.
+  // Keep assessment scores untouched; normalize only the class-level final remark.
+  const sortedGradeBands = subject.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent);
   const rows: unknown[][] = subject.enrollments.map((enrollment, index) => {
     const scores = academicAssessments.map(item => {
       const score = enrollment.scores.find(value => value.assessmentId === item.id);
       return score?.points ?? score?.remark ?? "";
     });
+    const band = sortedGradeBands.find(item =>
+      enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent
+    );
+    const remark = enrollment.remarks?.trim() || band?.remarks || "";
     return [
       index + 1,
       enrollment.studentName || "",
@@ -171,7 +183,7 @@ export async function POST(request: Request, context: Context) {
       ...parsed.data.componentNames.map(() => ""),
       "",
       enrollment.finalGradeOverride ?? "",
-      enrollment.remarks ?? ""
+      gradeRemarkExportCode(remark)
     ];
   });
 
