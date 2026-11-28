@@ -1027,24 +1027,24 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
     ...rootDomainColumns.flatMap(item => ([
       {
         col: item.rawCol,
-        value: item.category.name.toLocaleUpperCase() + " · " + (/lecture/i.test(item.category.name) ? "Total" : "TOTAL") + " (RAW %)",
+        value: getCleanComponentName(item.category.name) + "\nEQ",
         style: 4
       },
       {
         col: item.weightedCol,
-        value: item.category.name.toLocaleUpperCase() + " · WEIGHTED (" + item.category.weight.toFixed(2) + "% OF COURSE)",
+        value: getCleanComponentName(item.category.name) + "\n" + item.category.weight.toFixed(2) + "%",
         style: 4
       }
     ])),
     ...componentColumns.flatMap(item => ([
       {
         col: item.rawCol,
-        value: item.component.name.toLocaleUpperCase() + " · TOTAL (RAW %)",
+        value: getCleanComponentName(item.component.name) + "\nEQ",
         style: 4
       },
       {
         col: item.weightedCol,
-        value: item.component.name.toLocaleUpperCase() + " · WEIGHTED (" + item.component.percentage.toFixed(2) + "%)",
+        value: getCleanComponentName(item.component.name) + "\n" + item.component.percentage.toFixed(2) + "%",
         style: 4
       }
     ])),
@@ -1095,7 +1095,7 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
       ...componentValues,
       { col: totalCol, value: special || enrollment.finalPercent === null ? "" : Number(enrollment.finalPercent.toFixed(2)), style: 5 },
       { col: totalCol + 1, value: gradeString, style: 6 },
-      { col: totalCol + 2, value: enrollment.remarks || band?.remarks || "", style: 6 }
+      { col: totalCol + 2, value: enrollment.remarks?.trim() || band?.remarks?.trim() ? gradeRemarkIndicator(enrollment.remarks, band?.remarks) : "", style: 6 }
     ]);
   }
 
@@ -3519,11 +3519,11 @@ export default function Portal({ user, initialPage = "overview", initialClassId 
           </div>
         </div>
         <table className="print-grade-table generic-print-grade-table">
-          <thead><tr><th aria-label="Sequence number"></th><th>NAME OF STUDENTS</th>{gradeSheetPrimaryDomains.map(category=><Fragment key={category.id}><th>{/lecture/i.test(category.name)?"Total":"TOTAL"}<small>EQ</small></th><th>{category.name.toLocaleUpperCase()} WEIGHTED<small>{category.weight.toFixed(2)}%</small></th></Fragment>)}{gradeSheetAdditionalComponents.map(component=><Fragment key={component.name}><th>{gradeSheetComponentRawLabel(detail,component)}<small>EQ</small></th><th>{component.name.toLocaleUpperCase()} WEIGHTED<small>{component.percentage.toFixed(2)}%</small></th></Fragment>)}<th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
+          <thead><tr><th aria-label="Sequence number"></th><th>NAME OF STUDENTS</th>{gradeSheetPrimaryDomains.map(category=><Fragment key={category.id}><th>{getCleanComponentName(category.name)}<small>EQ</small></th><th>{getCleanComponentName(category.name)}<small>{category.weight.toFixed(2)}%</small></th></Fragment>)}{gradeSheetAdditionalComponents.map(component=><Fragment key={component.name}><th>{getCleanComponentName(component.name)}<small>EQ</small></th><th>{getCleanComponentName(component.name)}<small>{component.percentage.toFixed(2)}%</small></th></Fragment>)}<th>TOTAL GRADE</th><th>FINAL GRADE</th><th>REMARKS</th></tr></thead>
           <tbody>{detail.enrollments.map((enrollment,index)=>{
             const band = detail.gradeBands.slice().sort((a,b)=>b.minPercent-a.minPercent).find(item=>enrollment.finalPercent!==null&&enrollment.finalPercent>=item.minPercent);
             const special = !isPassedGradeRemark(enrollment.remarks,band?.remarks);
-            return <tr key={enrollment.id}><td>{index+1}.</td><td>{enrollment.studentName.toLocaleUpperCase()}</td>{gradeSheetPrimaryDomains.map(category=>{const summary=gradeSheetRootDomainSummary(detail,enrollment,category);return <Fragment key={category.id}><td>{special?"":summary?.rawEquivalentPercent==null?"":summary.rawEquivalentPercent.toFixed(2)+"%"}</td><td>{special?"":summary?.parentWeightedScore==null?"":summary.parentWeightedScore.toFixed(2)+"%"}</td></Fragment>;})}{gradeSheetAdditionalComponents.map(component=>{const summary=gradeSheetComponentSummary(detail,enrollment,component);return <Fragment key={component.name}><td>{special?"":summary.rawEquivalentPercent===null?"":summary.rawEquivalentPercent.toFixed(2)+"%"}</td><td>{special?"":summary.parentWeightedScore===null?"":summary.parentWeightedScore.toFixed(2)+"%"}</td></Fragment>;})}<td>{special||enrollment.finalPercent===null?"":enrollment.finalPercent.toFixed(2)+"%"}</td><td>{special?gradeRemarkIndicator(enrollment.remarks,band?.remarks):enrollment.finalGradeOverride||band?.finalGrade||""}</td><td>{resolvedGradeRemark(enrollment.remarks,band?.remarks)}</td></tr>;
+            return <tr key={enrollment.id}><td>{index+1}.</td><td>{enrollment.studentName.toLocaleUpperCase()}</td>{gradeSheetPrimaryDomains.map(category=>{const summary=gradeSheetRootDomainSummary(detail,enrollment,category);return <Fragment key={category.id}><td>{special?"":summary?.rawEquivalentPercent==null?"":summary.rawEquivalentPercent.toFixed(2)+"%"}</td><td>{special?"":summary?.parentWeightedScore==null?"":summary.parentWeightedScore.toFixed(2)+"%"}</td></Fragment>;})}{gradeSheetAdditionalComponents.map(component=>{const summary=gradeSheetComponentSummary(detail,enrollment,component);return <Fragment key={component.name}><td>{special?"":summary.rawEquivalentPercent===null?"":summary.rawEquivalentPercent.toFixed(2)+"%"}</td><td>{special?"":summary.parentWeightedScore===null?"":summary.parentWeightedScore.toFixed(2)+"%"}</td></Fragment>;})}<td>{special||enrollment.finalPercent===null?"":enrollment.finalPercent.toFixed(2)+"%"}</td><td>{special?gradeRemarkIndicator(enrollment.remarks,band?.remarks):enrollment.finalGradeOverride||band?.finalGrade||""}</td><td>{enrollment.remarks?.trim() || band?.remarks?.trim() ? gradeRemarkIndicator(enrollment.remarks,band?.remarks) : ""}</td></tr>;
           })}</tbody>
         </table>
         <div className="print-signatures">
