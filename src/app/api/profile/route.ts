@@ -44,14 +44,8 @@ export async function PATCH(request: Request) {
       error: "Faculty ID must contain 3–40 letters, numbers, hyphens, periods, underscores, or slashes."
     }, { status: 400 });
   }
-  if (parsed.data.defaultGradeSheetComponents) {
-    const components = parsed.data.defaultGradeSheetComponents;
-    const total = components.reduce((sum, item) => sum + item.percentage, 0);
-    const names = components.map(item => item.name.toLocaleLowerCase());
-    if (Math.abs(total - 100) > 0.01 || new Set(names).size !== names.length) {
-      return NextResponse.json({ error: "Default component names must be unique and their percentages must total 100%." }, { status: 400 });
-    }
-  }
+  // These are display-column selections with weights inherited from Grading Setup.
+  // A teacher may save a subset, so the displayed weights do not need to total 100%.
   const changedFacultyId = facultyId !== undefined && facultyId !== user.facultyId;
 
   try {

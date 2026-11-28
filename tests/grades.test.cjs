@@ -16,13 +16,33 @@ function loadCalculator(name, imports = {}) {
 }
 const attendance = loadCalculator("attendance");
 const calculatorExports = loadCalculator("grades", { "./attendance": attendance });
-const { calculateCategoryPercent, calculateGradeBreakdown, calculateFinal, convertRawPercent, expectedChildAllocation, remainingChildAllocation, firstOverallocatedCategoryGroup } = calculatorExports;
+const { calculateCategoryPercent, calculateGradeBreakdown, calculateFinal, convertRawPercent, expectedChildAllocation, remainingChildAllocation, firstOverallocatedCategoryGroup, normalizeRemark, isClassRemark, CLASS_REMARK_OPTIONS } = calculatorExports;
 const scored = (points, maxScore = 100, title = "Exam", remark = null, weight = null) =>
   ({ title, maxScore, weight, scores: [{ points, remark }] });
 const pending = (maxScore = 100, title = "Exam", weight = null) =>
   ({ title, maxScore, weight, scores: [] });
 const cat = (id, parentId, weight, assessments = [], conversionBase = 100) =>
   ({ id, parentId, weight, assessments, conversionBase });
+
+test("class remarks use one unique canonical dictionary and normalize legacy values", () => {
+  assert.deepEqual(CLASS_REMARK_OPTIONS, [
+    { label: "PASSED", value: "PASSED" },
+    { label: "FAILED", value: "FAILED" },
+    { label: "INCOMPLETE", value: "INC" },
+    { label: "NO PRIVILEGE (NP)", value: "NP" },
+    { label: "DROPPED (DRP)", value: "DROPPED" }
+  ]);
+  assert.equal(new Set(CLASS_REMARK_OPTIONS.map(option => option.value)).size, CLASS_REMARK_OPTIONS.length);
+  assert.equal(normalizeRemark("INCOMPLETE"), "INC");
+  assert.equal(normalizeRemark(" incomplete "), "INC");
+  assert.equal(normalizeRemark("inc"), "INC");
+  assert.equal(normalizeRemark("DRP"), "DROPPED");
+  assert.equal(normalizeRemark("PASS"), "PASSED");
+  assert.equal(normalizeRemark("Failed"), "FAILED");
+  assert.equal(isClassRemark("INCOMPLETE"), true);
+  assert.equal(isClassRemark("inc"), true);
+  assert.equal(isClassRemark("ABSENT"), false);
+});
 
 test("transmutation respects school passing base", () => {
   assert.equal(convertRawPercent(70, 70), 79);
