@@ -444,7 +444,7 @@ function gradeSheetComponentPercent(detail: Detail, enrollment: Enrollment, comp
   }
   return totalWeight > 0 ? Number((weighted / totalWeight).toFixed(2)) : null;
 }
-function gradeSheetRootWeightedContribution(detail: Detail, enrollment: Enrollment, root: Category) {
+function gradeSheetRootDomainSummary(detail: Detail, enrollment: Enrollment, root: Category) {
   const grouped = new Map<string, Assessment[]>();
   for (const assessment of detail.assessments) {
     const items = grouped.get(assessment.categoryId) ?? [];
@@ -467,20 +467,39 @@ function gradeSheetRootWeightedContribution(detail: Detail, enrollment: Enrollme
       };
     })
   })));
-  const branchIds = categoryDescendantIds(root.id, detail.categories);
-  const contributions = breakdown.items.filter(item => branchIds.has(item.categoryId));
-  if (!contributions.some(item => item.earnedCourse !== null)) return null;
-  return Number(contributions.reduce((sum, item) => sum + (item.earnedCourse ?? 0), 0).toFixed(2));
+  return breakdown.domains.find(item => item.categoryId === root.id) ?? null;
+}
+function gradeSheetRootWeightedContribution(detail: Detail, enrollment: Enrollment, root: Category) {
+  return gradeSheetRootDomainSummary(detail, enrollment, root)?.parentWeightedScore ?? null;
+}
+function gradeSheetComponentSummary(detail: Detail, enrollment: Enrollment, component: GradeSheetComponent) {
+  const category = detail.categories.find(item =>
+    categoryPath(item, detail.categories).trim().toLocaleLowerCase() === component.name.trim().toLocaleLowerCase()
+  );
+  if (!category) return { rawEquivalentPercent: null, parentWeightedScore: null };
+  if (!category.parentId) {
+    const domain = gradeSheetRootDomainSummary(detail, enrollment, category);
+    return {
+      rawEquivalentPercent: domain?.rawEquivalentPercent ?? null,
+      parentWeightedScore: domain?.parentWeightedScore ?? null
+    };
+  }
+  const rawEquivalentPercent = gradeSheetComponentPercent(detail, enrollment, component);
+  return {
+    rawEquivalentPercent,
+    parentWeightedScore: rawEquivalentPercent === null
+      ? null
+      : Number((rawEquivalentPercent * component.percentage / 100).toFixed(2))
+  };
+}
+function gradeSheetComponentRawLabel(detail: Detail, component: GradeSheetComponent) {
+  const category = detail.categories.find(item =>
+    categoryPath(item, detail.categories).trim().toLocaleLowerCase() === component.name.trim().toLocaleLowerCase()
+  );
+  return category && !category.parentId && /lecture/i.test(category.name) ? "Total" : "TOTAL";
 }
 function gradeSheetComponentContribution(detail: Detail, enrollment: Enrollment, component: GradeSheetComponent) {
-  const root = detail.categories.find(category =>
-    categoryPath(category, detail.categories).trim().toLocaleLowerCase() === component.name.trim().toLocaleLowerCase()
-  );
-  // Root Lecture/Laboratory columns must show the actual contribution to the course
-  // total, exactly as calculated for TOTAL GRADE, rather than a raw group percentage.
-  if (root && !root.parentId) return gradeSheetRootWeightedContribution(detail, enrollment, root);
-  const componentPercent = gradeSheetComponentPercent(detail, enrollment, component);
-  return componentPercent === null ? null : Number((componentPercent * component.percentage / 100).toFixed(2));
+  return gradeSheetComponentSummary(detail, enrollment, component).parentWeightedScore;
 }
 
 function downloadGradeSheetXlsx(
@@ -491,7 +510,11 @@ function downloadGradeSheetXlsx(
   assessmentOrder?: Assessment[]
 ) {
   type ExportCell = { value: unknown; style: number };
-  type ScoreColumn = { kind: "assessment"; category: Category; item: Assessment } | { kind: "equivalent"; category: Category };
+  type ScoreColumn =
+    | { kind: "assessment"; category: Category; item: Assessment }
+    | { kind: "equivalent"; category: Category }
+    | { kind: "domain-total"; category: Category }
+    | { kind: "domain-weighted"; category: Category };
   type ExportCategoryNode = {
     category: Category; depth: number; items: Assessment[];
     children: ExportCategoryNode[]; startColumn: number; columnCount: number;
@@ -528,6 +551,12 @@ function downloadGradeSheetXlsx(
     for (const item of node.items) { scoreColumns.push({ kind: "assessment", category: node.category, item }); nextColumn++; }
     if (node.items.length) { scoreColumns.push({ kind: "equivalent", category: node.category }); nextColumn++; }
     node.children.forEach(assignColumns);
+    if (node.depth === 0) {
+      scoreColumns.push({ kind: "domain-total", category: node.category });
+      nextColumn++;
+      scoreColumns.push({ kind: "domain-weighted", category: node.category });
+      nextColumn++;
+    }
     node.columnCount = nextColumn - node.startColumn;
   };
   rootNodes.forEach(assignColumns);
@@ -680,9 +709,15 @@ function downloadGradeSheetXlsx(
     if (column.kind === "assessment") {
       headerRows[2].push({ col: columnIndex, value: assessmentTitle(column.item), style: 5 });
       headerRows[3].push({ col: columnIndex, value: "MAX: " + column.item.maxScore, style: 15 });
-    } else {
+    } else if (column.kind === "equivalent") {
       headerRows[2].push({ col: columnIndex, value: "EQUIVALENT", style: 5 });
       headerRows[3].push({ col: columnIndex, value: "(%)", style: 15 });
+    } else if (column.kind === "domain-total") {
+      headerRows[2].push({ col: columnIndex, value: /lecture/i.test(column.category.name) ? "Total" : "TOTAL", style: 5 });
+      headerRows[3].push({ col: columnIndex, value: "RAW EQUIVALENT (%)", style: 15 });
+    } else {
+      headerRows[2].push({ col: columnIndex, value: "WEIGHTED", style: 5 });
+      headerRows[3].push({ col: columnIndex, value: column.category.weight.toFixed(2) + "% OF COURSE", style: 15 });
     }
   });
   headerRows.forEach(values => addRow(values));
@@ -706,6 +741,7 @@ function downloadGradeSheetXlsx(
       })
     })));
     const contributionByCategory = new Map(breakdown.items.map(item => [item.categoryId, item]));
+    const domainSummaryByCategory = new Map(breakdown.domains.map(item => [item.categoryId, item]));
     const values: Array<{ col: number; value: unknown; style?: number }> = [
       { col: 0, value: index + 1, style: 7 },
       { col: 1, value: enrollment.studentName, style: 6 },
@@ -716,9 +752,14 @@ function downloadGradeSheetXlsx(
         const score = enrollment.scores.find(item => item.assessmentId === column.item.id);
         const value = score?.remark ? score.remark : score?.points == null ? "" : score.points + " / " + column.item.maxScore;
         values.push({ col: 3 + columnIndex, value, style: 7 });
-      } else {
+      } else if (column.kind === "equivalent") {
         const contribution = contributionByCategory.get(column.category.id);
         const value = specialRemark || contribution?.earnedWithinRoot == null ? "—" : contribution.earnedWithinRoot.toFixed(2) + "%";
+        values.push({ col: 3 + columnIndex, value, style: 7 });
+      } else {
+        const domain = domainSummaryByCategory.get(column.category.id);
+        const score = column.kind === "domain-total" ? domain?.rawEquivalentPercent : domain?.parentWeightedScore;
+        const value = specialRemark || score == null ? "—" : score.toFixed(2) + "%";
         values.push({ col: 3 + columnIndex, value, style: 7 });
       }
     });
@@ -776,7 +817,11 @@ function downloadGradeSheetXlsx(
 
   const textByColumn = Array.from({ length: columnCount }, () => [] as string[]);
   for (const row of rows) row.forEach((cell, index) => textByColumn[index].push(String(cell.value ?? "")));
-  scoreColumns.forEach((column, index) => textByColumn[3 + index].push(column.kind === "assessment" ? assessmentTitle(column.item) : "EQUIVALENT (%)"));
+  scoreColumns.forEach((column, index) => textByColumn[3 + index].push(
+    column.kind === "assessment" ? assessmentTitle(column.item)
+      : column.kind === "equivalent" ? "EQUIVALENT (%)"
+      : column.kind === "domain-total" ? "RAW EQUIVALENT (%)" : "WEIGHTED COURSE CONTRIBUTION (%)"
+  ));
   const addGroupLabelWidths = (node: ExportCategoryNode) => {
     for (let column = node.startColumn; column < node.startColumn + node.columnCount; column++) textByColumn[column].push(node.category.name);
     node.children.forEach(addGroupLabelWidths);
@@ -789,7 +834,7 @@ function downloadGradeSheetXlsx(
     else if (index === 1) width = Math.max(24, Math.min(44, Math.ceil(maxLength * 0.9) + 2));
     else if (index === 2) width = Math.max(14, Math.min(18, Math.ceil(maxLength * 0.85) + 2));
     else if (index >= totalColumn) width = index === finalColumn ? 13 : index === remarksColumn ? 20 : 16;
-    else if (scoreColumns[index - 3]?.kind === "equivalent") width = Math.max(14, Math.min(20, Math.ceil(maxLength * 0.85) + 2));
+    else if (scoreColumns[index - 3]?.kind !== "assessment") width = Math.max(14, Math.min(22, Math.ceil(maxLength * 0.85) + 2));
     else width = Math.max(14, Math.min(32, Math.ceil(maxLength * 0.82) + 2));
     return '<col min="' + (index + 1) + '" max="' + (index + 1) + '" width="' + width + '" customWidth="1"/>';
   }).join("") + "</cols>";
@@ -858,9 +903,10 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
   const componentColumns = components.map((component, index) => ({
     component,
     category: categories.find(category => componentCategoryPath(category).trim().toLocaleLowerCase() === component.name.trim().toLocaleLowerCase()),
-    col: index + 2
+    rawCol: index * 2 + 2,
+    weightedCol: index * 2 + 3
   }));
-  const totalCol = 2 + componentColumns.length;
+  const totalCol = 2 + componentColumns.length * 2;
   const columnCount = totalCol + 3;
   const last = excelColumn(columnCount - 1);
   const cells: Array<Array<{ value: unknown; style: number }>> = [];
@@ -891,11 +937,18 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
   row([
     { col: 0, value: "", style: 4 },
     { col: 1, value: "NAME OF STUDENTS", style: 4 },
-    ...componentColumns.map(item => ({
-      col: item.col,
-      value: item.component.name.toLocaleUpperCase() + ". " + (Number(item.component.percentage.toFixed(2))).toString() + "%",
-      style: 4
-    })),
+    ...componentColumns.flatMap(item => ([
+      {
+        col: item.rawCol,
+        value: item.component.name.toLocaleUpperCase() + " · " + (item.category && !item.category.parentId && /lecture/i.test(item.category.name) ? "Total" : "TOTAL") + " (RAW %)",
+        style: 4
+      },
+      {
+        col: item.weightedCol,
+        value: item.component.name.toLocaleUpperCase() + " · WEIGHTED (" + item.component.percentage.toFixed(2) + "%)",
+        style: 4
+      }
+    ])),
     { col: totalCol, value: "TOTAL GRADE", style: 4 },
     { col: totalCol + 1, value: "FINAL GRADE", style: 4 },
     { col: totalCol + 2, value: "REMARKS", style: 4 }
@@ -905,18 +958,20 @@ async function downloadFcuGradeXlsx(filename: string, sheetName: string, detail:
   for (const [index, enrollment] of detail.enrollments.entries()) {
     const band = detail.gradeBands.slice().sort((a, b) => b.minPercent - a.minPercent).find(item => enrollment.finalPercent !== null && enrollment.finalPercent >= item.minPercent);
     const special = ["INC", "NP", "DROPPED"].includes(enrollment.remarks || "");
-    const componentValues = componentColumns.map(item => {
-      const rawPercent = item.category
-        ? item.category.name.toLocaleLowerCase().includes("attendance")
-          ? gradeSheetAttendancePercent(detail, enrollment, item.category.id)
-          : weightedCategoryPercent(enrollment, item.category, categories, detail.assessments)
-        : null;
-      const contribution = rawPercent === null ? null : rawPercent * item.component.percentage / 100;
-      return {
-        col: item.col,
-        value: special || contribution === null ? "" : Number(contribution.toFixed(2)),
-        style: 5
-      };
+    const componentValues = componentColumns.flatMap(item => {
+      const summary = gradeSheetComponentSummary(detail, enrollment, item.component);
+      return [
+        {
+          col: item.rawCol,
+          value: special || summary.rawEquivalentPercent === null ? "" : Number(summary.rawEquivalentPercent.toFixed(2)),
+          style: 5
+        },
+        {
+          col: item.weightedCol,
+          value: special || summary.parentWeightedScore === null ? "" : Number(summary.parentWeightedScore.toFixed(2)),
+          style: 5
+        }
+      ];
     });
     const gradeString = special ? "" : enrollment.finalGradeOverride || band?.finalGrade || "";
     row([
