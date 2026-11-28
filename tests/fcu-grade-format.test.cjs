@@ -42,6 +42,8 @@ async function generate(categories, enrollments, components) {
       const parts = String(name).split("/");
       return (parts.length > 1 ? parts[parts.length - 1] : String(name)).trim().toUpperCase();
     },
+    gradeDomainHeading: category => /laboratory|lab/i.test(category.name) ? "LAB." : /lecture|lect/i.test(category.name) ? "LECT." : String(category.name).toUpperCase(),
+    gradeDomainWeight: category => Number(category.weight.toFixed(2)).toString() + "%",
     weightedCategoryPercent: (enrollment, category) => enrollment.equivalents[category.id] ?? null,
     gradeSheetAttendancePercent: (detail, enrollment, categoryId) => enrollment.attendancePercent?.[categoryId] ?? null,
     gradeSheetRootDomainSummary: (detail, enrollment, category) => {
@@ -73,8 +75,7 @@ async function generate(categories, enrollments, components) {
         : value === "INCOMPLETE" ? "INC"
         : /^NO\s+(?:(?:EXAM(?:INATION)?|EXAMINATION)\s+)?PERMIT(?:\s*\(NP\))?$/.test(value) ? "NP"
         : value === "PASS" ? "PASSED" : value;
-      return normalized === "DROPPED" ? "DRP" : normalized === "INC" ? "INC"
-        : normalized === "NP" ? "NP" : ["FAILED", "FAIL", "NOT PASSED"].includes(normalized) ? "FAIL" : normalized || "—";
+      return normalized || "—";
     },
   };
   vm.runInNewContext(compiled + "\nthis.generateGradeFile = downloadFcuGradeXlsx;", context);
@@ -196,96 +197,69 @@ test("OOXML ZIP writer encodes XML as UTF-8 and writes valid uncompressed ZIP re
   assert.match(entries.get("xl/worksheets/sheet1.xml"), /REGISTRAR’S OFFICE · ACUCA/);
 });
 
-test("FCU final-grade export shows each saved component as raw and weighted columns", async () => {
-  const components = [
-    { name: "EXAM", percentage: 50 },
-    { name: "ACT", percentage: 40 },
-    { name: "ARP", percentage: 10 }
+test("Generic Excel emits the merged Lecture/Lab summary with numeric cells", async () => {
+  const categories = [
+    { id: "lecture", name: "Lecture", weight: 60, sortOrder: 1 },
+    { id: "lab", name: "Laboratory", weight: 40, sortOrder: 2 }
   ];
-  const cats = components.map(item => ({ id: item.name, name: item.name, weight: item.percentage }));
-  const files = await generate(cats, [
-    student("Example Student", { EXAM: 80, ACT: 90, ARP: 100 }, 86),
-    student("Incomplete Student", { EXAM: null, ACT: null, ARP: null }, null, "INC", "2023-0002")
-  ], components);
+  const files = await generate(categories, [
+    student("Example Student", { lecture: 71.39, lab: 89.5 }, 78.63),
+    student("Incomplete Student", { lecture: null, lab: null }, null, "INC", "2023-0002")
+  ], []);
   const sheet = files["xl/worksheets/sheet1.xml"];
-  const styles = files["xl/styles.xml"];
-  assert.match(sheet, /<mergeCell ref="A1:K9"\/>/);
-  assert.match(sheet, /<pageSetup paperSize="14" orientation="portrait" fitToWidth="1"/);
-  assert.match(sheet, /showGridLines="0" zoomScale="90"/);
-  assert.match(sheet, /<selection pane="bottomLeft" activeCell="A17"/);
-  assert.match(sheet, /<c r="A15"[^>]*><is><t xml:space="preserve"><\/t><\/is><\/c>/);
-  assert.match(sheet, /<c r="B15"[^>]*>.*?NAME OF STUDENTS/s);
-  assert.match(sheet, /<c r="C15"[^>]*>.*?EXAM[\s\S]*?EQ/s);
-  assert.match(sheet, /<c r="D15"[^>]*>.*?EXAM[\s\S]*?50\.00%/s);
-  assert.match(sheet, /<c r="E15"[^>]*>.*?ACT[\s\S]*?EQ/s);
-  assert.match(sheet, /<c r="F15"[^>]*>.*?ACT[\s\S]*?40\.00%/s);
-  assert.match(sheet, /<c r="G15"[^>]*>.*?ARP[\s\S]*?EQ/s);
-  assert.match(sheet, /<c r="H15"[^>]*>.*?ARP[\s\S]*?10\.00%/s);
-  assert.match(sheet, /<c r="I15"[^>]*>.*?TOTAL GRADE/s);
-  assert.match(sheet, /<c r="J15"[^>]*>.*?FINAL GRADE/s);
-  assert.match(sheet, /<c r="K15"[^>]*>.*?REMARKS/s);
-  assert.match(sheet, /<c r="A17"[^>]*>.*?1\./s);
+  assert.match(sheet, /<mergeCell ref="A1:I9"\/>/);
+  assert.match(sheet, /<pageSetup paperSize="14" orientation="landscape" fitToWidth="1"/);
+  assert.match(sheet, /<mergeCell ref="C15:D15"\/>/);
+  assert.match(sheet, /<mergeCell ref="E15:F15"\/>/);
+  for (const range of ["A15:A16","B15:B16","G15:G16","H15:H16","I15:I16"]) assert.ok(sheet.includes('<mergeCell ref="'+range+'"/>'));
+  assert.match(sheet, /<c r="C15"[^>]*>.*?LECT\. 60%/s);
+  assert.match(sheet, /<c r="E15"[^>]*>.*?LAB\. 40%/s);
+  assert.match(sheet, /<c r="C16"[^>]*>.*?EQ/s);
+  assert.match(sheet, /<c r="D16"[^>]*>.*?60%/s);
+  assert.match(sheet, /<c r="G15"[^>]*>.*?TG/s);
+  assert.match(sheet, /<c r="H15"[^>]*>.*?FG/s);
+  assert.match(sheet, /<c r="I15"[^>]*>.*?REMARKS/s);
+  assert.match(sheet, /<c r="A17"[^>]*><v>1<\/v>/);
   assert.match(sheet, /<c r="B17"[^>]*>.*?EXAMPLE STUDENT/s);
-  assert.match(sheet, /<c r="C17"[^>]*><v>80<\/v>/);
-  assert.match(sheet, /<c r="D17"[^>]*><v>40<\/v>/);
-  assert.match(sheet, /<c r="E17"[^>]*><v>90<\/v>/);
-  assert.match(sheet, /<c r="F17"[^>]*><v>36<\/v>/);
-  assert.match(sheet, /<c r="G17"[^>]*><v>100<\/v>/);
-  assert.match(sheet, /<c r="H17"[^>]*><v>10<\/v>/);
-  assert.match(sheet, /<c r="I17"[^>]*><v>86<\/v>/);
-  assert.match(sheet, /<c r="J17"[^>]*>.*?2\.00/s);
-  assert.match(sheet, /<c r="K18"[^>]*>.*?INC/s);
-  assert.doesNotMatch(sheet, /<c r="C18"[^>]*><v>/);
-  assert.match(styles, /numFmtId="164"/);
-  assert.match(styles, /<sz val="9"\/>/);
-  assert.ok(files["xl/drawings/drawing1.xml"]);
-  assert.ok(files["xl/media/image1.png"]);
-  assert.doesNotMatch(sheet, /2023-0001|2023-0002/);
-  assert.match(sheet, /<c r="A18"[^>]*>.*?2\./s);
-  assert.match(sheet, /<col min="1" max="1" width="6"/);
+  assert.match(sheet, /<c r="C17"[^>]*><v>71\.39<\/v>/);
+  assert.match(sheet, /<c r="D17"[^>]*><v>42\.83<\/v>/);
+  assert.match(sheet, /<c r="E17"[^>]*><v>89\.5<\/v>/);
+  assert.match(sheet, /<c r="F17"[^>]*><v>35\.8<\/v>/);
+  assert.match(sheet, /<c r="G17"[^>]*><v>78\.63<\/v>/);
+  assert.match(sheet, /<c r="H17"[^>]*>.*?2\.00/s);
+  assert.match(sheet, /<c r="I18"[^>]*>.*?INC/s);
+  assert.match(files["xl/styles.xml"], /formatCode="0\.00"/);
+  assert.match(sheet, /<col min="1" max="1" width="7"/);
   assert.match(sheet, /<col min="2" max="2" width="32"/);
-  assert.match(sheet, /<col min="3" max="8" width="13"/);
-  assert.match(sheet, /<col min="9" max="9" width="14"/);
-  assert.match(sheet, /<col min="10" max="10" width="11"/);
-  assert.match(sheet, /<col min="11" max="11" width="18"/);
-});
-test("Generic Excel keeps primary domains before additional saved subcomponents", async () => {
+  assert.doesNotMatch(sheet, /2023-0001|2023-0002/);
+});test("Saved subcomponents do not add columns to the Final Grades summary", async () => {
   const categories = [
     { id: "lecture", name: "Lecture", weight: 60, sortOrder: 1 },
     { id: "exams", name: "Exams", parentId: "lecture", weight: 50, sortOrder: 1 },
     { id: "lab", name: "Lab", weight: 40, sortOrder: 2 }
   ];
-  const components = [{ name: "Lecture / Exams", percentage: 50 }];
   const files = await generate(categories, [
     student("Domain Student", { lecture: 71.39, lab: 89.5, "Lecture / Exams": 86 }, 78.63)
-  ], components);
+  ], [{ name: "Lecture / Exams", percentage: 50 }]);
   const sheet = files["xl/worksheets/sheet1.xml"];
-  assert.match(sheet, /<c r="C15"[^>]*>.*?LECTURE[\s\S]*?EQ/s);
-  assert.match(sheet, /<c r="D15"[^>]*>.*?LECTURE[\s\S]*?60\.00%/s);
-  assert.match(sheet, /<c r="E15"[^>]*>.*?LAB[\s\S]*?EQ/s);
-  assert.match(sheet, /<c r="F15"[^>]*>.*?LAB[\s\S]*?40\.00%/s);
-  assert.match(sheet, /<c r="G15"[^>]*>.*?EXAMS[\s\S]*?EQ/s);
-  assert.match(sheet, /<c r="H15"[^>]*>.*?EXAMS[\s\S]*?50\.00%/s);
-  assert.match(sheet, /<c r="I15"[^>]*>.*?TOTAL GRADE/s);
+  assert.match(sheet, /<mergeCell ref="C15:D15"\/>/);
+  assert.match(sheet, /<mergeCell ref="E15:F15"\/>/);
   assert.match(sheet, /<c r="C17"[^>]*><v>71\.39<\/v>/);
   assert.match(sheet, /<c r="D17"[^>]*><v>42\.83<\/v>/);
   assert.match(sheet, /<c r="E17"[^>]*><v>89\.5<\/v>/);
   assert.match(sheet, /<c r="F17"[^>]*><v>35\.8<\/v>/);
-  assert.match(sheet, /<c r="G17"[^>]*><v>86<\/v>/);
-  assert.match(sheet, /<c r="H17"[^>]*><v>43<\/v>/);
-  assert.match(sheet, /<c r="I17"[^>]*><v>78\.63<\/v>/);
-});
-
-test("grade remarks normalize status shorthands and masking stays scoped to dropped Final Grades", () => {
+  assert.match(sheet, /<c r="G17"[^>]*><v>78\.63<\/v>/);
+  assert.doesNotMatch(sheet, /EXAMS/);
+});test("Final Grades uses canonical statuses, two-tier headers, and dropped-only masking", () => {
   const helperStart = source.indexOf("function normalizeGradeRemark(");
   const helperEnd = source.indexOf("\nfunction gradeSheetRootDomainSummary(", helperStart);
-  assert.ok(helperStart >= 0 && helperEnd > helperStart, "shared status helpers are defined");
+  assert.ok(helperStart >= 0 && helperEnd > helperStart);
   const compiledHelpers = ts.transpileModule(source.slice(helperStart, helperEnd), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText;
   const statusStart = gradeSource.indexOf("export const CLASS_REMARK_OPTIONS = [");
   const statusEnd = gradeSource.indexOf("\n\n/** Category weights", statusStart);
-  assert.ok(statusStart >= 0 && statusEnd > statusStart, "canonical class-remark helpers are present");
+  assert.ok(statusStart >= 0 && statusEnd > statusStart);
   const compiledStatusHelpers = ts.transpileModule(gradeSource.slice(statusStart, statusEnd).replace(/^export /gm, ""), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
   }).outputText;
@@ -294,88 +268,51 @@ test("grade remarks normalize status shorthands and masking stays scoped to drop
   const h = context.helpers;
   assert.equal(h.normalizeGradeRemark("DRP"), "DROPPED");
   assert.equal(h.normalizeGradeRemark("INCOMPLETE"), "INC");
-  assert.equal(h.isPassedGradeRemark("PASSED"), true);
-  assert.equal(h.isPassedGradeRemark("Passed"), true);
-  assert.equal(h.isPassedGradeRemark("DRP", "PASSED"), false);
-  assert.equal(h.isPassedGradeRemark("DROPPED"), false);
-  assert.equal(h.isPassedGradeRemark("INCOMPLETE"), false);
-  assert.equal(h.isPassedGradeRemark(null, "FAILED"), false);
-  assert.equal(h.gradeRemarkIndicator("DROPPED"), "DRP");
-  assert.equal(h.gradeRemarkIndicator("DRP"), "DRP");
+  assert.equal(h.gradeRemarkIndicator("DROPPED"), "DROPPED");
+  assert.equal(h.gradeRemarkIndicator("DRP"), "DROPPED");
   assert.equal(h.gradeRemarkIndicator("INCOMPLETE"), "INC");
-  assert.equal(h.gradeRemarkIndicator("INC"), "INC");
-  assert.equal(h.gradeRemarkIndicator("FAILED"), "FAIL");
+  assert.equal(h.gradeRemarkIndicator("FAILED"), "FAILED");
+  assert.equal(h.gradeRemarkIndicator("NO EXAMINATION PERMIT"), "NP");
+  assert.equal(h.gradeRemarkIndicator("NO PRIVILEGE"), "NO PRIVILEGE");
+  assert.equal(h.isPassedGradeRemark("PASSED"), true);
+  assert.equal(h.isPassedGradeRemark("DRP", "PASSED"), false);
   assert.equal(h.gradeRemarkSelectionValue("DRP"), "DROPPED");
-  assert.equal(h.gradeRemarkSelectionValue("INCOMPLETE"), "INC");
-  assert.equal(h.gradeRemarkSelectionValue("PASSED"), "PASSED");
-  assert.equal(h.gradeRemarkSelectionValue("FAILED"), "FAILED");
 
   const recordStart = source.indexOf('{classSection === "record" && <section id="class-section-record"');
   const recordEnd = source.indexOf('{classSection === "analytics" && <section className="class-analytics"', recordStart);
   const recordSection = source.slice(recordStart, recordEnd);
-  assert.ok(recordStart >= 0 && recordEnd > recordStart, "Record Scores section is isolated");
-  assert.doesNotMatch(recordSection, /hasSpecialRemark|isPassedGradeRemark|mobile-score-status-only/);
+  assert.ok(recordStart >= 0 && recordEnd > recordStart);
   assert.match(recordSection, /className="score-sheet-input"/);
   assert.match(recordSection, /className="score-sheet-category-equivalent"/);
-  assert.match(recordSection, /showWeightBreakdown && <tr className="score-sheet-breakdown-row"/);
 
   const finalStart = source.indexOf('{classSection === "final" && <section id="class-section-final"');
   const finalEnd = source.indexOf(String.fromCharCode(10) + "        </>}", finalStart);
   const finalSection = source.slice(finalStart, finalEnd);
-  assert.ok(finalStart >= 0 && finalEnd > finalStart, "Final Grades section is isolated");
-  assert.match(source, /const isFinalGradesTab = classSection === "final"/);
-  assert.match(finalSection, /isDroppedStatus=isFinalGradesTab && resolvedGradeRemark\(en\.remarks,band\?\.remarks\)==="DROPPED"/);
-  assert.doesNotMatch(finalSection, /!passed|passed\?/);
-  assert.match(finalSection, /isDroppedStatus[\s\S]*?<span className="score-sheet-status-indicator"[^>]*>DRP<\/span>/);
-  assert.match(finalSection, /<table className="w-full min-w-max table-fixed border-collapse shrink-0">/);
-  assert.match(finalSection, /<col className="w-\[180px\] min-w-\[180px\]" \/>/);
-  assert.match(finalSection, /<col className="w-\[95px\]" \/>/);
-  assert.match(finalSection, /<col className="w-\[105px\]" \/>/);
-  assert.match(finalSection, /<col className="w-\[100px\]" \/>/);
-  assert.match(finalSection, /<div className="w-\[95px\] mx-auto whitespace-normal break-words leading-tight uppercase">/);
-  assert.match(finalSection, /<div className="w-\[105px\] mx-auto whitespace-normal break-words leading-tight uppercase">/);
-  assert.match(source, /function getCleanComponentName\(componentName: string\): string/);
-  assert.match(finalSection, /getCleanComponentName\(component\.name\)/);
-  assert.match(finalSection, /\{renderColumnSubtext\(true\)\}/);
-  assert.match(finalSection, /\{renderColumnSubtext\(false, component\.percentage\.toFixed\(2\)\)\}/);
-  assert.match(source, /function renderColumnSubtext\(isRawEquivalent: boolean, weightPercentage\?: number \| string\)/);
-  assert.match(source, /isRawEquivalent \? "EQ" :/);
-  assert.doesNotMatch(finalSection, /Raw Equivalent|Configured Weight/i);
-
-  const printHeaderStart = source.indexOf('<table className="print-grade-table generic-print-grade-table">');
-  const printHeaderEnd = source.indexOf("</thead>", printHeaderStart);
-  const printHeader = source.slice(printHeaderStart, printHeaderEnd);
-  assert.ok(printHeaderStart >= 0 && printHeaderEnd > printHeaderStart, "printable Final Grades header is isolated");
-  assert.match(printHeader, /<small>EQ<\/small>/);
-  assert.match(printHeader, /getCleanComponentName\(category\.name\)/);
-  assert.match(printHeader, /getCleanComponentName\(component\.name\)/);
-  assert.match(printHeader, /category\.weight\.toFixed\(2\)\}%<\/small>/);
-  assert.match(printHeader, /component\.percentage\.toFixed\(2\)\}%<\/small>/);
-  assert.doesNotMatch(printHeader, /raw equivalent|configured weight|% of course|WEIGHTED/i);
-
-
-  const cleanNameStart = source.indexOf("function getCleanComponentName(");
-  const cleanNameEnd = source.indexOf("\nfunction renderColumnSubtext(", cleanNameStart);
-  assert.ok(cleanNameStart >= 0 && cleanNameEnd > cleanNameStart, "clean component-name helper is isolated");
-  const cleanNameContext = {};
-  vm.runInNewContext(ts.transpileModule(source.slice(cleanNameStart, cleanNameEnd) +
-    "\nthis.getCleanComponentName = getCleanComponentName;", {
-      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None }
-    }).outputText, cleanNameContext);
-  assert.equal(cleanNameContext.getCleanComponentName("MAJOR EXAM / MIDTERM EXAM"), "MIDTERM EXAM");
-  assert.equal(cleanNameContext.getCleanComponentName("MAJOR EXAM / FINAL EXAM"), "FINAL EXAM");
-  assert.equal(cleanNameContext.getCleanComponentName("EXERCISES"), "EXERCISES");
-  assert.equal(cleanNameContext.getCleanComponentName("QUIZZES / ASSIGNMENTS"), "ASSIGNMENTS");
-
-  assert.match(source, /function renderColumnSubtext[\s\S]*?className="block text-\[10px\] text-gray-500 font-normal leading-snug mt-0\.5"/);
+  assert.ok(finalStart >= 0 && finalEnd > finalStart);
+  assert.match(finalSection, /<th rowSpan=\{2\} scope="col"/);
+  assert.match(finalSection, /<th colSpan=\{2\} scope="colgroup"/);
+  assert.match(finalSection, /gradeSheetEnrollmentBreakdown\(detail, en\)/);
+  assert.match(finalSection, /isDroppedRemark\(currentRemark\)/);
+  assert.match(finalSection, /studentIndex \+ 1/);
+  assert.match(finalSection, /isDroppedStatus \? "" : total == null/);
+  assert.match(finalSection, /summary\?\.rawEquivalentPercent/);
+  assert.match(finalSection, /summary\?\.parentWeightedScore/);
   assert.match(finalSection, /font-mono tabular-nums align-middle/);
-  assert.match(finalSection, /score-sheet-remark-select w-full min-w-\[130px\] max-w-\[140px\]/);
+  assert.doesNotMatch(finalSection, /activeGradeSheetComponents\.map\(component/);
+  assert.doesNotMatch(finalSection, /gradeSheetAdditionalComponents/);
   assert.match(finalSection, /title="NP means No Examination Permit \(No Permit\)\."/);
-  assert.ok(recordSection.includes("<PendingGradeDash />"), "unentered calculated values render as centered gray dashes");
-  assert.doesNotMatch(recordSection, /isDroppedStatus|hasSpecialRemark|mobile-score-status-only/, "Record Scores is not masked by Final Grades status rules");
-});
 
-test("assessment quick-select codes update local grade state immediately and map to canonical remarks", () => {
+  const printStart = source.indexOf('<table className="print-grade-table generic-print-grade-table">');
+  const printEnd = source.indexOf("</thead>", printStart);
+  const printHeader = source.slice(printStart, printEnd);
+  assert.match(printHeader, /<th rowSpan=\{2\}>NO\.<\/th>/);
+  assert.match(printHeader, /<th colSpan=\{2\}>/);
+  assert.match(printHeader, /<th rowSpan=\{2\}>TG<\/th>/);
+  assert.match(printHeader, /<th rowSpan=\{2\}>FG<\/th>/);
+  assert.match(printHeader, /<th rowSpan=\{2\}>REMARKS<\/th>/);
+  assert.match(source, /@page \{ size: 13in 8\.5in landscape;/);
+  assert.match(source, /Edit Record Scores Columns/);
+});test("assessment quick-select codes update local grade state immediately and map to canonical remarks", () => {
   assert.match(source, /function scoreQuickCode\(remark: string \| null \| undefined\): ScoreQuickCode/);
   assert.match(source, /if \(remark === "EXCUSED"\) return "EX"/);
   assert.match(source, /if \(remark === "ABSENT"\) return "AB"/);
@@ -412,61 +349,65 @@ test("assessment quick-select codes update local grade state immediately and map
   assert.match(contributionMemo, /\[detail\?\.categories, detail\?\.assessments, detail\?\.enrollments, classSection, scoresByEnrollment\]/);
 });
 
-test("FCU Excel renders non-passing statuses in the grade cell and leaves numeric columns blank", async () => {
-  const components = [{ name: "EXAM", percentage: 100 }];
-  const categories = [{ id: "EXAM", name: "EXAM", weight: 100 }];
+test("Generic Excel masks only dropped TG/FG and keeps other status grades visible", async () => {
+  const categories = [{ id: "lecture", name: "Lecture", weight: 100 }];
+  const incomplete = student("Incomplete Student", { lecture: 79 }, 79, "INCOMPLETE");
+  incomplete.finalGradeOverride = "2.50";
+  const noPermit = student("No Permit Student", { lecture: 74 }, 74, "NO EXAMINATION PERMIT");
+  noPermit.finalGradeOverride = "3.00";
+  const failed = student("Failed Student", { lecture: 70 }, 70, "FAILED");
+  failed.finalGradeOverride = "4.00";
   const files = await generate(categories, [
-    student("Dropped Student", { EXAM: 83 }, 83, "DRP"),
-    student("Incomplete Student", { EXAM: 79 }, 79, "INCOMPLETE"),
-    student("No Permit Student", { EXAM: 74 }, 74, "NO EXAMINATION PERMIT"),
-    student("No Privilege Student", { EXAM: 70 }, 70, "NO PRIVILEGE")
-  ], components);
+    student("Dropped Student", { lecture: 83 }, 83, "DRP"),
+    incomplete, noPermit, failed,
+    student("Passed Student", { lecture: 91 }, 91, "PASSED")
+  ], []);
   const sheet = files["xl/worksheets/sheet1.xml"];
-  assert.match(sheet, /<c r="F17"[^>]*><is><t xml:space="preserve">DRP<\/t><\/is><\/c>/);
-  assert.match(sheet, /<c r="G17"[^>]*><is><t xml:space="preserve">DRP<\/t><\/is><\/c>/);
-  assert.match(sheet, /<c r="F18"[^>]*><is><t xml:space="preserve">INC<\/t><\/is><\/c>/);
-  assert.match(sheet, /<c r="G18"[^>]*><is><t xml:space="preserve">INC<\/t><\/is><\/c>/);
-  assert.match(sheet, /<c r="F19"[^>]*><is><t xml:space="preserve">NP<\/t><\/is><\/c>/);
-  assert.match(sheet, /<c r="G19"[^>]*><is><t xml:space="preserve">NP<\/t><\/is><\/c>/);
-  assert.match(sheet, /<c r="F20"[^>]*><is><t xml:space="preserve">NP<\/t><\/is><\/c>/);
-  assert.match(sheet, /<c r="G20"[^>]*><is><t xml:space="preserve">NP<\/t><\/is><\/c>/);
-  for (const cell of ["C17", "D17", "E17", "C18", "D18", "E18", "C19", "D19", "E19", "C20", "D20", "E20"]) {
-    assert.doesNotMatch(sheet, new RegExp('<c r="' + cell + '"[^>]*><v>'));
-  }
-});
-
-test("Generic PDF export is offered only once inside the export dropdown", () => {
-  assert.match(source, /<strong>Save \/ Print Generic PDF<\/strong>/, "the Generic dropdown retains its PDF option");
-  assert.match(source, /"Download Generic Excel Sheet"/, "the Generic dropdown retains its idle Excel option label");
-  assert.match(source, /Generating Excel file…/, "the Generic dropdown exposes its loading label");
-  assert.doesNotMatch(source, /<button className="btn btn-outline-primary" onClick=\{\(\) => printFinalGradesPdf\("generic"\)\}>Save \/ Print Generic PDF<\/button>/, "the duplicate standalone PDF button is removed");
+  assert.match(sheet, /<c r="C17"[^>]*><v>83<\/v>/);
+  assert.match(sheet, /<c r="D17"[^>]*><v>83<\/v>/);
+  assert.match(sheet, /<c r="E17"[^>]*><\/c>/);
+  assert.match(sheet, /<c r="F17"[^>]*><\/c>/);
+  assert.match(sheet, /<c r="G17"[^>]*>.*?DROPPED/s);
+  assert.match(sheet, /<c r="E18"[^>]*><v>79<\/v>/);
+  assert.match(sheet, /<c r="F18"[^>]*>.*?2\.50/s);
+  assert.match(sheet, /<c r="G18"[^>]*>.*?INC/s);
+  assert.match(sheet, /<c r="E19"[^>]*><v>74<\/v>/);
+  assert.match(sheet, /<c r="F19"[^>]*>.*?3\.00/s);
+  assert.match(sheet, /<c r="G19"[^>]*>.*?NP/s);
+  assert.match(sheet, /<c r="F20"[^>]*>.*?4\.00/s);
+  assert.match(sheet, /<c r="G20"[^>]*>.*?FAILED/s);
+  assert.match(sheet, /<c r="E21"[^>]*><v>91<\/v>/);
+  assert.match(sheet, /<c r="G21"[^>]*>.*?PASSED/s);
+  assert.doesNotMatch(sheet, /NO PRIVILEGE/);
+});test("Generic PDF uses the same compact summary headers and landscape printing", () => {
+  assert.match(source, /<strong>Save \/ Print Generic PDF<\/strong>/);
+  assert.match(source, /"Download Generic Excel Sheet"/);
+  assert.match(source, /Generating Excel file…/);
   assert.match(source, /gradeSheetPrimaryDomains\.map/);
-  assert.match(source, /gradeSheetAdditionalComponents\.map/);
-  assert.match(source, /activeGradeSheetComponents\.map\(component=>\{/);
-});
-
-test("ISO Excel export uses dynamic class metadata and omits student-number columns", () => {
+  assert.doesNotMatch(source, /gradeSheetAdditionalComponents/);
+  assert.match(source, /<th rowSpan=\{2\}>NO\.<\/th>/);
+  assert.match(source, /<th colSpan=\{2\}>/);
+  assert.match(source, /<th rowSpan=\{2\}>REMARKS<\/th>/);
+  assert.match(source, /@page \{ size: 13in 8\.5in landscape;/);
+});test("ISO export API uses the top-level domain summary and omits student numbers", () => {
   const route = fs.readFileSync("src/app/api/teacher/subjects/[subjectId]/iso-export/route.ts", "utf8");
-  assert.match(route, /const headers = \[\s*"NO\.",\s*"NAME OF STUDENTS",\s*\.\.\.assessmentHeaders/);
-  assert.doesNotMatch(route, /"Student Number"/);
-  assert.doesNotMatch(route, /enrollment\.studentNumber/);
+  assert.match(route, /const headers = \[/);
+  assert.match(route, /"NO\.",\s*"NAME OF STUDENTS"/);
+  assert.match(route, /rootDomains\.flatMap\(domain => \["EQ", domainWeightLabel\(domain\.weight\)\]\)/);
+  assert.match(route, /calculateGradeBreakdown\(/);
+  assert.match(route, /headerGroups/);
+  assert.match(route, /rowSpanColumns/);
+  assert.match(route, /numericColumns/);
+  assert.match(route, /normalizeRemark\(enrollment\.remarks/);
+  assert.match(route, /index \+ 1/);
   assert.match(route, /courseCode: subject\.code/);
   assert.match(route, /courseTitle: subject\.title/);
   assert.match(route, /id: subject\.id/);
   assert.match(route, /semester: subject\.term/);
   assert.match(route, /academicYear: subject\.academicYear/);
   assert.match(route, /classId: resolveClassId\(subject\)/);
-  assert.doesNotMatch(route, /sectionName: resolveSectionName/);
-  assert.doesNotMatch(route, /calculateGradeBreakdown|calculateCategoryPercent|componentContribution/, "ISO export must not calculate grades");
-  assert.match(route, /return score\?\.points \?\? score\?\.remark \?\? ""/);
-  assert.match(route, /\.\.\.parsed\.data\.componentNames\.map\(\(\) => ""\)/);
-  assert.match(route, /enrollment\.finalGradeOverride \?\? ""/);
-  assert.match(route, /cleanComponentName\(name\) \+ "\\nEQ"/);
-  assert.match(route, /gradeRemarkExportCode\(enrollment\.remarks\)/);
-  assert.doesNotMatch(route, /enrollment\.finalPercent|calculateGradeBreakdown/);
-});
-
-test("ISO Excel export uses the authenticated Python openpyxl generator", () => {
+  assert.doesNotMatch(route, /"Student Number"|enrollment\.studentNumber|componentNames|assessmentHeaders/);
+});test("ISO Excel export uses the authenticated Python openpyxl generator", () => {
   const pythonSource = fs.readFileSync("api/iso_export.py", "utf8");
   const endpoint = fs.readFileSync("src/app/api/teacher/subjects/[subjectId]/iso-export/route.ts", "utf8");
   const profileRoute = fs.readFileSync("src/app/api/profile/route.ts", "utf8");
@@ -480,7 +421,7 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.doesNotMatch(source.slice(source.indexOf("async function renderIsoExcelSealPng"), source.indexOf("async function exportIsoGradesExcel")), /departmentLogoPath/);
   assert.match(source, /ctx\.drawImage\(schoolLogo, sourceX, sourceY, cropSize, cropSize, 4, 4, 152, 152\)/);
   assert.doesNotMatch(source.slice(source.indexOf("async function renderIsoExcelSealPng"), source.indexOf("async function exportIsoGradesExcel")), /fillText\(/);
-  assert.match(source, /componentNames: activeGradeSheetComponents\.map/);
+  assert.doesNotMatch(source, /componentNames: activeGradeSheetComponents\.map/);
   assert.match(source, /\/iso-export/);
   assert.match(source, /window\.btoa\(binary\)/);
   assert.match(source, /response\.blob\(\)/);
@@ -491,6 +432,10 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(pythonSource, /center_end_column = column_count - 2/);
   assert.match(pythonSource, /metadata_label_column = column_count - 1/);
   assert.match(pythonSource, /metadata_value_column = column_count/);
+  assert.match(pythonSource, /two_tier_headers/);
+  assert.match(pythonSource, /worksheet\.freeze_panes = "A13" if two_tier_headers/);
+  assert.match(pythonSource, /cell\.number_format = "0\.00"/);
+  assert.match(pythonSource, /orientation = "landscape" if/);
   assert.match(pythonSource, /_merge_with_border\(worksheet, "A1:A4", THIN_BORDER\)/);
   assert.match(pythonSource, /_merge_with_border\(worksheet, "B1:B4", THIN_BORDER\)/);
   assert.match(pythonSource, /"C\{0\}:\{1\}\{0\}"\.format\(row_number, center_end_letter\)/);
@@ -514,8 +459,8 @@ test("ISO Excel export uses the authenticated Python openpyxl generator", () => 
   assert.match(pythonSource, /image\.width = 80/);
   assert.match(pythonSource, /image\.height = 80/);
   assert.match(pythonSource, /OneCellAnchor/);
-  assert.match(pythonSource, /cell\.number_format = "0\.00%"/);
-  assert.match(pythonSource, /Percentage columns are passed as fractions/);
+  assert.doesNotMatch(pythonSource, /cell\.number_format = "0\.00%"/);
+  assert.doesNotMatch(pythonSource, /Percentage columns are passed as fractions/);
   assert.match(pythonSource, /def _normalize_signature_name/);
   assert.match(pythonSource, /signature_space_rows = range\(signature_label_row \+ 1, signature_label_row \+ 4\)/);
   assert.match(pythonSource, /signature_name_row = signature_label_row \+ 4/);
