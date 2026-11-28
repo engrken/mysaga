@@ -986,7 +986,7 @@ async function downloadFcuGradeXlsx(
   const last = excelColumn(columnCount - 1);
   type ExportCell = { value: unknown; style: number };
   const rows: ExportCell[][] = [];
-  const mergeRanges: string[] = [];
+  const mergeRanges: string[] = ["A1:" + last + "9"];
   const addRow = (values: Array<{ col: number; value: unknown; style?: number }> = []) => {
     const row = Array.from({ length: columnCount }, () => ({ value: "", style: 0 } as ExportCell));
     for (const item of values) row[item.col] = { value: item.value, style: item.style ?? 0 };
