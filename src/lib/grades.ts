@@ -36,6 +36,11 @@ export function isClassRemark(remark: string | null | undefined): boolean {
   return CLASS_REMARK_CODES.has(normalizeRemark(remark));
 }
 
+/** True only for the canonical dropped status; other special remarks retain their numeric grade. */
+export function isDroppedRemark(remark: string | null | undefined): boolean {
+  return normalizeRemark(remark) === "DROPPED";
+}
+
 /** Category weights below the course roots are percentage points within the
  * root group. Grandchildren divide their direct parent's allocation. */
 export type GradeAllocationCategory = { id: string; parentId?: string | null; weight: number };

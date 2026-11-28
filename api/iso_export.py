@@ -54,9 +54,9 @@ def _normalize_export_remark(value: object) -> str:
     if re.match(r"^NO\s+(?:(?:EXAM(?:INATION)?|EXAMINATION)\s+)?PERMIT(?:\s*\(NP\))?$", remark):
         return "NP"
     if remark in {"DROPPED", "DRP", "DROP"}:
-        return "DRP"
+        return "DROPPED"
     if remark in {"FAILED", "FAIL", "NOT PASSED"}:
-        return "FAIL"
+        return "FAILED"
     return remark
 
 
@@ -158,8 +158,23 @@ def build_iso_workbook(payload: dict) -> bytes:
     workbook = Workbook()
     worksheet = workbook.active
     worksheet.title = re.sub(r"[\\/*?:\[\]]", " ", _safe_text(payload.get("sheetName", "ISO Grading Sheet")))[:31] or "ISO Grading Sheet"
+    header_groups = payload.get("headerGroups") or []
+    row_span_columns = payload.get("rowSpanColumns") or []
+    numeric_columns = set(payload.get("numericColumns") or [])
+    two_tier_headers = bool(header_groups and row_span_columns)
+    if two_tier_headers:
+        if not all(isinstance(group, dict) and isinstance(group.get("startColumn"), int)
+                   and isinstance(group.get("endColumn"), int)
+                   and 1 <= group["startColumn"] <= group["endColumn"] <= len(headers)
+                   and isinstance(group.get("title"), str) for group in header_groups):
+            raise ValueError("The domain header layout is invalid.")
+        if not all(isinstance(column, int) and 1 <= column <= len(headers) for column in row_span_columns):
+            raise ValueError("The row-spanning header layout is invalid.")
+        if not all(isinstance(column, int) and 1 <= column <= len(headers) for column in numeric_columns):
+            raise ValueError("The numeric summary column layout is invalid.")
+
     worksheet.sheet_view.showGridLines = True
-    worksheet.freeze_panes = "A12"
+    worksheet.freeze_panes = "A13" if two_tier_headers else "A12"
     worksheet.sheet_properties.pageSetUpPr.fitToPage = True
     worksheet.page_setup.orientation = "portrait"
     worksheet.page_setup.paperSize = "14"  # Folio paper code: Long bond, 8.5 x 13 inches.
@@ -171,7 +186,7 @@ def build_iso_workbook(payload: dict) -> bytes:
     worksheet.page_margins.bottom = 0.35
     worksheet.page_margins.header = 0.15
     worksheet.page_margins.footer = 0.15
-    worksheet.print_title_rows = "11:11"
+    worksheet.print_title_rows = "11:12" if two_tier_headers else "11:11"
 
     # Determine active width before building the header. All header and
     # accreditation spans are tied to the final number of table columns (N).
@@ -314,16 +329,47 @@ def build_iso_workbook(payload: dict) -> bytes:
     worksheet.row_dimensions[9].height = 8
     worksheet.row_dimensions[10].height = 8
 
-    for column_number, value in enumerate(normalized_headers, start=1):
-        cell = worksheet.cell(11, column_number)
-        _set_literal(cell, value)
-        cell.border = THIN_BORDER
-        cell.fill = header_fill
-        cell.font = table_font
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    worksheet.row_dimensions[11].height = 30
+    if two_tier_headers:
+        row_span_set = set(row_span_columns)
+        for row_number, height in ((11, 24), (12, 22)):
+            worksheet.row_dimensions[row_number].height = height
+            for column_number in range(1, column_count + 1):
+                cell = worksheet.cell(row_number, column_number)
+                cell.border = THIN_BORDER
+                cell.fill = header_fill
+                cell.font = table_font
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        for column_number, value in enumerate(normalized_headers, start=1):
+            if column_number in row_span_set:
+                _set_literal(worksheet.cell(11, column_number), value)
+                _merge_with_border(
+                    worksheet,
+                    "{0}11:{0}12".format(get_column_letter(column_number)),
+                    THIN_BORDER,
+                )
+            else:
+                _set_literal(worksheet.cell(12, column_number), value)
+        for group in header_groups:
+            start_column = group["startColumn"]
+            end_column = group["endColumn"]
+            _set_literal(worksheet.cell(11, start_column), group["title"])
+            _merge_with_border(
+                worksheet,
+                "{0}11:{1}11".format(get_column_letter(start_column), get_column_letter(end_column)),
+                THIN_BORDER,
+            )
+    else:
+        worksheet.row_dimensions[11].height = 30
+        for column_number, value in enumerate(normalized_headers, start=1):
+            cell = worksheet.cell(11, column_number)
+            _set_literal(cell, value)
+            cell.border = THIN_BORDER
+            cell.fill = header_fill
+            cell.font = table_font
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-    for row_offset, row_values in enumerate(rows, start=12):
+    data_start_row = 13 if two_tier_headers else 12
+    for row_offset, row_values in enumerate(rows, start=data_start_row):    for row_offset, row_values in enumerate(rows, start=12):
         worksheet.row_dimensions[row_offset].height = 22
         for column_number in range(1, column_count + 1):
             value = row_values[column_number - 1] if column_number <= len(row_values) else ""
@@ -336,28 +382,27 @@ def build_iso_workbook(payload: dict) -> bytes:
             cell.font = body_font
             horizontal = "left" if column_number == 2 else "center"
             if isinstance(value, (int, float)) and not isinstance(value, bool):
-                horizontal = "right"
-                if "(%)" in heading or "TOTAL GRADE" in heading:
-                    # Percentage columns are passed as fractions (0.2226 = 22.26%).
-                    cell.number_format = "0.00%"
-            if "FINAL GRADE" in heading:
+                horizontal = "center"
+                if column_number in numeric_columns:
+                    cell.number_format = "0.00"
+            if heading in {"TG", "FG"}:
                 horizontal = "center"
             cell.alignment = Alignment(horizontal=horizontal, vertical="center", wrap_text=True)
 
-    # Compact, role-based widths remain predictable for every subject's dynamic columns.
+    # Predictable widths for the fixed domain-summary table.
     for index in range(column_count):
         heading = _safe_text(normalized_headers[index]).upper()
         if index == 0:
-            width = 12
+            width = 7
         elif index == 1:
             width = 32
-        elif "TOTAL GRADE" in heading:
-            width = 14
-        elif "FINAL GRADE" in heading:
+        elif heading == "TG":
             width = 12
+        elif heading == "FG":
+            width = 10
         elif "REMARK" in heading:
-            width = 12
-        elif "(%)" in heading:
+            width = 15
+        elif heading == "EQ" or heading.endswith("%"):
             width = 12
         else:
             width = 10
@@ -369,7 +414,7 @@ def build_iso_workbook(payload: dict) -> bytes:
     worksheet.column_dimensions[get_column_letter(metadata_value_column)].width = 22
 
     # Signature block: headings, blank signing space, then centered printed names and positions.
-    data_end_row = 11 + len(rows)
+    data_end_row = (12 if two_tier_headers else 11) + len(rows)
     signature_label_row = data_end_row + 2
     signature_space_rows = range(signature_label_row + 1, signature_label_row + 4)
     signature_name_row = signature_label_row + 4
