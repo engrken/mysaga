@@ -104,6 +104,28 @@ test("attendance ignores grade-transmutation base and excludes excused dates", (
   assert.equal(data.items[0].pendingItems, 0);
 });
 
+test("null points with a PENDING marker stay pending and never calculate as a failing zero", () => {
+  const pendingAssessment = { title: "Unentered quiz", maxScore: 100, weight: null, scores: [{ points: null, remark: "PENDING" }] };
+  const result = calculateGradeBreakdown([cat("tests", null, 25, [pendingAssessment], 100)]);
+  assert.equal(calculateCategoryPercent({ conversionBase: 100, assessments: [pendingAssessment] }), null);
+  assert.equal(result.items[0].percent, null);
+  assert.equal(result.items[0].earnedCourse, null);
+  assert.equal(result.items[0].recordedItems, 0);
+  assert.equal(result.items[0].pendingItems, 1);
+  assert.equal(result.totalPercent, null);
+});
+
+test("valid attendance and explicit absence remarks still count as recorded when points are null", () => {
+  const attendanceMarks = [
+    scored(null, 1, "Attendance · 2026-11-01", "PRESENT"),
+    scored(null, 1, "Attendance · 2026-11-02", "ABSENT")
+  ];
+  const result = calculateGradeBreakdown([cat("attendance", null, 10, attendanceMarks, 50)]);
+  assert.equal(result.items[0].recordedItems, 2);
+  assert.equal(result.items[0].pendingItems, 0);
+  assert.equal(result.totalPercent, 5);
+});
+
 test("blank score is pending; recorded zero is not a pending score", () => {
   const items = [scored(100), pending()];
   const first = calculateGradeBreakdown([cat("tests", null, 25, items, 50)]);
@@ -114,6 +136,21 @@ test("blank score is pending; recorded zero is not a pending score", () => {
   assert.equal(second.items[0].percent, 75);
   assert.equal(second.items[0].earnedCourse, 18.75);
   assert.equal(second.items[0].pendingItems, 0);
+});
+
+test("quick-select status semantics keep DNS and AB in the denominator while EX is omitted", () => {
+  const assessments = [
+    scored(80, 100, "Quiz A"),
+    scored(null, 100, "Quiz B", "ABSENT"),
+    scored(null, 100, "Quiz C", "DID_NOT_SUBMIT"),
+    scored(null, 100, "Quiz D", "EXCUSED")
+  ];
+  const result = calculateGradeBreakdown([cat("quizzes", null, 100, assessments, 100)]);
+  assert.equal(result.items[0].percent, 26.67);
+  assert.equal(result.items[0].recordedItems, 3);
+  assert.equal(result.items[0].pendingItems, 0);
+  assert.equal(result.items[0].excusedItems, 1);
+  assert.equal(result.totalPercent, 26.67);
 });
 
 test("EXCUSED is omitted; ABSENT and DID_NOT_SUBMIT are recorded as zero raw marks", () => {

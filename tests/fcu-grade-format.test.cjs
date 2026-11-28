@@ -311,7 +311,56 @@ test("grade remarks normalize status shorthands and masking stays scoped to drop
   assert.match(source, /const isFinalGradesTab = classSection === "final"/);
   assert.match(finalSection, /isDroppedStatus=isFinalGradesTab && resolvedGradeRemark\(en\.remarks,band\?\.remarks\)==="DROPPED"/);
   assert.doesNotMatch(finalSection, /!passed|passed\?/);
-  assert.match(finalSection, /isDroppedStatus\?<span className="score-sheet-status-indicator"/);
+  assert.match(finalSection, /isDroppedStatus[\s\S]*?<span className="score-sheet-status-indicator"[^>]*>DRP<\/span>/);
+  assert.match(finalSection, /<table className="w-full min-w-max table-fixed border-collapse shrink-0">/);
+  assert.match(finalSection, /<col className="w-\[180px\] min-w-\[180px\]" \/>/);
+  assert.match(finalSection, /<col className="w-\[95px\]" \/>/);
+  assert.match(finalSection, /<col className="w-\[105px\]" \/>/);
+  assert.match(finalSection, /<col className="w-\[100px\]" \/>/);
+  assert.match(finalSection, /<div className="w-\[95px\] mx-auto whitespace-normal break-words leading-tight uppercase">/);
+  assert.match(finalSection, /<div className="w-\[105px\] mx-auto whitespace-normal break-words leading-tight uppercase">/);
+  assert.match(finalSection, /className="block text-\[10px\] text-gray-500 font-normal leading-snug mt-0\.5"/);
+  assert.match(finalSection, /font-mono tabular-nums align-middle/);
+  assert.match(finalSection, /score-sheet-remark-select w-full max-w-\[92px\]/);
+  assert.ok(recordSection.includes("<PendingGradeDash />"), "unentered calculated values render as centered gray dashes");
+  assert.doesNotMatch(recordSection, /isDroppedStatus|hasSpecialRemark|mobile-score-status-only/, "Record Scores is not masked by Final Grades status rules");
+});
+
+test("assessment quick-select codes update local grade state immediately and map to canonical remarks", () => {
+  assert.match(source, /function scoreQuickCode\(remark: string \| null \| undefined\): ScoreQuickCode/);
+  assert.match(source, /if \(remark === "EXCUSED"\) return "EX"/);
+  assert.match(source, /if \(remark === "ABSENT"\) return "AB"/);
+  assert.match(source, /if \(remark === "DID_NOT_SUBMIT"\) return "DNS"/);
+  assert.match(source, /function scoreRemarkFromQuickCode\(code: string\): WorkbookChange\["remark"\]/);
+  assert.match(source, /if \(code === "EX"\) return "EXCUSED"/);
+  assert.match(source, /if \(code === "AB"\) return "ABSENT"/);
+  assert.match(source, /if \(code === "DNS"\) return "DID_NOT_SUBMIT"/);
+
+  const recordStart = source.indexOf('{classSection === "record" && <section id="class-section-record"');
+  const analyticsStart = source.indexOf('{classSection === "analytics"', recordStart);
+  const recordSection = source.slice(recordStart, analyticsStart);
+  assert.match(recordSection, /value=\{scoreQuickCode\(score\?\.remark\)\}/);
+  assert.match(recordSection, /onChange=\{event=>saveScore\(enrollment\.id,item\.id,"",scoreRemarkFromQuickCode\(event\.target\.value\)\)\}/);
+  assert.match(recordSection, /onChange=\{event=>saveScore\(enrollment\.id,item\.id,"",scoreRemarkFromQuickCode\(event\.target\.value\)\)\}/g);
+
+  const localStart = source.indexOf("function updateScoreLocally(");
+  const saveStart = source.indexOf("function saveScore(", localStart);
+  const localUpdater = source.slice(localStart, saveStart);
+  assert.match(localUpdater, /setDetail\(current =>/);
+  assert.match(localUpdater, /updated\.finalPercent = calculateFinal\(/);
+  assert.match(localUpdater, /return \{ \.\.\.current, enrollments \}/);
+
+  const scoreSaveStart = saveStart;
+  const scoreSaveEnd = source.indexOf("\n  async function emailVerifiedGrades", scoreSaveStart);
+  const scoreSaver = source.slice(scoreSaveStart, scoreSaveEnd);
+  assert.ok(scoreSaver.indexOf("updateScoreLocally(") < scoreSaver.indexOf("workbookPendingRef.current.set("), "local recalculation happens before persistence is queued");
+  assert.match(scoreSaver, /flushWorkbookScores\(\)/);
+
+  const contributionStart = source.indexOf("const recordContributionsByEnrollment = useMemo");
+  const contributionEnd = source.indexOf("const studentGradeStats", contributionStart);
+  const contributionMemo = source.slice(contributionStart, contributionEnd);
+  assert.match(contributionMemo, /calculateGradeBreakdown\(/);
+  assert.match(contributionMemo, /\[detail\?\.categories, detail\?\.assessments, detail\?\.enrollments, classSection, scoresByEnrollment\]/);
 });
 
 test("FCU Excel renders non-passing statuses in the grade cell and leaves numeric columns blank", async () => {

@@ -238,7 +238,7 @@ test("Record Scores never masks score cells for class remarks; only DROPPED is m
   const finalSection = portal.slice(finalStart, finalEnd);
   assert.match(finalSection, /isDroppedStatus=isFinalGradesTab && resolvedGradeRemark\(en\.remarks,band\?\.remarks\)==="DROPPED"/);
   assert.doesNotMatch(finalSection, /!passed|passed\?/);
-  assert.match(finalSection, /isDroppedStatus\?<span className="score-sheet-status-indicator"/);
+  assert.match(finalSection, /isDroppedStatus[\s\S]*?<span className="score-sheet-status-indicator"[^>]*>DRP<\/span>/);
   assert.match(portal, /if \(value === "DRP" \|\| value === "DROP"\) return "DROPPED"/);
 
   const contribution = fs.readFileSync(path.join(__dirname, "../src/components/GradeContributionPanel.tsx"), "utf8");

@@ -104,9 +104,16 @@ export function convertRawPercent(rawPercent: number, conversionBase = 50) {
 }
 
 const roundPercent = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+const RECORDED_SCORE_REMARKS = new Set(["PRESENT", "LATE", "ABSENT", "DID_NOT_SUBMIT"]);
+const scoreRemark = (assessment: GradeCalculationCategory["assessments"][number]) =>
+  String(assessment.scores[0]?.remark ?? "").trim().toLocaleUpperCase();
+const isExcused = (assessment: GradeCalculationCategory["assessments"][number]) =>
+  scoreRemark(assessment) === "EXCUSED";
 const isRecorded = (assessment: GradeCalculationCategory["assessments"][number]) => {
   const score = assessment.scores[0];
-  return !!score && (score.points !== null || (!!score.remark && score.remark !== "EXCUSED"));
+  if (!score || isExcused(assessment)) return false;
+  return (score.points != null && Number.isFinite(score.points)) ||
+    RECORDED_SCORE_REMARKS.has(scoreRemark(assessment));
 };
 
 const isAttendanceItem = (title?: string) => !!title && title.toLocaleLowerCase().startsWith("attendance ·");
@@ -123,7 +130,7 @@ type GradeAssessment = GradeCalculationCategory["assessments"][number];
 
 function convertedLateAssessments(assessments: GradeAssessment[]) {
   const items = assessments.map((assessment, index) => ({ ...assessment, id: String(index) }));
-  const converted = consecutiveLateAbsences(attendanceDays(items), id => assessments[Number(id)].scores[0]?.remark);
+  const converted = consecutiveLateAbsences(attendanceDays(items), id => scoreRemark(assessments[Number(id)]));
   return new Set([...converted].map(id => assessments[Number(id)]));
 }
 
@@ -132,7 +139,7 @@ export function calculateCategoryPercent(
   converted = convertedLateAssessments(category.assessments)
 ) {
   const active = category.assessments.filter(assessment =>
-    assessment.scores[0]?.remark !== "EXCUSED" && isRecorded(assessment)
+    !isExcused(assessment) && isRecorded(assessment)
   );
   if (!active.length) return null;
   const isAttendance = category.assessments.length > 0 && category.assessments.every(item => isAttendanceItem(item.title));
@@ -140,9 +147,10 @@ export function calculateCategoryPercent(
   const transmute = (rawPercent: number) => convertRawPercent(rawPercent, base);
   const rawPoints = (assessment: GradeCalculationCategory["assessments"][number]) => {
     const score = assessment.scores[0];
-    if (score?.remark === "LATE" && isAttendanceItem(assessment.title)) return converted.has(assessment) ? 0 : assessment.maxScore;
-    return score?.remark === "PRESENT" ? assessment.maxScore :
-      score?.remark === "ABSENT" || score?.remark === "DID_NOT_SUBMIT" ? 0 : score?.points ?? 0;
+    const remark = scoreRemark(assessment);
+    if (remark === "LATE" && isAttendanceItem(assessment.title)) return converted.has(assessment) ? 0 : assessment.maxScore;
+    return remark === "PRESENT" ? assessment.maxScore :
+      remark === "ABSENT" || remark === "DID_NOT_SUBMIT" ? 0 : score?.points ?? 0;
   };
   if (category.assessments.some(assessment => assessment.weight !== null && assessment.weight !== undefined)) {
     const totalWeight = active.reduce((sum, assessment) => sum + (assessment.weight ?? 0), 0);
@@ -193,8 +201,8 @@ export function calculateGradeBreakdown(categories: GradeCalculationCategory[]) 
       withinRootWeight: roundPercent(withinRootWeight),
       earnedWithinRoot: percent === null ? null : roundPercent(percent * withinRootWeight / 100),
       recordedItems: category.assessments.filter(isRecorded).length,
-      pendingItems: category.assessments.filter(assessment => assessment.scores[0]?.remark !== "EXCUSED" && !isRecorded(assessment)).length,
-      excusedItems: category.assessments.filter(assessment => assessment.scores[0]?.remark === "EXCUSED").length
+      pendingItems: category.assessments.filter(assessment => !isExcused(assessment) && !isRecorded(assessment)).length,
+      excusedItems: category.assessments.filter(assessment => isExcused(assessment)).length
     });
   }
   const recorded = items.filter(item => item.earnedCourse !== null);
