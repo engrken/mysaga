@@ -41,7 +41,7 @@ test("dashboard includes the requested KPI, insights, schedule, quick panel, and
   assert.match(dashboard, /<PortalCustomizer/);
   assert.match(dashboard, /onReset=\{onReset\}/);
   assert.match(customizer, /Default Light Glass/);
-  assert.match(customizer, /Smoked Dark Glass/);
+  assert.match(customizer, /Soft Midnight Blue Glass/);
   assert.match(customizer, /Classic Original Theme/);
   assert.match(customizer, /Sunlit Study Room/);
   assert.match(customizer, /Blurred Café/);
@@ -116,4 +116,22 @@ test("demo sign-in always returns safe JSON and the browser handles empty or mal
   assert.match(entry, /try \{\s*data = JSON\.parse\(responseText\)/);
   assert.match(entry, /returned an empty response/);
   assert.ok(entry.includes('data.redirect.startsWith("//")'));
+});
+
+test("student page headers, quick panel, and secondary-page appearance controls share the portal layout", () => {
+  const portal = read("src/components/Portal.tsx");
+  const pageCustomizer = read("src/components/student-portal/StudentPageCustomizer.tsx");
+  const window = read("src/components/student-portal/DraggableGlassWindow.tsx");
+  const types = read("src/components/student-portal/types.ts");
+  const css = read("src/app/globals.css");
+  assert.match(portal, /student-portal-topbar-inner/);
+  assert.match(portal, /student-theme-page/);
+  assert.match(portal, /<StudentPageCustomizer[\\s\\S]*?requested=\\{studentCustomizerRequested\\}/);
+  assert.match(pageCustomizer, /These appearance choices carry across Overview, Announcements, and Class Chats/);
+  assert.match(pageCustomizer, /<PortalCustomizer/);
+  assert.match(window, /student-panel-default-top/);
+  assert.match(types, /panelPosition: \\{ x: 0, y: 0 \\}/);
+  assert.match(css, /data-student-demo="true"\\]\\{--student-panel-default-top:362px\\}/);
+  assert.match(css, /Soft Midnight/);
+  assert.match(css, /student-page-customizer-panel/);
 });
