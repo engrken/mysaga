@@ -252,7 +252,9 @@ test("class remark selectors share the unique canonical status list", () => {
   const grades = fs.readFileSync(path.join(__dirname, "../src/lib/grades.ts"), "utf8");
   const subjectRoute = fs.readFileSync(path.join(__dirname, "../src/app/api/teacher/subjects/[subjectId]/route.ts"), "utf8");
   assert.match(grades, /value: "INC"/);
-  assert.match(grades, /label: "INCOMPLETE"/);
+  assert.match(grades, /label: "INC", value: "INC"/);
+  assert.match(grades, /label: "NP", value: "NP"/);
+  assert.match(grades, /label: "DROPPED", value: "DROPPED"/);
   assert.match(grades, /export function normalizeRemark\(/);
   assert.match(grades, /if \(value === "INCOMPLETE"\) return "INC"/);
   assert.match(portal, /CLASS_REMARK_OPTIONS\.map\(option=> <option key=\{option\.value\} value=\{option\.value\}>\{option\.label\}<\/option>\)/);
