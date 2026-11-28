@@ -38,7 +38,15 @@ async function generate(categories, enrollments, components) {
     excelColumn: columns,
     xmlEscape: escape,
     weightedCategoryPercent: (enrollment, category) => enrollment.equivalents[category.id] ?? null,
-    gradeSheetAttendancePercent: (detail, enrollment, categoryId) => enrollment.attendancePercent?.[categoryId] ?? null
+    gradeSheetAttendancePercent: (detail, enrollment, categoryId) => enrollment.attendancePercent?.[categoryId] ?? null,
+    gradeSheetComponentSummary: (detail, enrollment, component) => {
+      const rawEquivalentPercent = enrollment.equivalents[component.name] ?? null;
+      return {
+        rawEquivalentPercent,
+        parentWeightedScore: rawEquivalentPercent === null ? null
+          : Math.round(rawEquivalentPercent * component.percentage) / 100
+      };
+    }
   };
   vm.runInNewContext(compiled + "\nthis.generateGradeFile = downloadFcuGradeXlsx;", context);
   const detail = {
@@ -201,10 +209,10 @@ test("FCU final-grade export uses the exact configured components and their weig
   assert.match(sheet, /<c r="A18"[^>]*>.*?2\./s);
   assert.match(sheet, /<col min="1" max="1" width="6"/);
   assert.match(sheet, /<col min="2" max="2" width="32"/);
-  assert.match(sheet, /<col min="3" max="5" width="13"/);
-  assert.match(sheet, /<col min="6" max="6" width="14"/);
-  assert.match(sheet, /<col min="7" max="7" width="11"/);
-  assert.match(sheet, /<col min="8" max="8" width="18"/);
+  assert.match(sheet, /<col min="3" max="8" width="13"/);
+  assert.match(sheet, /<col min="9" max="9" width="14"/);
+  assert.match(sheet, /<col min="10" max="10" width="11"/);
+  assert.match(sheet, /<col min="11" max="11" width="18"/);
 });
 
 test("Generic PDF export is offered only once inside the export dropdown", () => {
