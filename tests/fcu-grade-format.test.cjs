@@ -330,8 +330,20 @@ test("grade remarks normalize status shorthands and masking stays scoped to drop
   assert.match(finalSection, /<div className="w-\[105px\] mx-auto whitespace-normal break-words leading-tight uppercase">/);
   assert.match(source, /function getCleanComponentName\(componentName: string\): string/);
   assert.match(finalSection, /getCleanComponentName\(component\.name\)/);
-  assert.match(finalSection, />Raw Equivalent<\/span>/);
-  assert.match(finalSection, /component\.percentage\.toFixed\(2\)\}% Configured Weight/);
+  assert.match(finalSection, /\\{renderColumnSubtext\\(true\\)\\}/);
+  assert.match(finalSection, /\\{renderColumnSubtext\\(false, component\\.percentage\\.toFixed\\(2\\)\\)\\}/);
+  assert.match(source, /function renderColumnSubtext\\(isRawEquivalent: boolean, weightPercentage\\?: number \\| string\\)/);
+  assert.match(source, /isRawEquivalent \\? "EQ" :/);
+  assert.doesNotMatch(finalSection, /Raw Equivalent|Configured Weight/i);
+
+  const printHeaderStart = source.indexOf('<table className="print-grade-table generic-print-grade-table">');
+  const printHeaderEnd = source.indexOf("</thead>", printHeaderStart);
+  const printHeader = source.slice(printHeaderStart, printHeaderEnd);
+  assert.ok(printHeaderStart >= 0 && printHeaderEnd > printHeaderStart, "printable Final Grades header is isolated");
+  assert.match(printHeader, /<small>EQ<\\/small>/);
+  assert.match(printHeader, /category\\.weight\\.toFixed\\(2\\)\\}%<\\/small>/);
+  assert.match(printHeader, /component\\.percentage\\.toFixed\\(2\\)\\}%<\\/small>/);
+  assert.doesNotMatch(printHeader, /raw equivalent|configured weight|% of course/i);
   assert.doesNotMatch(finalSection, /component\.name\.toLocaleUpperCase\(\) WEIGHTED/);
 
   const cleanNameStart = source.indexOf("function getCleanComponentName(");
